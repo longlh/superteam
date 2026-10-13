@@ -1,0 +1,5 @@
+{
+  "name": "superteam-engine",
+  "version": "0.1.0",
+  "description": "Engine that orchestrates a team of agents following each project's own workflow"
+}
