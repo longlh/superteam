@@ -80,6 +80,7 @@ They share one library that handles:
 - **`auto_id` allocation:** done under the write lock, reading the latest state from disk (not from an index).
 - **Write lock:** every write takes it, so only one writer at a time across all instances.
 - **Atomic write:** write a temp file, then rename, pretty-formatted JSON.
+- **Trigger (outbox):** in the same lock as the data write, store an event file in `.superteam/events/`. The event carries the entity, id, operation, the changed fields (old and new values) and `causedBy`. After releasing the lock, start the workflow engine (7) detached, so the write script is never blocked. Seeding skips this step (`--no-trigger`).
 
 Agents call the scripts through Bash.
 
@@ -96,3 +97,9 @@ Also a script. The engine is not a watcher or a background process: it only runs
 A WorkflowExec runs as a Claude Code workflow (the Workflow tool: a JavaScript script that orchestrates agents with `agent()`, `parallel()`, `pipeline()`), following Claude's own workflow convention. These workflow files are generated from the WorkflowDefs by the build script (6), and the agents they call are the ones generated from the Roles.
 
 Its changes to the data go through the same write scripts, so they use the same validation and write lock.
+
+How it consumes events:
+
+- It drains `.superteam/events/` in order. It has its own lock (separate from the write lock), so only one engine processes events at a time.
+- A processed event is removed (or marked done). An event is never lost: if the engine dies midway, a manual command re-runs the remaining events. This is a manual recovery step, not a watcher.
+- When the engine writes data it passes `causedBy` (the WorkflowExec id) and a depth, and refuses to go past a depth limit, so it cannot loop forever.
