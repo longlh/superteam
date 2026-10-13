@@ -1,0 +1,87 @@
+# Superteam
+
+## Goal
+
+Build a workflow engine for projects that use Claude Code, delivered as a Claude Code plugin (`superteam-engine`).
+
+## Overview
+
+Every project has its own way of working. Superteam lets a project describe that way (its team and its workflow) as data, and runs a team of Claude Code agents on it.
+
+The design has two layers:
+
+- **Engine:** the `superteam-engine` plugin. It is generic and installed into any project: storage rules, scripts, MCP server, skills.
+- **Project:** the data of one project, stored in its own repo under `.superteam/data/`. It is what makes the workflow specific to that project.
+
+## Data flow
+
+Normal operation:
+
+```
+scripts ──write──> .superteam/data/*.json ──watcher──> index ──> MCP server ──query──> agents
+```
+
+- **Write path:** only the scripts (5) write the JSON files (1).
+- **Read path:** the index (2) is loaded from the files and served by the MCP server (3). Agents and skills (4) read through it. The index is a library used by the MCP server.
+
+## Build flow
+
+Run manually after the project data changes, separate from normal operation:
+
+```
+.superteam/data/*.json ──read──> build script ──> Claude Code files (agents, workflows)
+```
+
+The build script (6) reads the files directly, bypassing the index and the MCP server.
+
+## Components
+
+### 1. Storage
+
+File-based. Layout:
+
+```
+.superteam/data/{entity}/{id}.json
+```
+
+Each record is one JSON file, stored pretty-formatted so text diffs stay readable.
+
+### 2. In-memory index table
+
+A JS script loads the JSON files into memory, builds indexes over them, and exposes queries for fast access by index.
+
+### 3. MCP server
+
+Wraps the in-memory index table and gives AI agents a protocol to query project data. It is read-only: it never writes to `.superteam/data/` (writes go through the scripts, see 5). Its tools return both lists (by index) and full records (e.g. `get(entity, id)`), so agents need no other way to read.
+
+- **Lifecycle:** a long-running process. Claude Code starts it (stdio) when a session starts and stops it when the session ends. It loads all JSON files once at startup and keeps the index in memory, so queries do not re-read files.
+- **Sync:**
+  - The JSON files are the source of truth; the index is only a cache.
+  - A file watcher is the main sync mechanism: it reloads records changed on disk (written by scripts, manual edits, git pull, other sessions). There is a short delay between a write and the index seeing it.
+- **Multiple instances:** several sessions on one project each run their own server with their own index. This is safe because servers only read; the write lock lives in the scripts.
+
+### 4. Skills
+
+Skills provided by the plugin:
+
+- **Seed data:** create the initial data (e.g. roles, workflow definitions) through the scripts.
+- **Query data:** query project data through the MCP server.
+
+### 5. Scripts
+
+Scripts are the only way to write `.superteam/data/`. Principle: use as much code as possible and leave as little as possible to the AI, so file handling is deterministic.
+
+They share one library that handles:
+
+- **Validation:** check the record against the entity schema.
+- **`auto_id` allocation:** done under the write lock, reading the latest state from disk (not from an index).
+- **Write lock:** every write takes it, so only one writer at a time across all instances.
+- **Atomic write:** write a temp file, then rename, pretty-formatted JSON.
+
+Agents call the scripts through Bash.
+
+### 6. Build script
+
+A script that builds the Claude Code files, following Claude's conventions, from the data (e.g. Role -> agent, WorkflowDef -> workflow). It is a build step, run manually after the project data changes.
+
+It reads the JSON files directly, following the storage layout from 1 (no index, no MCP server), and writes its output outside `.superteam/data/`, so it needs no write lock.
