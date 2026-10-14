@@ -71,7 +71,7 @@
             "minimum": 0
           },
           "check": {
-            "description": "The validation that failed: schema (not a valid event or invalid data), scope (it touches something other than the task or work the brain was asked to work on), approver (an approval by a role not in canApprovedBy), depth (beyond the depth limit).",
+            "description": "The validation that failed: schema (not a well-formed process event or invalid data), scope (it touches something other than the task or work the brain was asked to work on), approver (an approval by a role not in canApprovedBy), depth (beyond the depth limit).",
             "type": "string",
             "enum": ["schema", "scope", "approver", "depth"]
           },
