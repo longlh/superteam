@@ -18,7 +18,7 @@
       "x-level": "engine"
     },
     "type": {
-      "description": "Task type; values are defined at project level. WorkflowDefs act on task types, not on individual tasks.",
+      "description": "Task type; values are defined at project level. Processes act on task types, not on individual tasks.",
       "type": "string",
       "x-level": "project"
     },

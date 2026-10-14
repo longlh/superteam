@@ -40,7 +40,7 @@
       "x-level": "engine"
     },
     "approver": {
-      "description": "Permission setup only: the role allowed to approve this role's tasks. Null does not mean auto-approve; the approval flow is decided by the _workflow.",
+      "description": "Permission setup only: the role allowed to approve this role's tasks. Null does not mean auto-approve; the approval flow is decided by the _process.",
       "type": ["string", "null"],
       "x-ref": "_role",
       "x-level": "engine"

@@ -28,7 +28,7 @@
       }
     },
     "operation": {
-      "description": "create, update or delete a record. `ack` is only for workflow events: the workflow ran and has nothing to change; its target is the target of the published event and it has no changes.",
+      "description": "create, update or delete a record. `ack` is only for process events: the process ran and has nothing to change; its target is the target of the published event and it has no changes.",
       "type": "string",
       "enum": ["create", "update", "delete", "ack"]
     },
@@ -50,7 +50,7 @@
       "format": "date-time"
     },
     "causedBy": {
-      "description": "What caused this event, filled by whoever creates it. An integer is the id of the _workflow the endpoint ran, set on the workflow events it returns (checked by the engine). A string is the name of the skill that called a write script. Null for a manual call of a write script.",
+      "description": "What caused this event, filled by whoever creates it. An integer is the id of the _process the endpoint ran, set on the process events it returns (checked by the engine). A string is the name of the skill that called a write script. Null for a manual call of a write script.",
       "type": ["integer", "string", "null"]
     },
     "depth": {

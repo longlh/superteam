@@ -6,12 +6,12 @@ Build a workflow engine for projects that use Claude Code, delivered as a Claude
 
 ## Overview
 
-Every project has its own way of working. Superteam lets a project describe that way (its team and its workflow) as data, and runs a team of Claude Code agents on it.
+Every project has its own way of working. Superteam lets a project describe that way (its team and its process) as data, and runs a team of Claude Code agents on it.
 
 The design has two layers:
 
 - **Engine:** the `superteam` plugin. It is generic and installed into any project. It is a headless engine framework: it stores data, queues events, publishes them to an external API that is its brain, and applies the result. In the real integration the brain is Claude (the AI layer, 2).
-- **Project:** the data of one project, stored in its own repo under `.superteam/data/`. It is what makes the workflow specific to that project.
+- **Project:** the data of one project, stored in its own repo under `.superteam/data/`. It is what makes the process specific to that project.
 
 ## Data flow
 
@@ -34,46 +34,46 @@ The installation script (2.3) reads the files directly, bypassing the index and 
 
 ### 1. Engine
 
-The foundation of the plugin: a headless engine framework. It defines the core entities, stores and serves their data, and publishes events to an external API that acts as its brain. It has no workflow logic of its own. In the real integration the brain is Claude (2.1.2). It is self-contained: it writes through its scripts (1.4) and reads the data files directly (1.2).
+The foundation of the plugin: a headless engine framework. It defines the core entities, stores and serves their data, and publishes events to an external API that acts as its brain. It has no process logic of its own. In the real integration the brain is Claude (2.1.2). It is self-contained: it writes through its scripts (1.4) and reads the data files directly (1.2).
 
-Core entities are defined by the engine and have a `_` prefix. Their schemas are JSON Schema files in `superteam-engine/schemas/`, named `<entity>.schema.json`. Entities without the prefix belong to the project.
+Core entities are defined by the engine and have a `_` prefix. Their schemas are JSON Schema files in `superteam-engine/src/schemas/`, named `<entity>.schema.json`. Entities without the prefix belong to the project.
 
 | Entity | Description |
 | --- | --- |
 | `_task` | A unit of work: type, status, assignee, parent and dependencies. |
 | `_artifact` | A file produced for a task, versioned per task. |
 | `_role` | A team member of the project, either `bot` or `human`. |
-| `_workflow` | A named definition of a workflow, made of entries. The engine uses it to enforce what the endpoint may return; the installation (2.3) generates Claude Code files from it. |
-| `_rejection` | A record of a batch of workflow events the engine rejected: the subscription that was called, the published event, what the brain returned, and which checks it broke. A business error, recorded so the workflow or the brain can be fixed; versioned in git. |
+| `_process` | A named definition of a process, made of entries. The engine uses it to enforce what the endpoint may return; the installation (2.3) generates Claude Code files from it. |
+| `_rejection` | A record of a batch of process events the engine rejected: the subscription that was called, the published event, what the brain returned, and which checks it broke. A business error, recorded so the process or the brain can be fixed; versioned in git. |
 | `_subscription` | A subscription to events, for pub/sub: which topic (`topic`, as `{entity}:{operation}`, such as `_task:create`) is published to which `endpoint` (an address), and who subscribed (`subscriber`: name and version). It has a TTL (`expiresAt`): its creator renews it while it is alive, and one that is not renewed expires and is ignored. Created by an external system; the engine only reads it to publish. |
 | `_event` | An outbox record written with each data write, which triggers the engine. The `_event` folder is a queue: the write scripts enqueue events in id order, and the engine dequeues (removes) each one once processed. The event id is only the order in the queue, not a unique identity: it can start over once the queue is drained. Immutable: once written it is never modified. |
 
 The engine is a script. It is not a watcher or a background process: it only runs when a write script (1.4) triggers it after changing data. Data changed outside the scripts (manual edits, git pull) is not supported for now: it does not trigger the engine. On each trigger it reads the events in the queue, finds the `_subscription` records that have not expired and whose `topic` is the topic of each one, and calls their `endpoint` one at a time, the one with the latest `expiresAt` first, until the response of one is accepted. The engine relies only on this data.
 
-The endpoint is the engine's brain. After a write, the engine sends it the published event (with its `target`) and expects a list of **workflow events** back: `_event` records, each describing a write the engine must make, such as creating or updating a task. A workflow event is a derived type of `_event`, not a separate entity, so it has the same shape. Its `causedBy` is the `_workflow` the brain ran. Events are immutable (read-only): the engine applies them as they are, or rejects them. If any workflow event is rejected, the engine applies none of them, does not retry, and records the rejection as a `_rejection`. This is a business error (the brain broke the workflow), unlike a failed call, which is a system error and is not recorded. Accepted events are applied through the write scripts (1.4), so they use the same validation and write lock.
+The endpoint is the engine's brain. After a write, the engine sends it the published event (with its `target`) and expects a list of **process events** back: `_event` records, each describing a write the engine must make, such as creating or updating a task. A process event is a derived type of `_event`, not a separate entity, so it has the same shape. Its `causedBy` is the `_process` the brain ran. Events are immutable (read-only): the engine applies them as they are, or rejects them. If any process event is rejected, the engine applies none of them, does not retry, and records the rejection as a `_rejection`. This is a business error (the brain broke the process), unlike a failed call, which is a system error and is not recorded. Accepted events are applied through the write scripts (1.4), so they use the same validation and write lock.
 
 What the engine publishes and subscribes to:
 
 | Item | What |
 | --- | --- |
-| Published | The `_event` record, unchanged. Nothing else is published: not the data records, not the `_workflow`. |
+| Published | The `_event` record, unchanged. Nothing else is published: not the data records, not the `_process`. |
 | Subscribed to | Changes of an entity, by topic `{entity}:{operation}`: `_task:create`, `_task:update`, `_task:delete`, and so on. A `_subscription` names the topic; the topic of an `_event` is its `target.entity` and its `operation`. |
 | Delivered to | The `endpoint` of one subscription. The live subscriptions of the topic are called one at a time, the one with the latest `expiresAt` first, and the first whose response the engine accepts wins: the others are not called. |
 | Sent along | The `depth` the returned events must carry: the depth of the published event plus one. |
-| Returned | A list of workflow events (`_event` records), each with `causedBy` (the `_workflow` the brain ran) and `depth`. They are not published: the engine validates and applies them, and the writes enqueue new `_event` records. |
+| Returned | A list of process events (`_event` records), each with `causedBy` (the `_process` the brain ran) and `depth`. They are not published: the engine validates and applies them, and the writes enqueue new `_event` records. |
 
 The engine validates the returned list in code, using the published event (its `target` and `operation`) and the `causedBy` of each returned event:
 
 1. Every returned event is a valid `_event` and writes valid data (entity schemas).
-2. `causedBy` is an existing `_workflow`.
-3. The change really triggers that workflow: it has an entry whose `trigger` is the topic of the published event.
-4. That workflow may return the event: the topic of the returned event and the fields it changes fit the `output` of that entry, and the assignee fits `assignTo`.
+2. `causedBy` is an existing `_process`.
+3. The change really triggers that process: it has an entry whose `trigger` is the topic of the published event.
+4. That process may return the event: the topic of the returned event and the fields it changes fit the `output` of that entry, and the assignee fits `assignTo`.
 5. `depth` is the depth of the published event plus one, and does not pass the depth limit.
-6. No workflow is missing. Before it publishes, the engine works out which workflows the event triggers: the ones with an entry whose `trigger` is the topic of the event. Each of them must appear as `causedBy` in at least one returned event. A workflow that has nothing to change still returns an `ack` event: its `operation` is `ack`, its `target` is the target of the published event, and it has no `changes`. An `ack` event is never listed in `output` and is always allowed. It is checked like the others but not applied: nothing is written.
+6. No process is missing. Before it publishes, the engine works out which processes the event triggers: the ones with an entry whose `trigger` is the topic of the event. Each of them must appear as `causedBy` in at least one returned event. A process that has nothing to change still returns an `ack` event: its `operation` is `ack`, its `target` is the target of the published event, and it has no `changes`. An `ack` event is never listed in `output` and is always allowed. It is checked like the others but not applied: nothing is written.
 
-A `_rejection` lists each violation: which of these checks was broken, and by which returned event (or by the batch as a whole, for a missing workflow) (`schema`, `workflow-unknown`, `trigger-mismatch`, `output-not-allowed`, `depth`, `workflow-missing`).
+A `_rejection` lists each violation: which of these checks was broken, and by which returned event (or by the batch as a whole, for a missing process) (`schema`, `process-unknown`, `trigger-mismatch`, `output-not-allowed`, `depth`, `process-missing`).
 
-This validation is for the brain only. Events written through the scripts (by a skill or manually) are checked against the entity schemas, and their `causedBy` (a skill name or null) is not checked against a `_workflow`.
+This validation is for the brain only. Events written through the scripts (by a skill or manually) are checked against the entity schemas, and their `causedBy` (a skill name or null) is not checked against a `_process`.
 
 How it consumes events:
 
@@ -112,7 +112,7 @@ Records are read directly from the data files by path pattern:
 write script ──lock──> validate ──> event (.superteam/data/_event/, gitignored)
                               │
                               └──> data file (.superteam/data/{entity}/{id}.json)
-                  release lock ──trigger──> engine ──call endpoint──> workflow events ──validate, write (via scripts)──> tasks
+                  release lock ──trigger──> engine ──call endpoint──> process events ──validate, write (via scripts)──> tasks
 ```
 
 - Only the write scripts (1.4) write the data files (1.1).
@@ -130,7 +130,7 @@ They share one library that handles:
 - **`auto_id` allocation:** done under the write lock, reading the latest state from disk (not from an index).
 - **Write lock:** every write takes it, so only one writer at a time across all instances.
 - **Atomic write:** write a temp file, then rename, pretty-formatted JSON.
-- **Trigger (outbox):** in the same lock as the data write, store an `_event` record in `.superteam/data/_event/`. The event carries the `target` (entity and id), the `operation`, the changed fields (old and new values), `causedBy` and `depth` (see `_event.schema.json`). Whoever creates an event fills `causedBy`: the write script, as given by its caller (null for a manual call, the skill name when a skill calls it), or the endpoint for the workflow events it returns (the `_workflow` id). After releasing the lock, start the engine (1) detached, so the write script is never blocked. Seeding skips this step (`--no-trigger`).
+- **Trigger (outbox):** in the same lock as the data write, store an `_event` record in `.superteam/data/_event/`. The event carries the `target` (entity and id), the `operation`, the changed fields (old and new values), `causedBy` and `depth` (see `_event.schema.json`). Whoever creates an event fills `causedBy`: the write script, as given by its caller (null for a manual call, the skill name when a skill calls it), or the endpoint for the process events it returns (the `_process` id). After releasing the lock, start the engine (1) detached, so the write script is never blocked. Seeding skips this step (`--no-trigger`).
 
 Register: a script that creates or renews a `_subscription`. Under the write lock it scans the existing `_subscription` records; there are few of them, so scanning is cheap. If one has the same `endpoint` and `topic`, it updates that record's `expiresAt` and `subscriber`; otherwise it creates a new record. The event is `update` or `create` accordingly.
 
@@ -174,14 +174,14 @@ A change to the declared keys in a schema takes effect at the next bootstrap or 
 
 The endpoint the engine calls. In the real integration it is Claude, reached through the MCP server (2.1): the engine publishes an event to the MCP server, which triggers a Claude workflow by spawning a child `claude -p`.
 
-- Input: the event and `depth`. Output: workflow events (see 1), each carrying `causedBy` (the `_workflow` it ran) and `depth`. The brain never writes data itself, and the engine checks its output against that `_workflow` (1).
-- A Claude workflow is a Claude Code workflow (the Workflow tool: a JavaScript script that orchestrates agents with `agent()`, `parallel()`, `pipeline()`), following Claude's own workflow convention. The workflow files and the agents they call are generated from the `_workflow` and `_role` records by the installation (2.3).
-- The Workflow tool only works inside a Claude session, so the MCP server starts one. In the project directory (so `.claude/workflows/{workflow}.js` is found), it runs `claude -p '<prompt naming the saved workflow and its args>' --output-format json --json-schema <schema> --permission-mode dontAsk --allowedTools Workflow --max-budget-usd <n>`, with stdin from `/dev/null`.
+- Input: the event and `depth`. Output: process events (see 1), each carrying `causedBy` (the `_process` it ran) and `depth`. The brain never writes data itself, and the engine checks its output against that `_process` (1).
+- A Claude workflow is a Claude Code workflow (the Workflow tool: a JavaScript script that orchestrates agents with `agent()`, `parallel()`, `pipeline()`), following Claude's own workflow convention. The workflow files and the agents they call are generated from the `_process` and `_role` records by the installation (2.3).
+- The Workflow tool only works inside a Claude session, so the MCP server starts one. In the project directory (so `.claude/workflows/{process}.js` is found), it runs `claude -p '<prompt naming the saved workflow and its args>' --output-format json --json-schema <schema> --permission-mode dontAsk --allowedTools Workflow --max-budget-usd <n>`, with stdin from `/dev/null`.
 - The child session inherits the environment and signs in with the user's own account, so it needs no API key. It runs the workflow and waits for it to finish; the validated result is in the `structured_output` field of the JSON output.
-- An unknown workflow name is not an error: the child answers with an empty list, which the engine rejects as `workflow-missing`.
+- An unknown workflow name is not an error: the child answers with an empty list, which the engine rejects as `process-missing`.
 - Without a brain, the engine still stores and serves data, but nothing answers its calls.
 
-Topics the brain needs, as the `topic` of `_subscription` records whose `endpoint` is the MCP server. The MCP server (2.1) registers them when it starts (draft v0, to be adjusted when the first workflows are written):
+Topics the brain needs, as the `topic` of `_subscription` records whose `endpoint` is the MCP server. The MCP server (2.1) registers them when it starts (draft v0, to be adjusted when the first processes are written):
 
 | Topic | Starts |
 | --- | --- |
@@ -196,7 +196,7 @@ Skills provided by the plugin:
 | Skill | Syntax | Description |
 | --- | --- | --- |
 | Define role | `/superteam:def-role` | Use AI to create `_role` records, written through the scripts (1.4). |
-| Define workflow | `/superteam:def-workflow` | Use AI to create `_workflow` records, written through the scripts (1.4). |
+| Define process | `/superteam:def-process` | Use AI to create `_process` records, written through the scripts (1.4). |
 | Query data | `/superteam:query-data <entity> [id]` | Query project data. A record by id is always read directly from its data file (1.2). Other queries go through the MCP server (2.1) when it is available, otherwise by listing the data files (1.2). |
 
 #### 2.3. Installation
@@ -208,7 +208,7 @@ Transform:
 | Entity | Claude Code file | Notes |
 | --- | --- | --- |
 | `_role` | `.claude/agents/{role}.md` | the role record (`description`, `tools`, `model`) combined with its `instructions` file |
-| `_workflow` | `.claude/workflows/{workflow}.js` | generated from its entries, run by the brain (2.1.2) by name |
+| `_process` | `.claude/workflows/{process}.js` | generated from its entries, run by the brain (2.1.2) by name |
 
 Edit:
 

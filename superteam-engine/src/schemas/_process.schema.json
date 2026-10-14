@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "_workflow.schema.json",
-  "title": "_workflow",
-  "description": "A named definition of a workflow, made of an array of entries. The engine uses it to enforce, in code, what the endpoint may return for an event: every workflow event must fit an entry. The installation also builds the Claude Code workflow from it (at the location Claude Code expects by convention, like _role). Draft v0: `input` is not defined yet.",
+  "$id": "_process.schema.json",
+  "title": "_process",
+  "description": "A named definition of a process, made of an array of entries. The engine uses it to enforce, in code, what the endpoint may return for an event: every process event must fit an entry. The installation also builds the Claude Code workflow from it (at the location Claude Code expects by convention, like _role). Draft v0: `input` is not defined yet.",
   "type": "object",
   "additionalProperties": false,
   "required": ["id", "name"],
@@ -21,7 +21,7 @@
       "x-level": "engine"
     },
     "name": {
-      "description": "Name of the definition, e.g. \"requirements intake workflow\".",
+      "description": "Name of the definition, e.g. \"requirements intake process\".",
       "type": "string",
       "x-level": "project"
     },
@@ -45,7 +45,7 @@
             "x-level": "engine"
           },
           "output": {
-            "description": "The workflow events this entry allows, by topic. `fields` lists the fields an event may change; null allows any. A workflow event that fits none of them is rejected.",
+            "description": "The process events this entry allows, by topic. `fields` lists the fields an event may change; null allows any. A process event that fits none of them is rejected.",
             "type": "array",
             "items": {
               "type": "object",
@@ -62,7 +62,7 @@
             "x-level": "engine"
           },
           "assignTo": {
-            "description": "When set, the assignee of the tasks that workflow events create or update must be this role.",
+            "description": "When set, the assignee of the tasks that process events create or update must be this role.",
             "type": ["string", "null"],
             "x-ref": "_role",
             "x-level": "engine"

@@ -20,7 +20,7 @@
       "x-level": "engine"
     },
     "endpoint": {
-      "description": "The address where the engine publishes a matching event, such as the address an MCP server listens on. The engine calls it and expects workflow events back.",
+      "description": "The address where the engine publishes a matching event, such as the address an MCP server listens on. The engine calls it and expects process events back.",
       "type": "string",
       "x-level": "engine"
     },
