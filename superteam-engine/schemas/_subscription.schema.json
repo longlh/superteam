@@ -5,7 +5,7 @@
   "description": "A subscription to events, for pub/sub. Created by an external system (such as the AI Enhancement layer); the engine only reads it to publish events. Draft v0: the fields are a first proposal.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["id", "topic", "endpoint"],
+  "required": ["id", "topic", "endpoint", "expiresAt"],
   "properties": {
     "id": {
       "type": "integer",
@@ -20,8 +20,14 @@
       "x-level": "engine"
     },
     "endpoint": {
-      "description": "Where the engine publishes a matching event, such as the name of an MCP server. The engine calls it and expects workflow events back.",
+      "description": "The address where the engine publishes a matching event, such as the address an MCP server listens on. The engine calls it and expects workflow events back.",
       "type": "string",
+      "x-level": "engine"
+    },
+    "expiresAt": {
+      "description": "TTL of the subscription. The creator renews it by extending this timestamp while it is alive; the engine ignores a subscription whose expiresAt is in the past.",
+      "type": "string",
+      "format": "date-time",
       "x-level": "engine"
     }
   }
