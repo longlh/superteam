@@ -2,10 +2,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "_event.schema.json",
   "title": "_event",
-  "description": "Outbox record written by a write script in the same lock as the data write. Stored at .superteam/data/_event/{id}.json (gitignored). The engine processes events in id order and removes each one when done. Draft v0.",
+  "description": "Outbox record written by a write script in the same lock as the data write. Stored at .superteam/data/_event/{id}.json (gitignored). The engine claims events lowest id first, moving each one out of the queue. The event is stored before the data file is in place, so it carries the hashes and the temp path the engine uses to check that the write completed. Draft v0.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["id", "target", "operation", "changes", "createdAt", "causedBy", "depth"],
+  "required": ["id", "target", "operation", "changes", "hash", "tmp", "createdAt", "depth"],
   "properties": {
     "id": {
       "description": "Order in the queue (the _event folder), allocated under the write lock. Not a unique identity: it only orders the events in the folder, and can start over once the queue is drained.",
@@ -44,13 +44,23 @@
         }
       }
     },
+    "hash": {
+      "description": "Hash of the bytes of the data file of the record, before and after the write. The hash of a missing file is null: old on create, new on delete.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["old", "new"],
+      "properties": {
+        "old": { "type": ["string", "null"] },
+        "new": { "type": ["string", "null"] }
+      }
+    },
+    "tmp": {
+      "description": "Path, from the project root, of the temp file under .superteam/tmp/ that holds the new content until the write script moves it onto the data file. Null on delete. After the move the file is gone and the path is only a record, so a temp file left behind can be found and moved into place by hand.",
+      "type": ["string", "null"]
+    },
     "createdAt": {
       "type": "string",
       "format": "date-time"
-    },
-    "causedBy": {
-      "description": "What caused this event, filled by whoever creates it. An integer is the id of the _task the brain was asked to work on, set on the process events it returns (checked by the engine). A string is the name of the skill that called a write script. Null for a manual call of a write script.",
-      "type": ["integer", "string", "null"]
     },
     "depth": {
       "description": "0 when written outside the engine, +1 for each engine-caused write. The engine refuses to go past its depth limit.",
@@ -65,7 +75,8 @@
         "properties": {
           "changes": {
             "additionalProperties": { "properties": { "old": { "type": "null" } } }
-          }
+          },
+          "hash": { "properties": { "old": { "type": "null" } } }
         }
       }
     },
@@ -75,7 +86,9 @@
         "properties": {
           "changes": {
             "additionalProperties": { "properties": { "new": { "type": "null" } } }
-          }
+          },
+          "hash": { "properties": { "new": { "type": "null" } } },
+          "tmp": { "type": "null" }
         }
       }
     }

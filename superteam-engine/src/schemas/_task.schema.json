@@ -2,13 +2,12 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "_task.schema.json",
   "title": "_task",
-  "description": "A unit of work. A parent task is created by a person or a skill and follows a _process; the engine creates its subtasks from that process. A subtask has a parent. Draft v0.",
+  "description": "A part of a _work, created by the engine from a step of the _process of that work. It is assigned to a role and may wait for sibling tasks. Draft v0.",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "id", "type", "status", "assignee", "createdAt", "createdBy",
-    "updatedAt", "updatedBy", "approvedAt", "approvedBy", "rejectedAt", "rejectedBy",
-    "title", "description", "parent", "dependOn", "archived"
+    "updatedAt", "updatedBy", "title", "description", "work", "dependOn", "archived"
   ],
   "properties": {
     "id": {
@@ -23,13 +22,13 @@
       "x-level": "project"
     },
     "status": {
-      "description": "OPEN, IN_PROGRESS or DONE. For a subtask: OPEN while it waits for its turn (a `dependOn` is not DONE yet, or it has not started), IN_PROGRESS once the engine starts it, DONE when its work is finished. For a parent task: set by the engine from its subtasks.",
+      "description": "OPEN, IN_PROGRESS or DONE. OPEN while it waits for its turn (a `dependOn` is not DONE yet, or it has not started), IN_PROGRESS once the engine starts it, DONE when its work is finished.",
       "type": "string",
       "enum": ["OPEN", "IN_PROGRESS", "DONE"],
       "x-level": "engine"
     },
     "assignee": {
-      "description": "A role, not an agent. For a subtask, the role of its entry in the process. For a parent task, set when the approval is given to a bot role.",
+      "description": "A role, not an agent: the role of its step in the process.",
       "type": ["string", "null"],
       "x-ref": "_role",
       "x-level": "engine"
@@ -38,54 +37,31 @@
     "createdBy": { "type": "string", "x-ref": "_role", "x-level": "engine" },
     "updatedAt": { "type": ["string", "null"], "format": "date-time", "x-level": "engine" },
     "updatedBy": { "type": ["string", "null"], "x-ref": "_role", "x-level": "engine" },
-    "approvedAt": { "description": "Parent task only.", "type": ["string", "null"], "format": "date-time", "x-level": "engine" },
-    "approvedBy": { "description": "Parent task only. Must be one of `canApprovedBy`.", "type": ["string", "null"], "x-ref": "_role", "x-level": "engine" },
-    "rejectedAt": { "description": "Parent task only. A rejected task stays rejected: it is final.", "type": ["string", "null"], "format": "date-time", "x-level": "engine" },
-    "rejectedBy": { "description": "Parent task only. Must be one of `canApprovedBy`.", "type": ["string", "null"], "x-ref": "_role", "x-level": "engine" },
     "title": { "type": "string", "x-level": "engine" },
     "description": { "type": "string", "x-level": "engine" },
-    "parent": {
-      "description": "Root tasks have no parent; a subtask points to its parent task.",
-      "type": ["integer", "null"],
-      "x-ref": "_task",
+    "work": {
+      "description": "The _work it belongs to.",
+      "type": "integer",
+      "x-ref": "_work",
       "x-level": "engine"
     },
     "dependOn": {
-      "description": "List of tasks this task waits for; may be empty. For a subtask, the sibling subtasks named in the process.",
+      "description": "The sibling tasks, created from the steps it waits for; may be empty.",
       "type": "array",
       "items": { "type": "integer", "x-ref": "_task" },
       "x-level": "engine"
     },
     "archived": { "type": "boolean", "x-level": "engine" },
-    "process": {
-      "description": "Parent task only: the _process it follows. Null for a task without one and for subtasks.",
-      "type": ["integer", "null"],
-      "default": null,
-      "x-ref": "_process",
-      "x-level": "engine"
-    },
-    "canApprovedBy": {
-      "description": "Parent task only: the roles allowed to approve or reject it. Set by whoever creates the task. [\"human\"] when omitted, so no agent approves by default.",
-      "type": "array",
-      "default": ["human"],
-      "items": { "type": "string", "x-ref": "_role" },
-      "x-level": "engine"
-    },
-    "customInstructions": {
-      "description": "Parent task only: overrides of the default instructions of the process, as { subtask name: text }. Set when the task is created.",
-      "type": "object",
-      "default": {},
-      "additionalProperties": { "type": "string" },
-      "x-level": "engine"
-    },
-    "subtask": {
-      "description": "Subtask only: the name of its entry in the process.",
-      "type": ["string", "null"],
-      "default": null,
+    "recoveries": {
+      "description": "How many times the recovery of the MCP server leader has touched this task to start it again. It is 1 at most: a task that was already recovered once is left for a person.",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1,
+      "default": 0,
       "x-level": "engine"
     },
     "instructions": {
-      "description": "Subtask only: the instructions of the subtask, from the process or overridden by `customInstructions` of the parent.",
+      "description": "The instructions of the task, from the process or overridden by `customInstructions` of its work.",
       "type": ["string", "null"],
       "default": null,
       "x-level": "engine"

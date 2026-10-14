@@ -5,7 +5,7 @@
   "description": "A record of a batch of process events that the engine rejected because the brain went beyond what it was asked to do. It is a business error, not a system error, so it is recorded to be fixed (the process, the instructions or the brain), and versioned in git. Written by the engine. Draft v0.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["id", "createdAt", "topic", "subscription", "event", "returned", "violations"],
+  "required": ["id", "createdAt", "topic", "brain", "event", "returned", "violations"],
   "properties": {
     "id": {
       "type": "integer",
@@ -19,20 +19,20 @@
       "x-level": "engine"
     },
     "topic": {
-      "description": "Topic of the published event, as {entity}:{operation}.",
+      "description": "Topic of the event sent, as {entity}:{operation}.",
       "type": "string",
       "pattern": "^_?[a-z][a-z0-9-]*:(create|update|delete)$",
       "x-level": "engine"
     },
-    "subscription": {
-      "description": "A copy of the _subscription that was called, to tell which brain returned the rejected events. A copy and not a reference, because subscriptions are runtime records: they expire and are deleted by the cleanup script.",
+    "brain": {
+      "description": "A copy of the _brain that was called, to tell which brain returned the rejected events. A copy and not a reference, because brains are runtime records: they expire and are deleted by the cleanup script.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "endpoint", "subscriber"],
+      "required": ["id", "endpoint", "implementation"],
       "properties": {
         "id": { "type": "integer" },
         "endpoint": { "type": "string" },
-        "subscriber": {
+        "implementation": {
           "type": "object",
           "additionalProperties": false,
           "required": ["name", "version"],
@@ -45,7 +45,7 @@
       "x-level": "engine"
     },
     "event": {
-      "description": "A copy of the published _event, as it was sent. A copy and not a reference, because the queue entry is removed and its id can start over.",
+      "description": "A copy of the _event, as it was sent to the brain. A copy and not a reference, because the queue entry is removed and its id can start over.",
       "type": "object",
       "x-level": "engine"
     },
@@ -71,7 +71,7 @@
             "minimum": 0
           },
           "check": {
-            "description": "The validation that failed: schema (not a valid event or invalid data), scope (it touches something other than the task the brain was asked to work on), approver (an approval by a role not in canApprovedBy), depth (beyond the depth limit).",
+            "description": "The validation that failed: schema (not a valid event or invalid data), scope (it touches something other than the task or work the brain was asked to work on), approver (an approval by a role not in canApprovedBy), depth (beyond the depth limit).",
             "type": "string",
             "enum": ["schema", "scope", "approver", "depth"]
           },

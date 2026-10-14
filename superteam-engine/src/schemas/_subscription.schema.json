@@ -2,10 +2,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "_subscription.schema.json",
   "title": "_subscription",
-  "description": "A subscription to events, for pub/sub. Created by an external system (such as the AI Enhancement layer); the engine only reads it to publish events. Draft v0: the fields are a first proposal.",
+  "description": "A subscription of an addon to events, for pub/sub: every subscription whose topic matches an event receives it. Project data: it has no TTL and holds no secret, only the names of the environment variables that configure the addon. Unlike a _brain, nothing is returned to the engine. Draft v0.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["id", "topic", "endpoint", "subscriber", "expiresAt"],
+  "required": ["id", "topic", "addon"],
   "properties": {
     "id": {
       "type": "integer",
@@ -14,31 +14,22 @@
       "x-level": "engine"
     },
     "topic": {
-      "description": "The changes to receive, as {entity}:{operation}, such as _task:create, _task:update or _task:delete. The topic of an event is its target entity and its operation.",
+      "description": "The changes the addon receives, as {entity}:{operation}, such as _task:update. The topic of an event is its target entity and its operation. The addon filters by itself: it decides which of these events it acts on.",
       "type": "string",
       "pattern": "^_?[a-z][a-z0-9-]*:(create|update|delete)$",
       "x-level": "engine"
     },
-    "endpoint": {
-      "description": "The address where the engine publishes a matching event, such as the address an MCP server listens on. The engine calls it and expects process events back.",
+    "addon": {
+      "description": "Name of the addon that receives the events, such as googlechat. It is the name of a file in src/addons/ of the plugin.",
       "type": "string",
+      "pattern": "^[a-z0-9_-]+$",
       "x-level": "engine"
     },
-    "subscriber": {
-      "description": "Who subscribed, to tell which brain an endpoint belongs to. The port in endpoint changes at every start, so it cannot tell.",
+    "env": {
+      "description": "How the addon is configured: the names the addon expects mapped to the names of environment variables, such as { \"webhook\": \"SUPERTEAM_GCHAT_WEBHOOK\" }. Only the names of the variables are stored, never their values, because a value such as the URL of a webhook is a secret and the data is versioned in git.",
       "type": "object",
-      "additionalProperties": false,
-      "required": ["name", "version"],
-      "properties": {
-        "name": { "type": "string" },
-        "version": { "type": ["string", "null"] }
-      },
-      "x-level": "engine"
-    },
-    "expiresAt": {
-      "description": "TTL of the subscription. The creator renews it by extending this timestamp while it is alive; the engine ignores a subscription whose expiresAt is in the past.",
-      "type": "string",
-      "format": "date-time",
+      "default": {},
+      "additionalProperties": { "type": "string" },
       "x-level": "engine"
     }
   }

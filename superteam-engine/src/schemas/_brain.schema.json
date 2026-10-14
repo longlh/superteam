@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "_brain.schema.json",
+  "title": "_brain",
+  "description": "A brain that the engine calls: which topic is sent to which endpoint. Created by an external system (such as the AI Enhancement layer); the engine only reads it to know where to send events. Draft v0: the fields are a first proposal.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "topic", "endpoint", "implementation", "expiresAt"],
+  "properties": {
+    "id": {
+      "type": "integer",
+      "minimum": 1,
+      "x-type": "auto_id",
+      "x-level": "engine"
+    },
+    "topic": {
+      "description": "The changes sent to this brain, as {entity}:{operation}, such as _work:create, _work:update or _work:delete. The topic of an event is its target entity and its operation.",
+      "type": "string",
+      "pattern": "^_?[a-z][a-z0-9-]*:(create|update|delete)$",
+      "x-level": "engine"
+    },
+    "endpoint": {
+      "description": "The address where the engine sends a matching event, such as the address an MCP server listens on. The engine calls it and expects process events back.",
+      "type": "string",
+      "x-level": "engine"
+    },
+    "implementation": {
+      "description": "Which implementation of the brain it is (name and version), to tell which brain an endpoint belongs to. The port in endpoint changes at every start, so it cannot tell.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": ["string", "null"] }
+      },
+      "x-level": "engine"
+    },
+    "expiresAt": {
+      "description": "TTL of the brain. The creator renews it by extending this timestamp while it is alive; the engine ignores a brain whose expiresAt is in the past.",
+      "type": "string",
+      "format": "date-time",
+      "x-level": "engine"
+    }
+  }
+}

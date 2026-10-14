@@ -8,9 +8,10 @@
   "required": ["id", "description", "kind", "instructions", "tools", "model"],
   "properties": {
     "id": {
-      "description": "Stable name; referenced by _task (`assignee`, `createdBy`, `approvedBy`, ...).",
+      "description": "Stable name; referenced by _work and _task (`assignee`, `createdBy`, `approvedBy`, ...). Lowercase letters, digits, \"-\" and \"_\" only: no other special characters, no \".\".",
       "type": "string",
-      "x-level": "engine"
+      "pattern": "^[a-z0-9_-]+$",
+      "x-level": "project"
     },
     "description": {
       "description": "What the role is responsible for.",
