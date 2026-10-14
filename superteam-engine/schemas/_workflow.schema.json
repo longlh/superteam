@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "_workflow.schema.json",
+  "title": "_workflow",
+  "description": "A named definition, e.g. a requirements intake workflow. It is a trigger that creates tasks and assigns them automatically, made of an array of entries. Adapter: generates the Claude Code workflow from the _workflow entity, at the location Claude Code expects by convention (build step, like _role). Draft v0: the entry fields are not fully defined yet.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "name"],
+  "properties": {
+    "id": {
+      "type": "integer",
+      "minimum": 1,
+      "x-type": "auto_id",
+      "x-level": "engine"
+    },
+    "name": {
+      "description": "Name of the definition, e.g. \"requirements intake workflow\".",
+      "type": "string",
+      "x-level": "project"
+    },
+    "entries": {
+      "description": "May be omitted on input; normalization sets it to [].",
+      "type": "array",
+      "default": [],
+      "x-level": "engine",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "trigger": {
+            "description": "Enum whose values are defined at project level. Not defined yet.",
+            "type": "string",
+            "x-level": "project"
+          },
+          "input": {
+            "description": "Not defined yet.",
+            "x-level": "engine"
+          },
+          "output": {
+            "description": "Not defined yet.",
+            "x-level": "engine"
+          },
+          "assignTo": {
+            "type": "string",
+            "x-ref": "_role",
+            "x-level": "engine"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "_workflow-exec.schema.json",
+  "title": "_workflow-exec",
+  "description": "A record written each time a _workflow entry is triggered (one execution): what triggered it, which tasks it created, and the outcome. Draft v0.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "workflow", "triggeredBy", "triggeredAt", "createdTasks", "result", "error"],
+  "properties": {
+    "id": {
+      "type": "integer",
+      "minimum": 1,
+      "x-type": "auto_id",
+      "x-level": "engine"
+    },
+    "workflow": {
+      "description": "The _workflow that ran.",
+      "type": "integer",
+      "x-ref": "_workflow",
+      "x-level": "engine"
+    },
+    "triggeredBy": {
+      "description": "Task whose event fired the trigger; null if started manually.",
+      "type": ["integer", "null"],
+      "x-ref": "_task",
+      "x-level": "engine"
+    },
+    "triggeredAt": {
+      "type": "string",
+      "format": "date-time",
+      "x-level": "engine"
+    },
+    "createdTasks": {
+      "description": "Tasks created by this execution.",
+      "type": "array",
+      "items": { "type": "integer", "x-ref": "_task" },
+      "x-level": "engine"
+    },
+    "result": {
+      "type": "string",
+      "enum": ["succeeded", "failed"],
+      "x-level": "engine"
+    },
+    "error": {
+      "description": "Reason when `result` is `failed`.",
+      "type": ["string", "null"],
+      "x-level": "engine"
+    }
+  },
+  "if": { "properties": { "result": { "const": "failed" } } },
+  "then": { "properties": { "error": { "type": "string" } } }
+}

@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "_task.schema.json",
+  "title": "_task",
+  "description": "A unit of work. Draft v0. `status` has no transition constraints for now (any value can change to any other).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id", "type", "status", "assignee", "createdAt", "createdBy",
+    "updatedAt", "updatedBy", "approvedAt", "approvedBy", "rejectedAt", "rejectedBy",
+    "title", "description", "parent", "dependOn", "archived"
+  ],
+  "properties": {
+    "id": {
+      "type": "integer",
+      "minimum": 1,
+      "x-type": "auto_id",
+      "x-level": "engine"
+    },
+    "type": {
+      "description": "Task type; values are defined at project level. WorkflowDefs act on task types, not on individual tasks.",
+      "type": "string",
+      "x-level": "project"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["open", "in_progress", "wait_for_approval", "approved", "rejected"],
+      "x-level": "engine"
+    },
+    "assignee": {
+      "description": "A role, not an agent.",
+      "type": ["string", "null"],
+      "x-ref": "_role",
+      "x-level": "engine"
+    },
+    "createdAt": { "type": "string", "format": "date-time", "x-level": "engine" },
+    "createdBy": { "type": "string", "x-ref": "_role", "x-level": "engine" },
+    "updatedAt": { "type": ["string", "null"], "format": "date-time", "x-level": "engine" },
+    "updatedBy": { "type": ["string", "null"], "x-ref": "_role", "x-level": "engine" },
+    "approvedAt": { "type": ["string", "null"], "format": "date-time", "x-level": "engine" },
+    "approvedBy": { "type": ["string", "null"], "x-ref": "_role", "x-level": "engine" },
+    "rejectedAt": { "type": ["string", "null"], "format": "date-time", "x-level": "engine" },
+    "rejectedBy": { "type": ["string", "null"], "x-ref": "_role", "x-level": "engine" },
+    "title": { "type": "string", "x-level": "engine" },
+    "description": { "type": "string", "x-level": "engine" },
+    "parent": {
+      "description": "Root tasks have no parent.",
+      "type": ["integer", "null"],
+      "x-ref": "_task",
+      "x-level": "engine"
+    },
+    "dependOn": {
+      "description": "List of tasks this task depends on; may be empty.",
+      "type": "array",
+      "items": { "type": "integer", "x-ref": "_task" },
+      "x-level": "engine"
+    },
+    "archived": { "type": "boolean", "x-level": "engine" }
+  }
+}

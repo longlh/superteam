@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "_role.schema.json",
+  "title": "_role",
+  "description": "Roles are defined by each project, following this schema. The engine reads them through an adapter; the schema is independent of the Claude Code subagent format. Adapter: combines the role record with its `instructions` file to generate one markdown agent definition, written at the location Claude Code expects by convention. It runs as a build step, triggered manually, after the project has set up its role entities. Draft v0.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "description", "kind", "instructions", "tools", "model", "approver"],
+  "properties": {
+    "id": {
+      "description": "Stable name; referenced by _task (`assignee`, `createdBy`, `approvedBy`, ...).",
+      "type": "string",
+      "x-level": "engine"
+    },
+    "description": {
+      "description": "What the role is responsible for.",
+      "type": "string",
+      "x-level": "engine"
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["bot", "human"],
+      "x-level": "engine"
+    },
+    "instructions": {
+      "description": "File describing how the role works.",
+      "type": ["string", "null"],
+      "x-type": "path",
+      "x-level": "engine"
+    },
+    "tools": {
+      "description": "Tools the role may use.",
+      "type": ["array", "null"],
+      "items": { "type": "string" },
+      "x-level": "engine"
+    },
+    "model": {
+      "description": "Suggested model.",
+      "type": ["string", "null"],
+      "x-level": "engine"
+    },
+    "approver": {
+      "description": "Permission setup only: the role allowed to approve this role's tasks. Null does not mean auto-approve; the approval flow is decided by the _workflow.",
+      "type": ["string", "null"],
+      "x-ref": "_role",
+      "x-level": "engine"
+    }
+  }
+}

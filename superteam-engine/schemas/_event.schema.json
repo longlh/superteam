@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "_event.schema.json",
+  "title": "_event",
+  "description": "Outbox record written by a write script in the same lock as the data write. Stored at .superteam/data/_event/{id}.json (gitignored). The engine processes events in id order and removes each one when done. Draft v0.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "target", "operation", "changes", "createdAt", "causedBy", "depth"],
+  "properties": {
+    "id": {
+      "description": "auto_id, allocated under the write lock; also the processing order.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "target": {
+      "description": "The record that changed.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entity", "id"],
+      "properties": {
+        "entity": {
+          "type": "string",
+          "pattern": "^_?[a-z][a-z0-9-]*$"
+        },
+        "id": {
+          "type": ["integer", "string"]
+        }
+      }
+    },
+    "operation": {
+      "type": "string",
+      "enum": ["create", "update", "delete"]
+    },
+    "changes": {
+      "description": "Changed fields only: field name -> { old, new }. On create every old is null; on delete every new is null.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["old", "new"],
+        "properties": {
+          "old": {},
+          "new": {}
+        }
+      }
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "causedBy": {
+      "description": "_workflow-exec id when the engine wrote this change; null when written by an agent or a person calling a script.",
+      "type": ["integer", "null"],
+      "x-ref": "_workflow-exec"
+    },
+    "depth": {
+      "description": "0 when written outside the engine, +1 for each engine-caused write. The engine refuses to go past its depth limit.",
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "operation": { "const": "create" } } },
+      "then": {
+        "properties": {
+          "changes": {
+            "additionalProperties": { "properties": { "old": { "type": "null" } } }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "operation": { "const": "delete" } } },
+      "then": {
+        "properties": {
+          "changes": {
+            "additionalProperties": { "properties": { "new": { "type": "null" } } }
+          }
+        }
+      }
+    }
+  ]
+}

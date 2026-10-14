@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "_artifact.schema.json",
+  "title": "_artifact",
+  "description": "A file produced for a task. Draft v0.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "task", "version", "createdAt", "source"],
+  "properties": {
+    "id": {
+      "type": "integer",
+      "minimum": 1,
+      "x-type": "auto_id",
+      "x-level": "engine"
+    },
+    "task": {
+      "type": "integer",
+      "x-ref": "_task",
+      "x-level": "engine"
+    },
+    "version": {
+      "description": "Separate counter per task (scoped by task id). Human-readable form is `task-<task id>-artifact-<version>`, e.g. `task-1-artifact-1`, `task-1-artifact-2`.",
+      "type": "integer",
+      "minimum": 1,
+      "x-type": "auto_increment_int",
+      "x-scope": "task",
+      "x-level": "engine"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time",
+      "x-level": "engine"
+    },
+    "source": {
+      "type": "string",
+      "x-type": "path",
+      "x-level": "engine"
+    }
+  }
+}
