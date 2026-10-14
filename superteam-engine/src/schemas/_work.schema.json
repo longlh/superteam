@@ -62,7 +62,7 @@
       "x-level": "engine"
     },
     "canApprovedBy": {
-      "description": "The roles allowed to approve or reject it. Set by whoever creates the work. [\"human\"] when omitted, so no agent approves by default.",
+      "description": "The roles allowed to approve or reject it, as role ids. The keyword \"human\" stands for every role of kind human. Set by whoever creates the work. [\"human\"] when omitted, so no agent approves by default.",
       "type": "array",
       "default": ["human"],
       "items": { "type": "string", "x-ref": "_role" },
