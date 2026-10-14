@@ -2,17 +2,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "_process.schema.json",
   "title": "_process",
-  "description": "A named definition of a process, made of an array of entries. The engine uses it to enforce, in code, what the endpoint may return for an event: every process event must fit an entry. The installation also builds the Claude Code workflow from it (at the location Claude Code expects by convention, like _role). Draft v0: `input` is not defined yet.",
+  "description": "A named definition of a process: the subtasks a parent task is split into, who does each one and what each one waits for. The engine creates the subtasks from it. Approval is not part of it: it belongs to the parent task. Draft v0.",
   "type": "object",
   "additionalProperties": false,
   "required": ["id", "name"],
-  "$defs": {
-    "topic": {
-      "description": "{entity}:{operation}, such as _task:create.",
-      "type": "string",
-      "pattern": "^_?[a-z][a-z0-9-]*:(create|update|delete)$"
-    }
-  },
   "properties": {
     "id": {
       "type": "integer",
@@ -21,11 +14,11 @@
       "x-level": "engine"
     },
     "name": {
-      "description": "Name of the definition, e.g. \"requirements intake process\".",
+      "description": "Name of the definition, e.g. \"research\".",
       "type": "string",
       "x-level": "project"
     },
-    "entries": {
+    "subtasks": {
       "description": "May be omitted on input; normalization sets it to [].",
       "type": "array",
       "default": [],
@@ -33,39 +26,27 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["trigger", "output"],
+        "required": ["name", "role"],
         "properties": {
-          "trigger": {
-            "description": "The topic this entry reacts to, like _subscription.topic. The engine picks the entry whose trigger is the topic of the event it published.",
-            "$ref": "#/$defs/topic",
-            "x-level": "engine"
+          "name": {
+            "description": "Name of the subtask, such as WORK or REVIEW. Unique in the process.",
+            "type": "string"
           },
-          "input": {
-            "description": "Not defined yet.",
-            "x-level": "engine"
+          "role": {
+            "description": "The role that does the subtask.",
+            "type": "string",
+            "x-ref": "_role"
           },
-          "output": {
-            "description": "The process events this entry allows, by topic. `fields` lists the fields an event may change; null allows any. A process event that fits none of them is rejected.",
+          "dependOn": {
+            "description": "Names of the subtasks of this process that must be DONE before this one starts. Subtasks that do not depend on each other run in parallel.",
             "type": "array",
-            "items": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["topic", "fields"],
-              "properties": {
-                "topic": { "$ref": "#/$defs/topic" },
-                "fields": {
-                  "type": ["array", "null"],
-                  "items": { "type": "string" }
-                }
-              }
-            },
-            "x-level": "engine"
+            "default": [],
+            "items": { "type": "string" }
           },
-          "assignTo": {
-            "description": "When set, the assignee of the tasks that process events create or update must be this role.",
-            "type": ["string", "null"],
-            "x-ref": "_role",
-            "x-level": "engine"
+          "instructions": {
+            "description": "Default instructions of the subtask, as a template. The creator of the parent task can override them with `customInstructions`.",
+            "type": "string",
+            "default": ""
           }
         }
       }

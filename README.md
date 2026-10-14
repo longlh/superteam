@@ -10,7 +10,7 @@ Every project has its own way of working. Superteam lets a project describe that
 
 The design has two layers:
 
-- **Engine:** the `superteam` plugin. It is generic and installed into any project. It is a headless engine framework: it stores data, queues events, publishes them to an external API that is its brain, and applies the result. In the real integration the brain is Claude (the AI layer, 2).
+- **Engine:** the `superteam` plugin. It is generic and installed into any project. It stores data, queues events, runs the process in code with no AI (1.5, 1.6), and publishes events to an external API that is its brain, which does the work that needs AI. In the real integration the brain is Claude (the AI layer, 2).
 - **Project:** the data of one project, stored in its own repo under `.superteam/data/`. It is what makes the process specific to that project.
 
 ## Data flow
@@ -25,7 +25,7 @@ Normal operation follows CQRS: writes (commands) and reads (queries) are separat
 Run manually after the project data changes, separate from normal operation:
 
 ```
-.superteam/data/*.json ──read──> installation script ──> Claude Code files (agents, workflows), .gitignore
+.superteam/data/*.json ──read──> installation script ──> Claude Code files (agents), .gitignore
 ```
 
 The installation script (2.3) reads the files directly, bypassing the index and the MCP server.
@@ -34,23 +34,23 @@ The installation script (2.3) reads the files directly, bypassing the index and 
 
 ### 1. Engine
 
-The foundation of the plugin: a headless engine framework. It defines the core entities, stores and serves their data, and publishes events to an external API that acts as its brain. It has no process logic of its own. In the real integration the brain is Claude (2.1.2). It is self-contained: it writes through its scripts (1.4) and reads the data files directly (1.2).
+The foundation of the plugin. It defines the core entities, stores and serves their data, runs the process in code (1.5, 1.6) and publishes events to an external API that acts as its brain. The engine has no AI: the brain does the work that needs AI, such as doing a subtask or approving a task. In the real integration the brain is Claude (2.1.2). It is self-contained: it writes through its scripts (1.4) and reads the data files directly (1.2).
 
 Core entities are defined by the engine and have a `_` prefix. Their schemas are JSON Schema files in `superteam-engine/src/schemas/`, named `<entity>.schema.json`. Entities without the prefix belong to the project.
 
 | Entity | Description |
 | --- | --- |
-| `_task` | A unit of work: type, status, assignee, parent and dependencies. |
-| `_artifact` | A file produced for a task, versioned per task. |
+| `_task` | A unit of work. A parent task follows a `_process` and is split into subtasks; the subtasks do the work (1.5). Its status is `OPEN`, `IN_PROGRESS` or `DONE`. A parent task is approved or rejected as a whole (1.6). |
+| `_artifact` | An output of a task, such as a document, source code or a pull request. It embeds the output or refers to it where it is stored. It records a result and is only ever created: a subtask that rewrites or deletes content in the project files creates a new artifact that records what it did. |
 | `_role` | A team member of the project, either `bot` or `human`. |
-| `_process` | A named definition of a process, made of entries. The engine uses it to enforce what the endpoint may return; the installation (2.3) generates Claude Code files from it. |
-| `_rejection` | A record of a batch of process events the engine rejected: the subscription that was called, the published event, what the brain returned, and which checks it broke. A business error, recorded so the process or the brain can be fixed; versioned in git. |
+| `_process` | A named definition of a process: the subtasks a parent task is split into, the role of each, and which subtasks each one waits for. It also holds the default instructions of each subtask. |
+| `_rejection` | A record of a batch of process events the engine rejected: the subscription that was called, the published event, what the brain returned, and which checks it broke. A business error, recorded so the process, the instructions or the brain can be fixed; versioned in git. |
 | `_subscription` | A subscription to events, for pub/sub: which topic (`topic`, as `{entity}:{operation}`, such as `_task:create`) is published to which `endpoint` (an address), and who subscribed (`subscriber`: name and version). It has a TTL (`expiresAt`): its creator renews it while it is alive, and one that is not renewed expires and is ignored. Created by an external system; the engine only reads it to publish. |
 | `_event` | An outbox record written with each data write, which triggers the engine. The `_event` folder is a queue: the write scripts enqueue events in id order, and the engine dequeues (removes) each one once processed. The event id is only the order in the queue, not a unique identity: it can start over once the queue is drained. Immutable: once written it is never modified. |
 
-The engine is a script. It is not a watcher or a background process: it only runs when a write script (1.4) triggers it after changing data. Data changed outside the scripts (manual edits, git pull) is not supported for now: it does not trigger the engine. On each trigger it reads the events in the queue, finds the `_subscription` records that have not expired and whose `topic` is the topic of each one, and calls their `endpoint` one at a time, the one with the latest `expiresAt` first, until the response of one is accepted. The engine relies only on this data.
+The engine is a script. It is not a watcher or a background process: it only runs when a write script (1.4) triggers it after changing data. Data changed outside the scripts (manual edits, git pull) is not supported for now: it does not trigger the engine. On each trigger it reads the events in the queue. For each event it first runs the process in code (1.5, 1.6), then finds the `_subscription` records that have not expired and whose `topic` is the topic of the event, and calls their `endpoint` one at a time, the one with the latest `expiresAt` first, until the response of one is accepted. The engine relies only on this data.
 
-The endpoint is the engine's brain. After a write, the engine sends it the published event (with its `target`) and expects a list of **process events** back: `_event` records, each describing a write the engine must make, such as creating or updating a task. A process event is a derived type of `_event`, not a separate entity, so it has the same shape. Its `causedBy` is the `_process` the brain ran. Events are immutable (read-only): the engine applies them as they are, or rejects them. If any process event is rejected, the engine applies none of them, does not retry, and records the rejection as a `_rejection`. This is a business error (the brain broke the process), unlike a failed call, which is a system error and is not recorded. Accepted events are applied through the write scripts (1.4), so they use the same validation and write lock.
+The endpoint is the engine's brain. After a write, the engine sends it the published event (with its `target`) and expects a list of **process events** back: `_event` records, each describing a write the brain wants to make for the task it was asked to work on, such as adding an artifact or finishing the subtask. If the event is not for the brain, for example a task update that no bot has to act on, the brain returns an empty list. A process event is a derived type of `_event`, not a separate entity, so it has the same shape. Its `causedBy` is the task the brain worked on. Events are immutable (read-only): the engine applies them as they are, or rejects them. If any process event is rejected, the engine applies none of them, does not retry, and records the rejection as a `_rejection`. This is a business error (the brain went beyond what it was asked to do), unlike a failed call, which is a system error and is not recorded. Accepted events are applied through the write scripts (1.4), so they use the same validation and write lock.
 
 What the engine publishes and subscribes to:
 
@@ -60,20 +60,18 @@ What the engine publishes and subscribes to:
 | Subscribed to | Changes of an entity, by topic `{entity}:{operation}`: `_task:create`, `_task:update`, `_task:delete`, and so on. A `_subscription` names the topic; the topic of an `_event` is its `target.entity` and its `operation`. |
 | Delivered to | The `endpoint` of one subscription. The live subscriptions of the topic are called one at a time, the one with the latest `expiresAt` first, and the first whose response the engine accepts wins: the others are not called. |
 | Sent along | The `depth` the returned events must carry: the depth of the published event plus one. |
-| Returned | A list of process events (`_event` records), each with `causedBy` (the `_process` the brain ran) and `depth`. They are not published: the engine validates and applies them, and the writes enqueue new `_event` records. |
+| Returned | A list of process events (`_event` records), each with `causedBy` (the task the brain worked on) and `depth`. They are not published: the engine validates and applies them, and the writes enqueue new `_event` records. |
 
-The engine validates the returned list in code, using the published event (its `target` and `operation`) and the `causedBy` of each returned event:
+The engine validates the returned list in code. The brain is asked to work on one task, the one the published event is about: a subtask that has just started, or a parent task to approve.
 
-1. Every returned event is a valid `_event` and writes valid data (entity schemas).
-2. `causedBy` is an existing `_process`.
-3. The change really triggers that process: it has an entry whose `trigger` is the topic of the published event.
-4. That process may return the event: the topic of the returned event and the fields it changes fit the `output` of that entry, and the assignee fits `assignTo`.
-5. `depth` is the depth of the published event plus one, and does not pass the depth limit.
-6. No process is missing. Before it publishes, the engine works out which processes the event triggers: the ones with an entry whose `trigger` is the topic of the event. Each of them must appear as `causedBy` in at least one returned event. A process that has nothing to change still returns an `ack` event: its `operation` is `ack`, its `target` is the target of the published event, and it has no `changes`. An `ack` event is never listed in `output` and is always allowed. It is checked like the others but not applied: nothing is written.
+1. `schema`: every returned event is a valid `_event` and writes valid data (entity schemas).
+2. `scope`: `causedBy` is that task, and the events touch nothing else. For a subtask: `_artifact:create` with `task` set to that subtask (an artifact is never updated or deleted), and `_task:update` of that subtask that only sets `status` to `DONE`. For an approval: `_task:update` of the parent task that only sets `approvedAt` and `approvedBy`, or `rejectedAt` and `rejectedBy`.
+3. `approver`: the role in `approvedBy` or `rejectedBy` is one of the `canApprovedBy` of the parent task.
+4. `depth`: it is the depth of the published event plus one, and does not pass the depth limit.
 
-A `_rejection` lists each violation: which of these checks was broken, and by which returned event (or by the batch as a whole, for a missing process) (`schema`, `process-unknown`, `trigger-mismatch`, `output-not-allowed`, `depth`, `process-missing`).
+A `_rejection` lists each violation: which of these checks was broken, and by which returned event.
 
-This validation is for the brain only. Events written through the scripts (by a skill or manually) are checked against the entity schemas, and their `causedBy` (a skill name or null) is not checked against a `_process`.
+This validation is for the brain only. Events written through the scripts (by a skill or manually) are checked against the entity schemas, and their `causedBy` (a skill name or null) is not checked against a task.
 
 How it consumes events:
 
@@ -130,11 +128,35 @@ They share one library that handles:
 - **`auto_id` allocation:** done under the write lock, reading the latest state from disk (not from an index).
 - **Write lock:** every write takes it, so only one writer at a time across all instances.
 - **Atomic write:** write a temp file, then rename, pretty-formatted JSON.
-- **Trigger (outbox):** in the same lock as the data write, store an `_event` record in `.superteam/data/_event/`. The event carries the `target` (entity and id), the `operation`, the changed fields (old and new values), `causedBy` and `depth` (see `_event.schema.json`). Whoever creates an event fills `causedBy`: the write script, as given by its caller (null for a manual call, the skill name when a skill calls it), or the endpoint for the process events it returns (the `_process` id). After releasing the lock, start the engine (1) detached, so the write script is never blocked. Seeding skips this step (`--no-trigger`).
+- **Trigger (outbox):** in the same lock as the data write, store an `_event` record in `.superteam/data/_event/`. The event carries the `target` (entity and id), the `operation`, the changed fields (old and new values), `causedBy` and `depth` (see `_event.schema.json`). Whoever creates an event fills `causedBy`: the write script, as given by its caller (null for a manual call, the skill name when a skill calls it), or the endpoint for the process events it returns (the id of the task it worked on). After releasing the lock, start the engine (1) detached, so the write script is never blocked. Seeding skips this step (`--no-trigger`).
 
 Register: a script that creates or renews a `_subscription`. Under the write lock it scans the existing `_subscription` records; there are few of them, so scanning is cheap. If one has the same `endpoint` and `topic`, it updates that record's `expiresAt` and `subscriber`; otherwise it creates a new record. The event is `update` or `create` accordingly.
 
 Cleanup: a script, run manually, that deletes the expired `_subscription` records (`expiresAt` in the past). It is never run automatically. Expired records are ignored by the engine in the meantime, so cleaning up is only housekeeping.
+
+#### 1.5. Work flow
+
+A parent task follows a `_process`. The engine runs the work flow in code, on the events of the queue, with no AI. A task has the status `OPEN`, `IN_PROGRESS` or `DONE`. A pair such as `REVIEW_DONE` is read as the subtask `REVIEW` with the status `DONE`.
+
+| When | Who | What |
+| --- | --- | --- |
+| A parent task is created with a `process` | Engine | Creates one subtask for each entry of the process, with status `OPEN`: `parent` is the task, `subtask` is the entry name, `assignee` is its role, `dependOn` points to the sibling subtasks it waits for, and `instructions` is the `customInstructions` of the parent for that name if there is one, else the default of the entry. |
+| A subtask has no `dependOn` that is not `DONE`, at creation or when its last dependency becomes `DONE` | Engine | Sets it to `IN_PROGRESS`. Subtasks that do not depend on each other start at the same time. |
+| A subtask is `IN_PROGRESS` | Its assignee role | Does the work and writes its `_artifact` records, then sets the subtask to `DONE`. A bot role does it through the brain (2.1.2), a human role by hand. |
+| Every subtask of a parent task is `DONE` | Engine | Sets the parent task to `DONE`. The approval (1.6) starts. |
+
+- A subtask that is `OPEN` while a `dependOn` is not `DONE` is waiting for its turn.
+- A parent task is `IN_PROGRESS` as soon as one of its subtasks is. Its progress, the number of `DONE` subtasks over all subtasks, is computed when it is read and is not stored.
+- `DONE` only says the work is finished, not that it succeeded. The result of a subtask is its artifacts: a review that finds problems still ends `DONE`, and its artifact says what it found.
+
+#### 1.6. Approval flow
+
+The approval is a separate flow from the work flow, and it applies only to the parent task. The subtasks were delegated to the members, so only the result of the whole team is approved.
+
+- It starts when the parent task is `DONE`. The approver is a role in `canApprovedBy`, a list the creator of the task sets when creating it. When it is omitted it is `["human"]`, so no agent approves by default.
+- If `canApprovedBy` has a bot role, the engine assigns the parent task to the first one, and the brain (2.1.2) decides from the content of the parent task and the artifacts of all its subtasks. If it has only human roles, nothing happens and a human approves or rejects through a script.
+- The decision is written in the parent task as `approvedAt` and `approvedBy`, or `rejectedAt` and `rejectedBy`. The engine checks that the role is in `canApprovedBy`.
+- A rejected task stays rejected. It is a final state.
 
 ### 2. AI Enhancement
 
@@ -172,22 +194,20 @@ A change to the declared keys in a schema takes effect at the next bootstrap or 
 
 ##### 2.1.2. Brain
 
-The endpoint the engine calls. In the real integration it is Claude, reached through the MCP server (2.1): the engine publishes an event to the MCP server, which triggers a Claude workflow by spawning a child `claude -p`.
+The endpoint the engine calls. In the real integration it is Claude, reached through the MCP server (2.1): the engine publishes an event to the MCP server, which starts a Claude agent for the task by spawning a child `claude -p`.
 
-- Input: the event and `depth`. Output: process events (see 1), each carrying `causedBy` (the `_process` it ran) and `depth`. The brain never writes data itself, and the engine checks its output against that `_process` (1).
-- A Claude workflow is a Claude Code workflow (the Workflow tool: a JavaScript script that orchestrates agents with `agent()`, `parallel()`, `pipeline()`), following Claude's own workflow convention. The workflow files and the agents they call are generated from the `_process` and `_role` records by the installation (2.3).
-- The Workflow tool only works inside a Claude session, so the MCP server starts one. In the project directory (so `.claude/workflows/{process}.js` is found), it runs `claude -p '<prompt naming the saved workflow and its args>' --output-format json --json-schema <schema> --permission-mode dontAsk --allowedTools Workflow --max-budget-usd <n>`, with stdin from `/dev/null`.
-- The child session inherits the environment and signs in with the user's own account, so it needs no API key. It runs the workflow and waits for it to finish; the validated result is in the `structured_output` field of the JSON output.
-- An unknown workflow name is not an error: the child answers with an empty list, which the engine rejects as `process-missing`.
-- Without a brain, the engine still stores and serves data, but nothing answers its calls.
+- Input: the event and `depth`. Output: process events (see 1), each carrying `causedBy` (the task it worked on) and `depth`. The brain never writes data itself, and the engine checks its output (1).
+- The MCP server reads the task from the data files before it spawns anything. It acts only in two cases: a subtask that is `IN_PROGRESS` and whose `assignee` is a bot role, and a parent task that is `DONE` and assigned to a bot role for approval. In every other case it answers with an empty list and starts nothing.
+- For a subtask, the prompt is made of the instructions of the role, the `instructions` of the subtask, the content of the parent task, and the artifacts of the subtasks it depends on. For an approval, it is the content of the parent task and the artifacts of all its subtasks.
+- In the project directory, it runs `claude -p '<prompt>' --output-format json --json-schema <schema> --permission-mode dontAsk --max-budget-usd <n>`, with the agent of the role (`.claude/agents/{role}.md`) and the tools of the role allowed, and stdin from `/dev/null`. The validated result is in the `structured_output` field of the JSON output.
+- The child session inherits the environment and signs in with the user's own account, so it needs no API key.
+- Without a brain, the engine still stores and serves data and runs the process, but a subtask or an approval given to a bot role is never done.
 
-Topics the brain needs, as the `topic` of `_subscription` records whose `endpoint` is the MCP server. The MCP server (2.1) registers them when it starts (draft v0, to be adjusted when the first processes are written):
+Topics the brain needs, as the `topic` of `_subscription` records whose `endpoint` is the MCP server. The MCP server (2.1) registers them when it starts:
 
 | Topic | Starts |
 | --- | --- |
-| `_task:create` | intake of new work: break down, assign |
-| `_task:update` | the assignee role starts working on a newly assigned task, or a reaction to approval, rejection or a request for approval; the brain reads `changes` to tell which |
-| `_artifact:create` | review of the new artifact by the approver |
+| `_task:update` | a subtask that the engine has just set to `IN_PROGRESS`, or a parent task that the engine has just assigned for approval |
 
 #### 2.2. Skills
 
@@ -201,14 +221,13 @@ Skills provided by the plugin:
 
 #### 2.3. Installation
 
-Sets the project up to run with Claude Code. A script does two things: it transforms core entities into Claude Code files, following Claude's conventions, and it edits the project's `.gitignore`. It is run manually after the project data changes.
+Sets the project up to run with Claude Code. A script does two things: it transforms the roles into Claude Code agents, following Claude's conventions, and it edits the project's `.gitignore`. It is run manually after the project data changes.
 
 Transform:
 
 | Entity | Claude Code file | Notes |
 | --- | --- | --- |
 | `_role` | `.claude/agents/{role}.md` | the role record (`description`, `tools`, `model`) combined with its `instructions` file |
-| `_process` | `.claude/workflows/{process}.js` | generated from its entries, run by the brain (2.1.2) by name |
 
 Edit:
 

@@ -67,8 +67,9 @@ Planned files, none created yet. README section numbers in brackets.
 
 | File | Responsibility |
 | --- | --- |
+| `orchestrate.js` | The process in code (1.5, 1.6): create the subtasks of a parent task, start them, finish the parent, assign the approval. |
 | `publish.js` | Pick the live subscriptions of a topic, order them, call the endpoint, retry. |
-| `validate.js` | The six checks on the brain's output, and the `_rejection` record. |
+| `validate.js` | The four checks on the brain's output, and the `_rejection` record. |
 | `apply.js` | Apply accepted process events through `lib/write.js`. |
 
 ### `src/scripts/`
@@ -121,16 +122,16 @@ These are proposals. The plan below assumes them, and each one is cheap to chang
 | 4 | Engine to brain contract | `POST` to the `endpoint` with JSON `{ "event": <_event>, "depth": <number> }`. The answer is JSON `{ "processEvents": [<_event>, ...] }`. A non-2xx status, no answer in time, or a body that cannot be read is a failed call (1). |
 | 5 | CLI of `scripts/write.js` | `write.js <entity> create\|update\|delete [--id N] [--data '<json>'] [--caused-by <value>] [--no-trigger]`. It prints the written record as JSON. Exit code 0 on success, 1 on a rejected write. |
 | 6 | Depth limit | 5. |
-| 7 | What `_process` holds beyond `trigger`, `output` and `assignTo` | The steps the process runs (which role does what). Needed before the installation (2.3) can generate `.claude/workflows/{process}.js`. Decide before Phase 3. |
-| 8 | "The assignee fits `assignTo`" (check 4 in 1) | Checked only when the event sets `assignee`. An update that does not touch `assignee` passes. |
+| 7 | Where the process logic lives | In the engine, as code (`engine/orchestrate.js`), run on each event before it is published. Not a separate subscriber. |
+| 8 | Status of a parent task | Stored, set by the engine from its subtasks. Its progress is computed when read. |
 
 ### Phase 0: how the brain runs (done)
 
-The MCP server starts a Claude workflow by spawning a child `claude -p` (2.1.2). Two risks go to Phase 3: a child started in a project with this plugin may load the plugin and its MCP server again, and the usage counts against the account's limit in a way not yet measured.
+The MCP server starts Claude by spawning a child `claude -p` (2.1.2). Checked so far: the child signs in with the user's account and returns a validated `structured_output`. Three things go to Phase 3 because they are not checked yet: running the agent of a role with `--agent`, a child started in a project with this plugin loading the plugin and its MCP server again, and how the usage counts against the account's limit.
 
 ### Phase 1: engine core, no AI
 
-Goal: write a record through a script and have the engine publish the event to an endpoint, validate the answer and apply it. Tested against a fake brain, an HTTP server in `test/fixtures/` that returns a configured answer.
+Goal: write a record through a script and have the engine run the process, publish the event to an endpoint, validate the answer and apply it. Tested against a fake brain, an HTTP server in `test/fixtures/` that returns a configured answer.
 
 | # | Task | Files |
 | --- | --- | --- |
@@ -143,16 +144,18 @@ Goal: write a record through a script and have the engine publish the event to a
 | 1.7 | Enqueue and dequeue `_event`, derive the topic from `target.entity` and `operation`. | `lib/events.js` |
 | 1.8 | The write pipeline: lock, validate, store the `_event` first, write the data file, release the lock, start the engine detached unless `--no-trigger` (1.3). | `lib/write.js` |
 | 1.9 | The write CLI (decision 5). | `scripts/write.js` |
-| 1.10 | Publish: take the live subscriptions of the topic, latest `expiresAt` first, call the endpoint (10 minute timeout, retry after 1, 2 and 4 seconds), move to the next subscription on failure, skip subscribers of the same name and version after a rejection. | `engine/publish.js` |
-| 1.11 | The six checks, the expected processes computed before publishing, `ack` handling, the `_rejection` record. | `engine/validate.js` |
-| 1.12 | Apply accepted events through `lib/write.js`, keep `causedBy` and `depth`, refuse beyond the depth limit. | `engine/apply.js` |
-| 1.13 | Drain the queue under the engine lock, look at the queue again before exiting, support the manual re-run of what is left. | `scripts/engine.js` |
-| 1.14 | Register and renew a `_subscription`, delete the expired ones. | `scripts/register.js`, `scripts/cleanup.js` |
+| 1.10 | Orchestrate: create the subtasks of a parent task from its `_process` (with `customInstructions`), start the subtasks whose `dependOn` are `DONE`, set the parent `IN_PROGRESS` and `DONE`, assign the approval to the first bot role of `canApprovedBy` (1.5, 1.6). | `engine/orchestrate.js` |
+| 1.11 | Publish: take the live subscriptions of the topic, latest `expiresAt` first, call the endpoint (10 minute timeout, retry after 1, 2 and 4 seconds), move to the next subscription on failure, skip subscribers of the same name and version after a rejection. | `engine/publish.js` |
+| 1.12 | The four checks (`schema`, `scope`, `approver`, `depth`) and the `_rejection` record. | `engine/validate.js` |
+| 1.13 | Apply accepted events through `lib/write.js`, keep `causedBy` and `depth`, refuse beyond the depth limit. | `engine/apply.js` |
+| 1.14 | Drain the queue under the engine lock, look at the queue again before exiting, support the manual re-run of what is left. | `scripts/engine.js` |
+| 1.15 | Register and renew a `_subscription`, delete the expired ones. | `scripts/register.js`, `scripts/cleanup.js` |
 
 Done when, with the fake brain:
-- Creating a `_task` publishes `_task:create`, and the process events the brain returns are applied.
-- A batch that breaks a check applies nothing and leaves a `_rejection` with the right `check`.
-- A missing process is rejected as `process-missing`, and an `ack` event is accepted and not applied.
+- Creating a parent task with a process creates its subtasks. Subtasks that do not depend on each other start together, and a subtask that depends on others starts only when they are `DONE`.
+- When every subtask is `DONE` the parent task is `DONE`, and the approval is assigned to the first bot role of `canApprovedBy`, or left to a human when there is none.
+- The process events the fake brain returns are applied.
+- A batch that breaks a check (`schema`, `scope`, `approver`, `depth`) applies nothing and leaves a `_rejection` with the right `check`.
 - A dead endpoint is retried and then the next subscription is tried. A rejected answer moves on only to a subscriber with a different name or version.
 - The depth limit stops a loop.
 - Two writers at the same time get different ids and no lost write.
@@ -168,19 +171,19 @@ Goal: an MCP server that Claude Code starts with the session, that serves querie
 | 2.2 | The in-memory index table: load the data, build the indexes declared in the schemas, answer queries by key. | `mcp/index/table.js` |
 | 2.3 | The file watcher: re-index one record on change, full rebuild on demand. | `mcp/index/watcher.js` |
 | 2.4 | The MCP server: stdio, query tools, a reload tool, a local HTTP listener on a random port bound to `127.0.0.1`. | `mcp/server.js`, `.mcp.json` |
-| 2.5 | Register the three topics at start, renew every 13 minutes (TTL 1 hour). | `mcp/server.js` |
+| 2.5 | Register the topic `_task:update` at start, renew every 13 minutes (TTL 1 hour). | `mcp/server.js` |
 
 Done when the server starts in a Claude Code session, its subscriptions appear in `.superteam/data/_subscription/` and are renewed, and the query tools answer from the index.
 
 ### Phase 3: AI integration
 
-Goal: events reach Claude, workflows run, results come back.
+Goal: events reach Claude, agents do the subtasks and the approvals, results come back.
 
 | # | Task | Files |
 | --- | --- | --- |
-| 3.1 | The brain: answer the engine's call by spawning `claude -p` as verified in Phase 0, return `structured_output`. Guard against the child loading the plugin again. | `mcp/brain.js` |
-| 3.2 | The installation: `_role` to `.claude/agents/{role}.md`, `_process` to `.claude/workflows/{process}.js`, the `.gitignore` lines (2.3). Needs decision 7. | `scripts/install.js` |
+| 3.1 | The brain: answer the engine's call only for a subtask in progress or an approval given to a bot role, build the prompt, spawn `claude -p` with the agent of the role, return `structured_output`. Check `--agent`, and guard against the child loading the plugin again. | `mcp/brain.js` |
+| 3.2 | The installation: `_role` to `.claude/agents/{role}.md`, the `.gitignore` lines (2.3). | `scripts/install.js` |
 | 3.3 | The skills: Define role, Define process, Query data (2.2). | `skills/*/SKILL.md` |
-| 3.4 | End to end: a real workflow answers a real `_task:create` event. | `test/fixtures/` |
+| 3.4 | End to end: a research process with `WORK` and `REVIEW` subtasks. A parent task is created, agents do the subtasks, and the approval goes to a human or to an agent. | `test/fixtures/` |
 
-Done when a task created through a skill produces process events written by the real brain, and a wrong answer leaves a `_rejection`.
+Done when a parent task created for the research process ends `DONE` with the artifacts written by real agents, and an agent that goes beyond its subtask leaves a `_rejection`.

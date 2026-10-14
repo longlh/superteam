@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "_rejection.schema.json",
   "title": "_rejection",
-  "description": "A record of a batch of process events that the engine rejected because the brain broke the process. It is a business error, not a system error, so it is recorded to be fixed (the workflow or the brain), and versioned in git. Written by the engine. Draft v0.",
+  "description": "A record of a batch of process events that the engine rejected because the brain went beyond what it was asked to do. It is a business error, not a system error, so it is recorded to be fixed (the process, the instructions or the brain), and versioned in git. Written by the engine. Draft v0.",
   "type": "object",
   "additionalProperties": false,
   "required": ["id", "createdAt", "topic", "subscription", "event", "returned", "violations"],
@@ -66,14 +66,14 @@
         "required": ["index", "check", "message"],
         "properties": {
           "index": {
-            "description": "Position of the process event in `returned`; null when the violation is about the batch as a whole, such as a missing process.",
-            "type": ["integer", "null"],
+            "description": "Position of the process event in `returned`.",
+            "type": "integer",
             "minimum": 0
           },
           "check": {
-            "description": "The validation that failed.",
+            "description": "The validation that failed: schema (not a valid event or invalid data), scope (it touches something other than the task the brain was asked to work on), approver (an approval by a role not in canApprovedBy), depth (beyond the depth limit).",
             "type": "string",
-            "enum": ["schema", "process-unknown", "trigger-mismatch", "output-not-allowed", "depth", "process-missing"]
+            "enum": ["schema", "scope", "approver", "depth"]
           },
           "message": {
             "type": "string"

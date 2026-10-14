@@ -5,7 +5,7 @@
   "description": "Roles are defined by each project, following this schema. The engine reads them through an adapter; the schema is independent of the Claude Code subagent format. Adapter: combines the role record with its `instructions` file to generate one markdown agent definition, written at the location Claude Code expects by convention. It runs as a build step, triggered manually, after the project has set up its role entities. Draft v0.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["id", "description", "kind", "instructions", "tools", "model", "approver"],
+  "required": ["id", "description", "kind", "instructions", "tools", "model"],
   "properties": {
     "id": {
       "description": "Stable name; referenced by _task (`assignee`, `createdBy`, `approvedBy`, ...).",
@@ -23,7 +23,7 @@
       "x-level": "engine"
     },
     "instructions": {
-      "description": "File describing how the role works.",
+      "description": "File with the business instructions of the role: how this kind of member works.",
       "type": ["string", "null"],
       "x-type": "path",
       "x-level": "engine"
@@ -37,12 +37,6 @@
     "model": {
       "description": "Suggested model.",
       "type": ["string", "null"],
-      "x-level": "engine"
-    },
-    "approver": {
-      "description": "Permission setup only: the role allowed to approve this role's tasks. Null does not mean auto-approve; the approval flow is decided by the _process.",
-      "type": ["string", "null"],
-      "x-ref": "_role",
       "x-level": "engine"
     }
   }

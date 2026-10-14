@@ -2,10 +2,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "_artifact.schema.json",
   "title": "_artifact",
-  "description": "A file produced for a task. Draft v0.",
+  "description": "An output of a task, such as a document, source code or a pull request. It either embeds the output or refers to it where it is stored. Draft v0.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["id", "task", "version", "createdAt", "source"],
+  "required": ["id", "task", "version", "createdAt"],
   "properties": {
     "id": {
       "type": "integer",
@@ -31,10 +31,19 @@
       "format": "date-time",
       "x-level": "engine"
     },
-    "source": {
+    "content": {
+      "description": "The output itself, embedded.",
       "type": "string",
-      "x-type": "path",
+      "x-level": "engine"
+    },
+    "ref": {
+      "description": "Where the output is stored: a path, a URL or another reference.",
+      "type": "string",
       "x-level": "engine"
     }
-  }
+  },
+  "oneOf": [
+    { "required": ["content"] },
+    { "required": ["ref"] }
+  ]
 }
