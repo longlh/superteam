@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "_rejection.schema.json",
+  "title": "_rejection",
+  "description": "A record of a batch of workflow events that the engine rejected because the brain broke the workflow. It is a business error, not a system error, so it is recorded to be fixed (the workflow or the brain), and versioned in git. Written by the engine. Draft v0.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "createdAt", "topic", "subscription", "event", "returned", "violations"],
+  "properties": {
+    "id": {
+      "type": "integer",
+      "minimum": 1,
+      "x-type": "auto_id",
+      "x-level": "engine"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time",
+      "x-level": "engine"
+    },
+    "topic": {
+      "description": "Topic of the published event, as {entity}:{operation}.",
+      "type": "string",
+      "pattern": "^_?[a-z][a-z0-9-]*:(create|update|delete)$",
+      "x-level": "engine"
+    },
+    "subscription": {
+      "description": "A copy of the _subscription that was called, to tell which brain returned the rejected events. A copy and not a reference, because subscriptions are runtime records: they expire and are deleted by the cleanup script.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "endpoint", "subscriber"],
+      "properties": {
+        "id": { "type": "integer" },
+        "endpoint": { "type": "string" },
+        "subscriber": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "version"],
+          "properties": {
+            "name": { "type": "string" },
+            "version": { "type": ["string", "null"] }
+          }
+        }
+      },
+      "x-level": "engine"
+    },
+    "event": {
+      "description": "A copy of the published _event, as it was sent. A copy and not a reference, because the queue entry is removed and its id can start over.",
+      "type": "object",
+      "x-level": "engine"
+    },
+    "returned": {
+      "description": "The workflow events the brain returned, as received.",
+      "type": "array",
+      "items": { "type": "object" },
+      "x-level": "engine"
+    },
+    "violations": {
+      "description": "Why the batch was rejected: one entry per broken check.",
+      "type": "array",
+      "minItems": 1,
+      "x-level": "engine",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["index", "check", "message"],
+        "properties": {
+          "index": {
+            "description": "Position of the workflow event in `returned`; null when the violation is about the batch as a whole, such as a missing workflow.",
+            "type": ["integer", "null"],
+            "minimum": 0
+          },
+          "check": {
+            "description": "The validation that failed.",
+            "type": "string",
+            "enum": ["schema", "workflow-unknown", "trigger-mismatch", "output-not-allowed", "depth", "workflow-missing"]
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

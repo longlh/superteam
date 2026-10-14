@@ -20,15 +20,15 @@ Normal operation follows CQRS: writes (commands) and reads (queries) are separat
 - **Write flow:** see 1.3. Scripts write the data files, then trigger the engine.
 - **Read flow:** see 1.2. Records are read directly from the data files. The optional MCP server (2.1) enhances it with an in-memory index.
 
-## Build flow
+## Installation flow
 
 Run manually after the project data changes, separate from normal operation:
 
 ```
-.superteam/data/*.json ──read──> build script ──> Claude Code files (agents, workflows)
+.superteam/data/*.json ──read──> installation script ──> Claude Code files (agents, workflows), .gitignore
 ```
 
-The build script (2.3) reads the files directly, bypassing the index and the MCP server.
+The installation script (2.3) reads the files directly, bypassing the index and the MCP server.
 
 ## Components
 
@@ -43,13 +43,14 @@ Core entities are defined by the engine and have a `_` prefix. Their schemas are
 | `_task` | A unit of work: type, status, assignee, parent and dependencies. |
 | `_artifact` | A file produced for a task, versioned per task. |
 | `_role` | A team member of the project, either `bot` or `human`. |
-| `_workflow` | A named definition of a workflow, made of entries. The engine uses it to enforce what the endpoint may return; the installation (2.3) builds from it. |
-| `_subscription` | A subscription to events, for pub/sub: which topic (`topic`, as `{entity}:{operation}`, such as `_task:create`) is published to which `endpoint` (an address). It has a TTL (`expiresAt`): its creator renews it while it is alive, and one that is not renewed expires and is ignored. Created by an external system; the engine only reads it to publish. |
+| `_workflow` | A named definition of a workflow, made of entries. The engine uses it to enforce what the endpoint may return; the installation (2.3) generates Claude Code files from it. |
+| `_rejection` | A record of a batch of workflow events the engine rejected: the subscription that was called, the published event, what the brain returned, and which checks it broke. A business error, recorded so the workflow or the brain can be fixed; versioned in git. |
+| `_subscription` | A subscription to events, for pub/sub: which topic (`topic`, as `{entity}:{operation}`, such as `_task:create`) is published to which `endpoint` (an address), and who subscribed (`subscriber`: name and version). It has a TTL (`expiresAt`): its creator renews it while it is alive, and one that is not renewed expires and is ignored. Created by an external system; the engine only reads it to publish. |
 | `_event` | An outbox record written with each data write, which triggers the engine. The `_event` folder is a queue: the write scripts enqueue events in id order, and the engine dequeues (removes) each one once processed. The event id is only the order in the queue, not a unique identity: it can start over once the queue is drained. Immutable: once written it is never modified. |
 
 The engine is a script. It is not a watcher or a background process: it only runs when a write script (1.4) triggers it after changing data. Data changed outside the scripts (manual edits, git pull) is not supported for now: it does not trigger the engine. On each trigger it reads the events in the queue, finds the `_subscription` records whose `topic` is the topic of each one and calls the `endpoint` of each one that has not expired. The engine relies only on this data.
 
-The endpoint is the engine's brain. After a write, the engine sends it the published event (with its `target`) and expects a list of **workflow events** back: `_event` records, each describing a write the engine must make, such as creating or updating a task. A workflow event is a derived type of `_event`, not a separate entity, so it has the same shape. Its `causedBy` is the `_workflow` the brain ran. Events are immutable (read-only): the engine applies them as they are, or rejects them. If any workflow event is rejected, the engine applies none of them and does not retry; how rejections are recorded is not defined yet. Accepted events are applied through the write scripts (1.4), so they use the same validation and write lock.
+The endpoint is the engine's brain. After a write, the engine sends it the published event (with its `target`) and expects a list of **workflow events** back: `_event` records, each describing a write the engine must make, such as creating or updating a task. A workflow event is a derived type of `_event`, not a separate entity, so it has the same shape. Its `causedBy` is the `_workflow` the brain ran. Events are immutable (read-only): the engine applies them as they are, or rejects them. If any workflow event is rejected, the engine applies none of them, does not retry, and records the rejection as a `_rejection`. This is a business error (the brain broke the workflow), unlike a failed call, which is a system error and is not recorded. Accepted events are applied through the write scripts (1.4), so they use the same validation and write lock.
 
 What the engine publishes and subscribes to:
 
@@ -68,6 +69,9 @@ The engine validates the returned list in code, using the published event (its `
 3. The change really triggers that workflow: it has an entry whose `trigger` is the topic of the published event.
 4. That workflow may return the event: the topic of the returned event and the fields it changes fit the `output` of that entry, and the assignee fits `assignTo`.
 5. `depth` is the depth of the published event plus one, and does not pass the depth limit.
+6. No workflow is missing. Before it publishes, the engine works out which workflows the event triggers: the ones with an entry whose `trigger` is the topic of the event. Each of them must appear as `causedBy` in at least one returned event. A workflow that has nothing to change still returns an `ack` event: its `operation` is `ack`, its `target` is the target of the published event, and it has no `changes`. An `ack` event is never listed in `output` and is always allowed. It is checked like the others but not applied: nothing is written.
+
+A `_rejection` lists each violation: which of these checks was broken, and by which returned event (or by the batch as a whole, for a missing workflow) (`schema`, `workflow-unknown`, `trigger-mismatch`, `output-not-allowed`, `depth`, `workflow-missing`).
 
 This validation is for the brain only. Events written through the scripts (by a skill or manually) are checked against the entity schemas, and their `causedBy` (a skill name or null) is not checked against a `_workflow`.
 
@@ -76,7 +80,7 @@ How it consumes events:
 - It drains `.superteam/data/_event/` in order. It has its own lock (separate from the write lock), so only one engine processes events at a time.
 - A processed event is marked done by removing it; events are never modified. An event is never lost: if the engine dies midway, a manual command re-runs the remaining events. This is a manual recovery step, not a watcher.
 - When the engine calls an endpoint it passes the `depth` the returned events must carry (the depth of the published event plus one). It refuses to go past a depth limit, so it cannot loop forever.
-- If a call to an endpoint fails, the engine retries it 3 times, after 1, 2 and 4 seconds. If it still fails, the engine gives up silently: nothing is recorded, and the event is removed from the queue as usual: the data write that produced it already succeeded, so on the engine's side the event is done. The other subscriptions of the same event are not affected.
+- Every attempt to call an endpoint times out after 10 minutes. If a call fails for any reason (the endpoint cannot be reached, it times out, or its response cannot be read), the engine treats all failures the same way: it retries 3 times, after 1, 2 and 4 seconds. If it still fails, the engine gives up silently: nothing is recorded, and the event is removed from the queue as usual: the data write that produced it already succeeded, so on the engine's side the event is done. The other subscriptions of the same event are not affected.
 
 #### 1.1. Storage
 
@@ -128,7 +132,7 @@ They share one library that handles:
 - **Atomic write:** write a temp file, then rename, pretty-formatted JSON.
 - **Trigger (outbox):** in the same lock as the data write, store an `_event` record in `.superteam/data/_event/`. The event carries the `target` (entity and id), the `operation`, the changed fields (old and new values), `causedBy` and `depth` (see `_event.schema.json`). Whoever creates an event fills `causedBy`: the write script, as given by its caller (null for a manual call, the skill name when a skill calls it), or the endpoint for the workflow events it returns (the `_workflow` id). After releasing the lock, start the engine (1) detached, so the write script is never blocked. Seeding skips this step (`--no-trigger`).
 
-Register: a script that creates or renews a `_subscription`. Under the write lock it scans the existing `_subscription` records; there are few of them, so scanning is cheap. If one has the same `endpoint` and `topic`, it updates that record's `expiresAt`; otherwise it creates a new record. The event is `update` or `create` accordingly.
+Register: a script that creates or renews a `_subscription`. Under the write lock it scans the existing `_subscription` records; there are few of them, so scanning is cheap. If one has the same `endpoint` and `topic`, it updates that record's `expiresAt` and `subscriber`; otherwise it creates a new record. The event is `update` or `create` accordingly.
 
 Cleanup: a script, run manually, that deletes the expired `_subscription` records (`expiresAt` in the past). It is never run automatically. Expired records are ignored by the engine in the meantime, so cleaning up is only housekeeping.
 
@@ -141,7 +145,7 @@ The layer that lets AI agents use the engine: an optional index and MCP server f
 An optional enhancement of the read side. On top of the in-memory index table (2.1.1), the server gives AI agents a protocol to query project data. It is also the endpoint the engine publishes events to (2.1.2). It is read-only: it never writes to `.superteam/data/` (writes go through the scripts, see 1.4). Its tools query by those keys, such as the tasks of an assignee, the children of a task or the tasks with a given status. Query by id is not served by it: a record by id is always read directly from its data file (1.2).
 
 - **Lifecycle:** a long-running process. Claude Code starts it (stdio) when a session starts and stops it when the session ends. It loads all JSON files once at startup and keeps the index in memory, so queries do not re-read files.
-- **Registration:** besides stdio, it opens a listening address when it starts, on a random free port chosen by the operating system. For each topic the brain needs (2.1.2) it registers a `_subscription` with the register script (1.4): the `endpoint` is that address and the `expiresAt` is now plus a TTL of 1 hour. While it runs it renews them every 13 minutes with the same script. When it stops, nothing removes them: they expire. If a new server gets the port of a dead one, the script finds the same `endpoint` and `topic` and updates that record instead of creating a duplicate. The records are written through the write scripts (1.4) like any other data. Each write enqueues an `_event`, but nothing subscribes to the `_subscription` topics, so it publishes nothing.
+- **Registration:** besides stdio, it opens a listening address when it starts, on a random free port chosen by the operating system. For each topic the brain needs (2.1.2) it registers a `_subscription` with the register script (1.4): the `endpoint` is that address, the `subscriber` is the plugin name and version, and the `expiresAt` is now plus a TTL of 1 hour. While it runs it renews them every 13 minutes with the same script. When it stops, nothing removes them: they expire. If a new server gets the port of a dead one, the script finds the same `endpoint` and `topic` and updates that record instead of creating a duplicate. The records are written through the write scripts (1.4) like any other data. Each write enqueues an `_event`, but nothing subscribes to the `_subscription` topics, so it publishes nothing.
 - **Multiple instances:** several sessions on one project each run their own server with their own index. This is safe because servers only read; the write lock lives in the scripts.
 
 ##### 2.1.1. In-memory index table

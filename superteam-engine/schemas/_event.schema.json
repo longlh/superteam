@@ -28,8 +28,9 @@
       }
     },
     "operation": {
+      "description": "create, update or delete a record. `ack` is only for workflow events: the workflow ran and has nothing to change; its target is the target of the published event and it has no changes.",
       "type": "string",
-      "enum": ["create", "update", "delete"]
+      "enum": ["create", "update", "delete", "ack"]
     },
     "changes": {
       "description": "Changed fields only: field name -> { old, new }. On create every old is null; on delete every new is null.",
@@ -76,6 +77,14 @@
           "changes": {
             "additionalProperties": { "properties": { "new": { "type": "null" } } }
           }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "operation": { "const": "ack" } } },
+      "then": {
+        "properties": {
+          "changes": { "maxProperties": 0 }
         }
       }
     }
