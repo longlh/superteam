@@ -172,11 +172,13 @@ A change to the declared keys in a schema takes effect at the next bootstrap or 
 
 ##### 2.1.2. Brain
 
-The endpoint the engine calls. In the real integration it is Claude, reached through the MCP server (2.1): the engine publishes an event to the MCP server, which triggers a Claude workflow.
+The endpoint the engine calls. In the real integration it is Claude, reached through the MCP server (2.1): the engine publishes an event to the MCP server, which triggers a Claude workflow by spawning a child `claude -p`.
 
 - Input: the event and `depth`. Output: workflow events (see 1), each carrying `causedBy` (the `_workflow` it ran) and `depth`. The brain never writes data itself, and the engine checks its output against that `_workflow` (1).
 - A Claude workflow is a Claude Code workflow (the Workflow tool: a JavaScript script that orchestrates agents with `agent()`, `parallel()`, `pipeline()`), following Claude's own workflow convention. The workflow files and the agents they call are generated from the `_workflow` and `_role` records by the installation (2.3).
-- The Workflow tool only works inside a Claude session. Assumption, not yet verified: how the MCP server starts the workflow in a Claude session. Revisit when the brain is built.
+- The Workflow tool only works inside a Claude session, so the MCP server starts one. In the project directory (so `.claude/workflows/{workflow}.js` is found), it runs `claude -p '<prompt naming the saved workflow and its args>' --output-format json --json-schema <schema> --permission-mode dontAsk --allowedTools Workflow --max-budget-usd <n>`, with stdin from `/dev/null`.
+- The child session inherits the environment and signs in with the user's own account, so it needs no API key. It runs the workflow and waits for it to finish; the validated result is in the `structured_output` field of the JSON output.
+- An unknown workflow name is not an error: the child answers with an empty list, which the engine rejects as `workflow-missing`.
 - Without a brain, the engine still stores and serves data, but nothing answers its calls.
 
 Topics the brain needs, as the `topic` of `_subscription` records whose `endpoint` is the MCP server. The MCP server (2.1) registers them when it starts (draft v0, to be adjusted when the first workflows are written):
