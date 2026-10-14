@@ -44,18 +44,38 @@ Core entities are defined by the engine and have a `_` prefix. Their schemas are
 | `_artifact` | A file produced for a task, versioned per task. |
 | `_role` | A team member of the project, either `bot` or `human`. |
 | `_workflow` | A named definition of a workflow, made of entries. The engine uses it to enforce what the endpoint may return; the installation (2.3) builds from it. |
-| `_subscription` | A subscription to events, for pub/sub: which events (`match`) are published to which `endpoint`, and optionally the `_workflow` that the returned workflow events must follow. Created by an external system; the engine only reads it to publish. |
+| `_subscription` | A subscription to events, for pub/sub: which topic (`topic`, as `{entity}:{operation}`, such as `_task:create`) is published to which `endpoint`. Created by an external system; the engine only reads it to publish. |
 | `_event` | An outbox record written with each data write, which triggers the engine. The `_event` folder is a queue: the write scripts enqueue events in id order, and the engine dequeues (removes) each one once processed. The event id is only the order in the queue, not a unique identity: it can start over once the queue is drained. Immutable: once written it is never modified. |
 
-The engine is a script. It is not a watcher or a background process: it only runs when a write script (1.4) triggers it after changing data. Data changed outside the scripts (manual edits, git pull) is not supported for now: it does not trigger the engine. On each trigger it reads the events in the queue, finds the `_subscription` records that match each one and calls the `endpoint` of each. The engine relies only on this data.
+The engine is a script. It is not a watcher or a background process: it only runs when a write script (1.4) triggers it after changing data. Data changed outside the scripts (manual edits, git pull) is not supported for now: it does not trigger the engine. On each trigger it reads the events in the queue, finds the `_subscription` records whose `topic` is the topic of each one and calls the `endpoint` of each. The engine relies only on this data.
 
-The endpoint is the engine's brain. The engine sends it the event together with `causedBy` and `depth`, and expects **workflow events** back: each one describes a write the engine must make, such as creating or updating a task. Before applying, the engine validates them in code: against the entity schemas, and, when the subscription names a `_workflow`, against the entry of that workflow whose `trigger` matches the event (the events allowed in `output` and the `assignTo` role). If any workflow event is rejected, the engine applies none of them and does not retry; how rejections are recorded is not defined yet. Accepted events are applied through the write scripts (1.4), so they use the same validation and write lock. A workflow event is a derived type of `_event`, not a separate entity, so it has the same shape (`target`, `operation`, `changes`) and already carries `causedBy` and `depth`. Events are immutable (read-only): the engine applies them as they are.
+The endpoint is the engine's brain. After a write, the engine sends it the published event (with its `target`) and expects a list of **workflow events** back: `_event` records, each describing a write the engine must make, such as creating or updating a task. A workflow event is a derived type of `_event`, not a separate entity, so it has the same shape. Its `causedBy` is the `_workflow` the brain ran. Events are immutable (read-only): the engine applies them as they are, or rejects them. If any workflow event is rejected, the engine applies none of them and does not retry; how rejections are recorded is not defined yet. Accepted events are applied through the write scripts (1.4), so they use the same validation and write lock.
+
+What the engine publishes and subscribes to:
+
+| Item | What |
+| --- | --- |
+| Published | The `_event` record, unchanged. Nothing else is published: not the data records, not the `_workflow`. |
+| Subscribed to | Changes of an entity, by topic `{entity}:{operation}`: `_task:create`, `_task:update`, `_task:delete`, and so on. A `_subscription` names the topic; the topic of an `_event` is its `target.entity` and its `operation`. |
+| Delivered to | The `endpoint` of the subscription. |
+| Sent along | The `depth` the returned events must carry: the depth of the published event plus one. |
+| Returned | A list of workflow events (`_event` records), each with `causedBy` (the `_workflow` the brain ran) and `depth`. They are not published: the engine validates and applies them, and the writes enqueue new `_event` records. |
+
+The engine validates the returned list in code, using the published event (its `target` and `operation`) and the `causedBy` of each returned event:
+
+1. Every returned event is a valid `_event` and writes valid data (entity schemas).
+2. `causedBy` is an existing `_workflow`.
+3. The change really triggers that workflow: it has an entry whose `trigger` is the topic of the published event.
+4. That workflow may return the event: the topic of the returned event and the fields it changes fit the `output` of that entry, and the assignee fits `assignTo`.
+5. `depth` is the depth of the published event plus one, and does not pass the depth limit.
+
+This validation is for the brain only. Events written through the scripts (by a skill or manually) are checked against the entity schemas, and their `causedBy` (a skill name or null) is not checked against a `_workflow`.
 
 How it consumes events:
 
 - It drains `.superteam/data/_event/` in order. It has its own lock (separate from the write lock), so only one engine processes events at a time.
 - A processed event is marked done by removing it; events are never modified. An event is never lost: if the engine dies midway, a manual command re-runs the remaining events. This is a manual recovery step, not a watcher.
-- When the engine calls an endpoint it passes `causedBy` (an id that identifies the call) and a depth, which end up on the events it applies. It refuses to go past a depth limit, so it cannot loop forever.
+- When the engine calls an endpoint it passes the `depth` the returned events must carry (the depth of the published event plus one). It refuses to go past a depth limit, so it cannot loop forever.
 
 #### 1.1. Storage
 
@@ -105,7 +125,7 @@ They share one library that handles:
 - **`auto_id` allocation:** done under the write lock, reading the latest state from disk (not from an index).
 - **Write lock:** every write takes it, so only one writer at a time across all instances.
 - **Atomic write:** write a temp file, then rename, pretty-formatted JSON.
-- **Trigger (outbox):** in the same lock as the data write, store an `_event` record in `.superteam/data/_event/`. The event carries the `target` (entity and id), the `operation`, the changed fields (old and new values), `causedBy` and `depth` (see `_event.schema.json`). After releasing the lock, start the engine (1) detached, so the write script is never blocked. Seeding skips this step (`--no-trigger`).
+- **Trigger (outbox):** in the same lock as the data write, store an `_event` record in `.superteam/data/_event/`. The event carries the `target` (entity and id), the `operation`, the changed fields (old and new values), `causedBy` and `depth` (see `_event.schema.json`). Whoever creates an event fills `causedBy`: the write script, as given by its caller (null for a manual call, the skill name when a skill calls it), or the endpoint for the workflow events it returns (the `_workflow` id). After releasing the lock, start the engine (1) detached, so the write script is never blocked. Seeding skips this step (`--no-trigger`).
 
 ### 2. AI Enhancement
 
@@ -165,16 +185,15 @@ The script reads the JSON files directly, following the storage layout from 1.1 
 
 The endpoint the engine calls. In the real integration it is Claude, reached through the MCP server (2.1): the engine publishes an event to the MCP server, which triggers a Claude workflow.
 
-- Input: the event, `causedBy` and `depth`. Output: workflow events (see 1) carrying that `causedBy` and `depth`. The brain never writes data itself, and the engine checks its output against the `_workflow` (1).
+- Input: the event and `depth`. Output: workflow events (see 1), each carrying `causedBy` (the `_workflow` it ran) and `depth`. The brain never writes data itself, and the engine checks its output against that `_workflow` (1).
 - A Claude workflow is a Claude Code workflow (the Workflow tool: a JavaScript script that orchestrates agents with `agent()`, `parallel()`, `pipeline()`), following Claude's own workflow convention. The workflow files and the agents they call are generated from the `_workflow` and `_role` records by the installation (2.3).
 - The Workflow tool only works inside a Claude session. Assumption, not yet verified: how the MCP server starts the workflow in a Claude session. Revisit when the brain is built.
 - Without a brain, the engine still stores and serves data, but nothing answers its calls.
 
-Events the brain needs, as `match` conditions of `_subscription` records whose `endpoint` is the MCP server (draft v0, to be adjusted when the first workflows are written):
+Topics the brain needs, as the `topic` of `_subscription` records whose `endpoint` is the MCP server (draft v0, to be adjusted when the first workflows are written):
 
-| Event | `entity` | `operation` | `fields` | Starts |
-| --- | --- | --- | --- | --- |
-| Task created | `_task` | `create` | any | intake of new work: break down, assign |
-| Task assigned | `_task` | `update` | `assignee` | the assignee role starts working on the task |
-| Task status changed | `_task` | `update` | `status` | reaction to approval, rejection or a request for approval |
-| Artifact created | `_artifact` | `create` | any | review of the new artifact by the approver |
+| Topic | Starts |
+| --- | --- |
+| `_task:create` | intake of new work: break down, assign |
+| `_task:update` | the assignee role starts working on a newly assigned task, or a reaction to approval, rejection or a request for approval; the brain reads `changes` to tell which |
+| `_artifact:create` | review of the new artifact by the approver |

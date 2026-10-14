@@ -49,8 +49,8 @@
       "format": "date-time"
     },
     "causedBy": {
-      "description": "Id that identifies the endpoint call that caused this event; null when written by an agent or a person calling a script. Opaque to the endpoint.",
-      "type": ["integer", "null"]
+      "description": "What caused this event, filled by whoever creates it. An integer is the id of the _workflow the endpoint ran, set on the workflow events it returns (checked by the engine). A string is the name of the skill that called a write script. Null for a manual call of a write script.",
+      "type": ["integer", "string", "null"]
     },
     "depth": {
       "description": "0 when written outside the engine, +1 for each engine-caused write. The engine refuses to go past its depth limit.",

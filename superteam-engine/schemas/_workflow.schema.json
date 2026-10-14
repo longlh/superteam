@@ -7,26 +7,10 @@
   "additionalProperties": false,
   "required": ["id", "name"],
   "$defs": {
-    "eventPattern": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["entity", "operation", "fields"],
-      "properties": {
-        "entity": {
-          "type": "string",
-          "pattern": "^_?[a-z][a-z0-9-]*$"
-        },
-        "operation": {
-          "description": "null matches any operation.",
-          "type": ["string", "null"],
-          "enum": ["create", "update", "delete", null]
-        },
-        "fields": {
-          "description": "null matches any fields.",
-          "type": ["array", "null"],
-          "items": { "type": "string" }
-        }
-      }
+    "topic": {
+      "description": "{entity}:{operation}, such as _task:create.",
+      "type": "string",
+      "pattern": "^_?[a-z][a-z0-9-]*:(create|update|delete)$"
     }
   },
   "properties": {
@@ -52,8 +36,8 @@
         "required": ["trigger", "output"],
         "properties": {
           "trigger": {
-            "description": "The event this entry reacts to; same shape as _subscription.match. The engine picks the entry whose trigger matches the event it published.",
-            "$ref": "#/$defs/eventPattern",
+            "description": "The topic this entry reacts to, like _subscription.topic. The engine picks the entry whose trigger is the topic of the event it published.",
+            "$ref": "#/$defs/topic",
             "x-level": "engine"
           },
           "input": {
@@ -61,9 +45,20 @@
             "x-level": "engine"
           },
           "output": {
-            "description": "The workflow events this entry allows. For each one, `fields` lists the fields it may change; null allows any. A workflow event that fits none of them is rejected.",
+            "description": "The workflow events this entry allows, by topic. `fields` lists the fields an event may change; null allows any. A workflow event that fits none of them is rejected.",
             "type": "array",
-            "items": { "$ref": "#/$defs/eventPattern" },
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["topic", "fields"],
+              "properties": {
+                "topic": { "$ref": "#/$defs/topic" },
+                "fields": {
+                  "type": ["array", "null"],
+                  "items": { "type": "string" }
+                }
+              }
+            },
             "x-level": "engine"
           },
           "assignTo": {
