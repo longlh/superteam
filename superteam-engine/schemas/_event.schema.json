@@ -8,7 +8,7 @@
   "required": ["id", "target", "operation", "changes", "createdAt", "causedBy", "depth"],
   "properties": {
     "id": {
-      "description": "auto_id, allocated under the write lock; also the processing order.",
+      "description": "Order in the queue (the _event folder), allocated under the write lock. Not a unique identity: it only orders the events in the folder, and can start over once the queue is drained.",
       "type": "integer",
       "minimum": 1
     },
@@ -49,9 +49,8 @@
       "format": "date-time"
     },
     "causedBy": {
-      "description": "_workflow-exec id when the engine wrote this change; null when written by an agent or a person calling a script.",
-      "type": ["integer", "null"],
-      "x-ref": "_workflow-exec"
+      "description": "Id that identifies the endpoint call that caused this event; null when written by an agent or a person calling a script. Opaque to the endpoint.",
+      "type": ["integer", "null"]
     },
     "depth": {
       "description": "0 when written outside the engine, +1 for each engine-caused write. The engine refuses to go past its depth limit.",

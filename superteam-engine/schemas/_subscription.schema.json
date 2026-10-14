@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "_subscription.schema.json",
+  "title": "_subscription",
+  "description": "A subscription to events, for pub/sub. Created by an external system (such as the AI Enhancement layer); the engine only reads it to publish events. Draft v0: the fields are a first proposal.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "match", "endpoint", "workflow"],
+  "properties": {
+    "id": {
+      "type": "integer",
+      "minimum": 1,
+      "x-type": "auto_id",
+      "x-level": "engine"
+    },
+    "match": {
+      "description": "Which events the subscription receives. An event matches when all the non-null conditions hold.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entity", "operation", "fields"],
+      "x-level": "engine",
+      "properties": {
+        "entity": {
+          "description": "Entity of the event target.",
+          "type": "string",
+          "pattern": "^_?[a-z][a-z0-9-]*$"
+        },
+        "operation": {
+          "description": "Operation of the event; null matches any.",
+          "type": ["string", "null"],
+          "enum": ["create", "update", "delete", null]
+        },
+        "fields": {
+          "description": "The event matches when at least one of these fields changed; null matches any.",
+          "type": ["array", "null"],
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "endpoint": {
+      "description": "Where the engine publishes a matching event, such as the name of an MCP server. The engine calls it and expects workflow events back.",
+      "type": "string",
+      "x-level": "engine"
+    },
+    "workflow": {
+      "description": "The workflow whose definition the engine enforces on the workflow events the endpoint returns; null means no check.",
+      "type": ["integer", "null"],
+      "x-ref": "_workflow",
+      "x-level": "engine"
+    }
+  }
+}

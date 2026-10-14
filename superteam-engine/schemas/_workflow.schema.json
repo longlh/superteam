@@ -2,10 +2,33 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "_workflow.schema.json",
   "title": "_workflow",
-  "description": "A named definition, e.g. a requirements intake workflow. It is a trigger that creates tasks and assigns them automatically, made of an array of entries. Adapter: generates the Claude Code workflow from the _workflow entity, at the location Claude Code expects by convention (build step, like _role). Draft v0: the entry fields are not fully defined yet.",
+  "description": "A named definition of a workflow, made of an array of entries. The engine uses it to enforce, in code, what the endpoint may return for an event: every workflow event must fit an entry. The installation also builds the Claude Code workflow from it (at the location Claude Code expects by convention, like _role). Draft v0: `input` is not defined yet.",
   "type": "object",
   "additionalProperties": false,
   "required": ["id", "name"],
+  "$defs": {
+    "eventPattern": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entity", "operation", "fields"],
+      "properties": {
+        "entity": {
+          "type": "string",
+          "pattern": "^_?[a-z][a-z0-9-]*$"
+        },
+        "operation": {
+          "description": "null matches any operation.",
+          "type": ["string", "null"],
+          "enum": ["create", "update", "delete", null]
+        },
+        "fields": {
+          "description": "null matches any fields.",
+          "type": ["array", "null"],
+          "items": { "type": "string" }
+        }
+      }
+    }
+  },
   "properties": {
     "id": {
       "type": "integer",
@@ -26,22 +49,26 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
+        "required": ["trigger", "output"],
         "properties": {
           "trigger": {
-            "description": "Enum whose values are defined at project level. Not defined yet.",
-            "type": "string",
-            "x-level": "project"
+            "description": "The event this entry reacts to; same shape as _subscription.match. The engine picks the entry whose trigger matches the event it published.",
+            "$ref": "#/$defs/eventPattern",
+            "x-level": "engine"
           },
           "input": {
             "description": "Not defined yet.",
             "x-level": "engine"
           },
           "output": {
-            "description": "Not defined yet.",
+            "description": "The workflow events this entry allows. For each one, `fields` lists the fields it may change; null allows any. A workflow event that fits none of them is rejected.",
+            "type": "array",
+            "items": { "$ref": "#/$defs/eventPattern" },
             "x-level": "engine"
           },
           "assignTo": {
-            "type": "string",
+            "description": "When set, the assignee of the tasks that workflow events create or update must be this role.",
+            "type": ["string", "null"],
             "x-ref": "_role",
             "x-level": "engine"
           }
