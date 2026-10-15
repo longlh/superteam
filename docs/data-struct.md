@@ -18,6 +18,7 @@ erDiagram
         string description
         string instruction
         string role
+        workflowStepId[] dependOn
     }
 
     WORK {
@@ -58,6 +59,7 @@ erDiagram
     }
 
     WORKFLOW ||--o{ WORKFLOW_STEP : has
+    WORKFLOW_STEP }o--o{ WORKFLOW_STEP : "depends on"
     WORKFLOW ||--o{ WORK : follows
     WORK ||--o{ TASK : has
     TASK }o--o{ TASK : "depends on"
@@ -84,8 +86,8 @@ These statuses are not stored. They are derived from the fields of the entities.
 | Status | Formula |
 |---|---|
 | `OPEN` | `tasks.length == 0` |
-| `IN_PROGRESS` | `tasks.length > 0 && tasks.length > done_tasks.length` |
-| `DONE` | `tasks.length > 0 && tasks.length === done_tasks.length` |
+| `IN_PROGRESS` | `tasks.length > 0 && tasks.length > completed_tasks.length` |
+| `DONE` | `tasks.length > 0 && tasks.length === completed_tasks.length` |
 
 ### Work approval status
 
@@ -93,7 +95,7 @@ The approval status of a work is derived from the fields of the work and its tas
 
 | Approval status | Formula |
 |---|---|
-| `DRAFT` | `approved == false && tasks.length == 0` |
-| `PROPOSED` | `tasks.length === done_tasks.length && tasks.length > 0` |
-| `APPROVED` | `PROPOSED && approvalAt && approved` |
-| `REJECTED` | `PROPOSED && approvalAt && !approved` |
+| `DRAFT` | `tasks.length === 0 \|\| tasks.length > completed_tasks.length` |
+| `PROPOSED` | `tasks.length > 0 && tasks.length === completed_tasks.length && !approvalAt` |
+| `APPROVED` | `tasks.length > 0 && tasks.length === completed_tasks.length && approvalAt && approved` |
+| `REJECTED` | `tasks.length > 0 && tasks.length === completed_tasks.length && approvalAt && !approved` |
