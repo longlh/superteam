@@ -9,6 +9,7 @@ erDiagram
         string *title "human readable name"
         string description "human readable description"
         string[] dod
+        string[] canApprove "roles"
     }
 
     WORKFLOW_STEP {
@@ -30,6 +31,7 @@ erDiagram
         datetime createdAt
         datetime updatedAt
         boolean[] dodChecklist
+        string approver "role"
         boolean approved
         datetime approvalAt
     }
@@ -42,7 +44,7 @@ erDiagram
         string[] dod
         datetime createdAt
         datetime updatedAt
-        string assignee
+        string assignee "role"
         string instruction
         taskId[] dependOn
         boolean[] dodChecklist
