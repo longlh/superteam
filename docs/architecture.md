@@ -8,6 +8,7 @@
 
 Where the state is kept.
 
+- It belongs to the root workspace, where the engine runs.
 - It is file-based.
 - Only part of it is versioned with git. Runtime data is not.
 
@@ -22,7 +23,8 @@ Owns the workflow logic and all state: works, tasks, statuses, approval status, 
 - Every write is an event (a write command) that goes through a single queue, including the writes from different AI sessions at the same time.
 - The write flow is asynchronous: a write is accepted into the queue and the caller does not wait for it to be processed.
 - The engine runs a loop that claims the events from the queue and processes them one at a time, in order, so there is no race condition.
-- There is only one engine instance.
+- There is only one engine instance, in the root workspace. A workspace is a working directory.
+- The git worktrees created for workers have no engine.
 - It persists its state to local files (see Storage).
 
 ### Worker layer
@@ -40,6 +42,14 @@ A Claude process that runs one task.
 - It is spawned and killed by the engine.
 - It loads the requirements of the task, the context and the role, then runs the task.
 - It returns its result to the engine as structured output defined by a JSON schema. It does not go through the MCP server.
+
+#### Merge agent
+
+A special AI agent, not a worker process, that does the git merges (see "Spawn worker").
+
+- It is spawned by the engine in two cases, and in both it does a merge.
+- When the engine prepares the worktree of a task: it merges the branches of the previous tasks into the new branch, before the worker runs.
+- When the approval status of a work becomes `APPROVED`: it merges the branches of all the final tasks of the work into the root branch.
 
 ### Interface layer
 
