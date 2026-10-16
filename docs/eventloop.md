@@ -69,10 +69,15 @@ The event loop comes with a factory that creates an event from a payload:
   counter: the counter is set at the start (see "Life cycle"), and the factory
   adds one to it each time it creates an event. When the queue is empty the
   maximum is 0, so the `order` of an event always starts from 1. The `order` `0`
-  is never used for a new event: it is reserved for the event that is recovered
-  at the start.
+  is never used for a new event: it is reserved for the events that go back to
+  the head of the queue, which are the event that is recovered at the start and
+  the event of a retry.
 - `createdAt`: `now()`.
 - `id`: a hash of `createdAt`.
+
+The factory writes an event atomically. It writes the file of the event to the
+temporary folder first, and when the write is finished it moves the file into
+the queue, so the loop never reads an event that is half written.
 
 ## Loop
 
@@ -80,7 +85,8 @@ The loop claims the events from the queue and processes them one at a time, in
 order, so there is no race condition.
 
 The loop runs continuously while there are events in the queue. When the queue
-is empty, it waits 1 second before it checks again.
+is empty, it resets the counter of the factory to 0, and waits 1 second before
+it checks again.
 
 The event loop itself detects the abandoned claims. On each iteration of
 `loop()` it does:
@@ -88,18 +94,21 @@ The event loop itself detects the abandoned claims. On each iteration of
 1. Check the claim folder. A claim that is still there is abandoned, because a
    write command is processed right away and never waits. Move its event to the
    DLQ, so that the errors do not accumulate.
-2. Dequeue and claim a new event.
+2. Dequeue and claim a new event. If its `attempts` is greater than 0, it is a
+   retry, so the loop waits 2 to the power of `attempts` seconds before it goes
+   on. The queue is blocked while the loop waits, and this is accepted.
 3. Process the write: apply it to the state. The engine does not write directly
    to the target file. It writes to a temporary folder first
    (`.superteam/.w/tmp/`), which is a different folder from the claim folder,
    and when the write is finished it moves the file to its target place.
 4. If the write succeeds, delete the claim and fire `write:done`. If it fails,
-   the event is retried: the factory creates a new event with the same payload
-   and `attempts` plus one, the engine enqueues it, and the claim is deleted.
-   The maximum number of attempts is configurable, and the default is 3. When
-   `attempts` reaches it, the event is moved to the DLQ instead. An event with
-   an invalid structure, or with a syntax error, is never retried: it is moved
-   to the DLQ.
+   the event is retried: the factory creates a new event with the same payload,
+   `attempts` plus one and the `order` `0`. The engine enqueues it as
+   `000000.json`, which is the head of the queue, so the writes keep their
+   order, and the claim is deleted. The maximum number of attempts is
+   configurable, and the default is 3. When `attempts` reaches it, the event is
+   moved to the DLQ instead. An event with an invalid structure, or with a
+   syntax error, is never retried: it is moved to the DLQ.
 
 ## Life cycle
 
