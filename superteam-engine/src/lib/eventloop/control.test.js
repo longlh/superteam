@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readdir, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createControl } from "./control.js";
@@ -11,7 +11,7 @@ const payload = { command: "write", target: "/a/b.txt", src: "hi" };
 // The control with fakes for all its parts, and the folders on a temporary
 // disk folder. `calls` records what happened. `iterations` is what each call of
 // iterate() returns, then false.
-async function setup({ iterations = [] } = {}) {
+async function setup({ iterations = [], exit } = {}) {
   const paths = getPaths(await mkdtemp(path.join(tmpdir(), "control-")));
   const calls = [];
   const hooks = {};
@@ -44,6 +44,7 @@ async function setup({ iterations = [] } = {}) {
     loop,
     sleep,
     pollIntervalMs: 1000,
+    exit,
   });
   return { calls, control, hooks, paths };
 }
@@ -155,4 +156,43 @@ test("the handlers are removed when the start stage fails", async () => {
   await assert.rejects(failing.start());
   assert.equal(process.listenerCount("SIGTERM"), before);
   await assert.rejects(failing.enqueue(payload), /start\(\) first/);
+});
+
+test("start clears the tmp folder", async () => {
+  const { control, paths } = await setup();
+  await mkdir(paths.tmp, { recursive: true });
+  await writeFile(path.join(paths.tmp, "left.tmp"), "from a crash");
+  control.shutdown();
+  await control.start({ handleSignals: false });
+  assert.deepEqual(await readdir(paths.tmp), []);
+});
+
+test("start can be called only once", async () => {
+  const { control } = await setup();
+  control.shutdown();
+  await control.start({ handleSignals: false });
+  await assert.rejects(control.start({ handleSignals: false }), /only once/);
+});
+
+test("a second signal force quits, and the first one does not", async () => {
+  const codes = [];
+  const { control, hooks } = await setup({ exit: (code) => codes.push(code) });
+  hooks.onSleep = () => {
+    process.emit("SIGINT");
+    assert.deepEqual(codes, []);
+    process.emit("SIGINT");
+    assert.deepEqual(codes, [130]);
+  };
+  await control.start();
+});
+
+test("shutdown() followed by one signal is not a force quit", async () => {
+  const codes = [];
+  const { control, hooks } = await setup({ exit: (code) => codes.push(code) });
+  hooks.onSleep = () => {
+    control.shutdown();
+    process.emit("SIGTERM");
+  };
+  await control.start();
+  assert.deepEqual(codes, []);
 });

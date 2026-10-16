@@ -1,4 +1,4 @@
-import { ensurePaths } from "./paths.js";
+import { clearTmp, ensurePaths } from "./paths.js";
 
 const SIGNALS = ["SIGINT", "SIGTERM"];
 
@@ -12,14 +12,26 @@ export function createControl({
   loop,
   pollIntervalMs = 1000,
   sleep,
+  exit = process.exit,
 }) {
   // True once the start stage is done: the folders exist and the counter is set.
   let isStarted = false;
   let isShuttingDown = false;
+  // start() runs once: a second call, or a restart after shutdown, is refused.
+  let isStartCalled = false;
+  let isSignaled = false;
 
   // The iteration in progress finishes, then the loop stops.
   function shutdown() {
     isShuttingDown = true;
+  }
+
+  // A second signal is a force quit. The
+  // claim stays, and the next start() recovers from it like from a crash.
+  function onSignal() {
+    if (isSignaled) exit(130);
+    isSignaled = true;
+    shutdown();
   }
 
   return {
@@ -31,13 +43,17 @@ export function createControl({
       return event;
     },
 
-    // 1. Start: the folders, the counter, the recovery.
+    // 1. Start: the folders, the tmp clean-up, the counter, the recovery.
     // 2. Loop: until the shutdown. 3. Shutdown: no new iteration starts.
-    // The signals call shutdown() unless handleSignals is false.
+    // The signals call shutdown() unless handleSignals is false. A second
+    // signal quits at once.
     async start({ fetchTimeoutMs, handleSignals = true } = {}) {
-      if (handleSignals) SIGNALS.forEach((s) => process.on(s, shutdown));
+      if (isStartCalled) throw new Error("start() can be called only once");
+      isStartCalled = true;
+      if (handleSignals) SIGNALS.forEach((s) => process.on(s, onSignal));
       try {
         await ensurePaths(paths);
+        await clearTmp(paths);
         factory.setCounter(await queue.maxOrder());
         await loop.recover();
         isStarted = true;
@@ -47,7 +63,7 @@ export function createControl({
           }
         }
       } finally {
-        SIGNALS.forEach((s) => process.off(s, shutdown));
+        SIGNALS.forEach((s) => process.off(s, onSignal));
       }
     },
 

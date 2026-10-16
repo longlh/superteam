@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createFactory } from "./factory.js";
-import { eventId } from "./event.js";
+import { MAX_ORDER, eventId } from "./event.js";
 
 const payload = { command: "write", target: "/a/b.txt", src: "hi" };
 const createdAt = "2026-01-01T00:00:00.000Z";
@@ -47,4 +47,11 @@ test("createAtHead gives order 0 with the attempts, and keeps the counter", () =
     attempts: 2,
   });
   assert.equal(factory.create(payload).order, 1);
+});
+
+test("create throws when the order would pass the maximum", () => {
+  const factory = setup();
+  factory.setCounter(MAX_ORDER - 1);
+  assert.equal(factory.create(payload).order, MAX_ORDER);
+  assert.throws(() => factory.create(payload), /not supported/);
 });

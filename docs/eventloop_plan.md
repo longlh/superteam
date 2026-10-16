@@ -15,7 +15,7 @@ The plan to implement the module described in `eventloop.md`.
 | Topic               | Decision                                                                                                                                                                           |
 | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Language            | JavaScript, ES modules, Node 24. No runtime dependency.                                                                                                                            |
-| Location            | `superteam-engine/src/eventloop/`. Each unit test is next to its code: `paths.js` has `paths.test.js`.                                                                             |
+| Location            | `superteam-engine/src/lib/eventloop/`. Each unit test is next to its code: `paths.js` has `paths.test.js`.                                                                         |
 | Test runner         | `node:test` and `node:assert`. No extra dependency.                                                                                                                                |
 | Base directory      | A `baseDir` option. The folders are `{baseDir}/.superteam/.w/{queue,claim,dlq,tmp}`.                                                                                               |
 | Folders             | Created with `mkdir -p` at start.                                                                                                                                                  |
@@ -32,6 +32,12 @@ The plan to implement the module described in `eventloop.md`.
 | Broken claim        | At the recovery, a claim that is not valid goes to the DLQ and `write:error` is fired. An abandoned claim found by `loop()` only goes to the DLQ: no notification.                 |
 | `target`            | The writer creates the parent folder of `target` (`mkdir -p`) before it moves the file.                                                                                            |
 | Counter             | Increased synchronously in `create()`, so two calls in the same process never get the same `order`.                                                                                |
+| `order` limit       | `create()` throws `order above 999999 is not supported` when the counter reaches the maximum.                                                                                      |
+| `EXDEV`             | The writer turns a cross-device `rename` error into `target ... on another device is not supported`. It is a write failure, so it is retried and then goes to the DLQ.             |
+| Tmp clean-up        | The start stage deletes every file in `.superteam/.w/tmp/` (`clearTmp()`), before the recovery.                                                                                    |
+| `start()` guard     | `start()` throws `start() can be called only once` on a second call, also after `shutdown()`.                                                                                      |
+| Force quit          | A second `SIGINT` or `SIGTERM` calls `exit(130)` at once. The claim stays, and the next start recovers from it like from a crash. `shutdown()` called by code does not count.      |
+| Fail fast           | An error of the file system inside `iterate()` is not caught: `start()` rejects and the loop stops. A claim that is left is recovered at the next start.                           |
 
 ## 3. Code style
 
@@ -109,8 +115,14 @@ await loop.start({ fetchTimeoutMs }); // runs the start stage, then the loop, an
 loop.shutdown(); // sets isShuttingDown to true
 ```
 
-- `start()` also adds the `SIGINT` and `SIGTERM` handlers, which call
-  `shutdown()`. The option `handleSignals: false` turns this off, for tests.
+- `start()` also adds the `SIGINT` and `SIGTERM` handlers. The first signal
+  calls `shutdown()`. A second signal is a force quit: it calls `exit(130)` at
+  once, and the next start recovers from the claim that is left. The option
+  `handleSignals: false` turns the handlers off, for tests.
+- `start()` can be called only once. A second call, also after `shutdown()`,
+  throws `start() can be called only once`.
+- `start()` is fail fast: an error of the file system inside the loop makes the
+  promise reject, and the loop stops.
 - `enqueue()` throws if it is called before `start()` has finished its start
   stage: it returns a promise that is rejected with
   `enqueue() needs start() first`.
@@ -120,19 +132,22 @@ loop.shutdown(); // sets isShuttingDown to true
 Each step comes with the unit test file of its code, next to it. A step ends
 with its tests passing before the next step starts.
 
-1. **Foundation** (`paths.js`, `event.js`): the folders, the event shape, the
-   parsing of an event file, the validator, the hash functions, and the padding
-   of `order` to 6 digits.
+1. **Foundation** (`paths.js`, `event.js`): the folders, `ensurePaths()`,
+   `clearTmp()`, the event shape, the parsing of an event file, the validator,
+   the hash functions, and the padding of `order` to 6 digits.
 2. **Factory** (`factory.js`): the counter, `create()` with `order`, `id` and
    `createdAt`, and `createAtHead()` with the `order` `0`, for the retry and the
-   recovery. The factory does not know where the events go.
+   recovery. `create()` throws when `order` would pass `999999`. The factory
+   does not know where the events go.
 3. **Queue** (`queue.js`): the only place that knows the queue folders. `put()`
    writes an event atomically (write to tmp, then move into the queue), and
    overwrites a file with the same name. It also lists the queue in `order`,
    claims the lowest event by moving it, deletes the claim, moves an event to
    the DLQ, and reads the claim.
 4. **Writer** (`writer.js`): get the content from `src` or from `remoteSrc`
-   (`src` first), write it to tmp, move it to `target`, and return the hash.
+   (`src` first), write it to tmp, move it to `target`, and return the hash. A
+   `target` on another device (`EXDEV`) is not supported: it throws a clear
+   error.
 5. **Subscribers** (`subscribers.js`): subscribe, unsubscribe, and emit with
    each handler in a try and catch.
 6. **Loop** (`loop.js`): `iterate()`, one iteration of `loop()`, with the four
@@ -146,36 +161,44 @@ with its tests passing before the next step starts.
    signal and no wait for an empty queue.
 7. **Control** (`control.js`, `index.js`): the life cycle of the loop. `start()`
    is the three stages of `eventloop.md`: the start stage makes the folders
-   (`ensurePaths()`), finds the maximum `order` and sets the counter, and calls
-   `loop.recover()`; then it sets `isStarted`. The loop stage calls
-   `loop.iterate()` again and again, and waits 1 second when the queue is empty.
-   The shutdown stage is `shutdown()`, which sets `isShuttingDown`, checked
-   before each new iteration. The control also owns the `SIGINT` and `SIGTERM`
-   handlers, which call `shutdown()`, and `enqueue()`, which needs `isStarted`,
-   so `enqueue()` never runs while the counter is not right.
+   (`ensurePaths()`), clears the tmp folder (`clearTmp()`), finds the maximum
+   `order` and sets the counter, and calls `loop.recover()`; then it sets
+   `isStarted`. The loop stage calls `loop.iterate()` again and again, and waits
+   1 second when the queue is empty. The shutdown stage is `shutdown()`, which
+   sets `isShuttingDown`, checked before each new iteration. The control also
+   owns the `SIGINT` and `SIGTERM` handlers (the first signal calls
+   `shutdown()`, the second one calls `exit(130)`), the guard that lets
+   `start()` run only once, and `enqueue()`, which needs `isStarted`, so
+   `enqueue()` never runs while the counter is not right. `exit` is an option of
+   the control, for tests.
 
 ## 7. Tests
 
 Unit tests, each in the `.test.js` file next to its code:
 
-- `paths.test.js`: the folders are the right ones, and they are created when
-  they are missing.
+- `paths.test.js`: the folders are the right ones, they are created when they
+  are missing, and `clearTmp()` deletes what is left in the tmp folder.
 - `event.test.js`: the padding of `order`, the `id` and the `hash`, the
   validator, and the parsing of an event file.
 - `factory.test.js`: 100 calls of `create()` at the same time give 100 different
-  `order`, and `createAtHead()` gives the `order` `0`.
+  `order`, `createAtHead()` gives the `order` `0`, and `create()` throws above
+  `999999`.
 - `queue.test.js`: `put` is atomic and overwrites, the list is in `order`, the
   claim moves the lowest event, and the move to the DLQ.
 - `writer.test.js`: the `src` first rule, `file://`, `http` with a local test
-  server, and a binary file that is written byte for byte.
+  server, and a binary file that is written byte for byte. The `EXDEV` error is
+  not tested, because it needs a second device.
 - `subscribers.test.js`: the function that `subscribe()` returns unsubscribes
   the handler, and a subscriber that throws does not stop the other subscribers.
 - `loop.test.js`: one iteration with fakes for the parts it uses, the wait of
   `2^attempts` seconds, and `recover()`.
 - `control.test.js`: with a fake loop, the order of the three stages, the wait
   when the queue is empty, the check of `isShuttingDown`, `enqueue()` before and
-  after the start stage, and the signals (`process.emit`, no real signal): they
-  call `shutdown()`, and the handlers are removed after `start()`.
+  after the start stage, the clean-up of the tmp folder, the guard of `start()`,
+  and the signals (`process.emit`, no real signal): the first one calls
+  `shutdown()`, the second one calls the fake `exit` with `130`, a `shutdown()`
+  from code does not count as a signal, and the handlers are removed after
+  `start()`.
 
 Flow tests, in `index.test.js` because `index.js` puts all the parts together.
 They go through the public API, with the folders prepared on a temporary disk
@@ -193,6 +216,8 @@ them:
 - An event with a wrong structure, or one that is not valid JSON, goes to the
   DLQ without a retry.
 - An abandoned claim found by `loop()` goes to the DLQ.
+- The tmp folder is empty after the start stage.
+- A second call of `start()` throws.
 - Start with a claim: it becomes `000000.json`, and it overwrites an existing
   `000000.json`. The counter starts at the maximum `order` of the queue, and at
   0 when the queue is empty.

@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readdir } from "node:fs/promises";
+import { mkdtemp, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { ensurePaths, getPaths } from "./paths.js";
+import { clearTmp, ensurePaths, getPaths } from "./paths.js";
 
 test("the folders are under {baseDir}/.superteam/.w", () => {
   const paths = getPaths("/base");
@@ -27,4 +27,12 @@ test("ensurePaths creates the missing folders, and can run twice", async () => {
     "queue",
     "tmp",
   ]);
+});
+
+test("clearTmp deletes what is left in the tmp folder", async () => {
+  const paths = getPaths(await mkdtemp(path.join(tmpdir(), "paths-")));
+  await ensurePaths(paths);
+  await writeFile(path.join(paths.tmp, "a.tmp"), "x");
+  await clearTmp(paths);
+  assert.deepEqual(await readdir(paths.tmp), []);
 });

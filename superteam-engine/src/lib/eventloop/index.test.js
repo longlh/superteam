@@ -336,3 +336,19 @@ test("start with a claim that is not valid: it goes to the DLQ", async () => {
   );
   assert.equal(ctx.seen[0].event, null);
 });
+
+test("the tmp folder is empty after the start stage", async () => {
+  const ctx = await setup();
+  await ctx.prepare();
+  await writeFile(path.join(ctx.dir("tmp"), "left.tmp"), "from a crash");
+  ctx.loop.shutdown(); // only the start stage runs
+  await ctx.loop.start({ handleSignals: false });
+  assert.deepEqual(await ls(ctx.dir("tmp")), []);
+});
+
+test("a second call of start throws", async () => {
+  const ctx = await setup();
+  ctx.loop.shutdown(); // only the start stage runs
+  await ctx.loop.start({ handleSignals: false });
+  await assert.rejects(ctx.loop.start({ handleSignals: false }), /only once/);
+});

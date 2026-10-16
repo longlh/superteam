@@ -32,6 +32,11 @@ export function createWriter({ paths }) {
         await rename(tmpFile, payload.target);
       } catch (error) {
         await rm(tmpFile, { force: true });
+        if (error.code === "EXDEV") {
+          throw new Error(
+            `target ${payload.target} on another device is not supported`,
+          );
+        }
         throw error;
       }
       return sha256(content);

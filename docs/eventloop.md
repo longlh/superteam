@@ -117,9 +117,11 @@ The event loop itself detects the abandoned claims. On each iteration of
 The event loop has three stages:
 
 1. **Start:** the event loop starts. At this time it:
-   1. Finds the maximum `order` in the queue, and sets the counter of the
+   1. Deletes every file in the tmp folder: no write is in progress, so what is
+      there comes from a crash.
+   2. Finds the maximum `order` in the queue, and sets the counter of the
       factory to it. When the queue is empty, the counter is 0.
-   2. Recovers from a crash: it checks the abandoned claims. For each one, the
+   3. Recovers from a crash: it checks the abandoned claims. For each one, the
       factory creates a new event with the same payload and the same `attempts`,
       and the `order` `0`. The event loop enqueues it as `000000.json`, which is
       the head of the queue, and the claim is deleted. If `000000.json` already
@@ -130,7 +132,9 @@ The event loop has three stages:
    as `SIGINT` or `SIGTERM`, it sets the global flag `isShuttingDown` to `true`.
    Before the loop starts a new iteration, it checks this flag. If it is `true`,
    no new iteration starts, so the iteration in progress is finished and then
-   the loop stops.
+   the loop stops. A second signal is a force quit: the process exits at once,
+   and the claim that is left is recovered at the next start. `start()` can be
+   called only once.
 
 ## Subscriber
 
@@ -166,7 +170,11 @@ accepted:
 - There is no limit on where `target` and the path of a `file://` `url` can be,
   and there is no authentication.
 - `remoteSrc` supports only `GET`. `POST` is not supported yet.
-- `order` has a maximum of `999999`, and nothing checks it.
+- `order` has a maximum of `999999`. Creating an event above it throws: it is
+  not supported.
 - Moving a file from `.superteam/.w/tmp/` to a `target` on another device, such
-  as another mount, fails with `EXDEV` (cross-device link). The `target` is
-  expected to be on the same device as the workspace.
+  as another mount, is not supported: the write fails with an error, and the
+  event is retried and then goes to the DLQ. The `target` is expected to be on
+  the same device as the workspace.
+- An error of the file system inside the loop is not caught (fail fast): the
+  loop stops, and the next start recovers from the claim that is left.
