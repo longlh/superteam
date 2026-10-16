@@ -65,6 +65,39 @@ superteam-engine/src/lib/eventloop/
   control.test.js
 ```
 
+How the files relate. An arrow means "uses". `index.js` creates every part and
+passes it to the parts that need it, so its arrows are left out. `event.js` and
+`paths.js` are at the bottom: they use no other file.
+
+```mermaid
+flowchart TD
+  caller([Caller]) -->|enqueue, subscribe, start, shutdown| control
+  signals([SIGINT, SIGTERM]) -->|shutdown| control
+
+  control["control.js<br/>life cycle, signals, enqueue()"]
+  loop["loop.js<br/>iterate(), recover()"]
+  queue["queue.js<br/>the queue folders"]
+  factory["factory.js<br/>create events"]
+  writer["writer.js<br/>apply a write"]
+  subscribers["subscribers.js<br/>notifications"]
+  event["event.js<br/>shape, parse, validate, hash"]
+  paths["paths.js<br/>folders, mkdir -p"]
+
+  control --> loop
+  control --> queue
+  control --> factory
+  control --> paths
+  loop --> queue
+  loop --> factory
+  loop --> writer
+  loop --> subscribers
+  loop --> event
+  queue --> event
+  factory --> event
+  writer --> event
+  caller -.->|subscribe| subscribers
+```
+
 ## 5. Public API
 
 ```js
