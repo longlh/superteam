@@ -65,8 +65,12 @@ outside the workspace.
 
 The event loop comes with a factory that creates an event from a payload:
 
-- `order`: the factory reads the current queue and takes the maximum `order`
-  plus one.
+- `order`: the maximum `order` plus one. The factory keeps this maximum in a
+  counter: the counter is set at the start (see "Life cycle"), and the factory
+  adds one to it each time it creates an event. When the queue is empty the
+  maximum is 0, so the `order` of an event always starts from 1. The `order` `0`
+  is never used for a new event: it is reserved for the event that is recovered
+  at the start.
 - `createdAt`: `now()`.
 - `id`: a hash of `createdAt`.
 
@@ -83,7 +87,7 @@ The event loop itself detects the abandoned claims. On each iteration of
 
 1. Check the claim folder. A claim that is still there is abandoned, because a
    write command is processed right away and never waits. Move its event to the
-   DLQ.
+   DLQ, so that the errors do not accumulate.
 2. Dequeue and claim a new event.
 3. Process the write: apply it to the state. The engine does not write directly
    to the target file. It writes to a temporary folder first
@@ -96,6 +100,24 @@ The event loop itself detects the abandoned claims. On each iteration of
    `attempts` reaches it, the event is moved to the DLQ instead. An event with
    an invalid structure, or with a syntax error, is never retried: it is moved
    to the DLQ.
+
+## Life cycle
+
+The event loop has three stages:
+
+1. **Start:** the event loop starts. At this time it:
+   1. Finds the maximum `order` in the queue, and sets the counter of the
+      factory to it. When the queue is empty, the counter is 0.
+   2. Recovers from a crash: it checks the abandoned claims. For each one, the
+      factory creates a new event with the same payload and the same `attempts`,
+      and the `order` `0`. The engine enqueues it as `000000.json`, which is the
+      head of the queue, and the claim is deleted.
+2. **Loop:** the event loop runs `loop()` again and again (see "Loop").
+3. **Shutdown:** the event loop stops gracefully. When it receives a signal such
+   as `SIGINT` or `SIGTERM`, it sets the global flag `isShuttingDown` to `true`.
+   Before the loop starts a new iteration, it checks this flag. If it is `true`,
+   no new iteration starts, so the iteration in progress is finished and then
+   the loop stops.
 
 ## Subscriber
 
