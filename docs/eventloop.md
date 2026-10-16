@@ -17,13 +17,13 @@ The queue needs three places:
 
 An event is immutable: once it is created it is never modified. An event has these fields:
 
-| Field | Type | Description |
-|---|---|---|
-| `order` | int | The position of the event in the queue. |
-| `id` | string | The identity of the event. |
-| `payload` | Object[] | The write command. |
-| `createdAt` | datetime | The time the event was created. |
-| `attempts` | int | The number of attempts to process the event. Default `0`. |
+| Field       | Type     | Description                                               |
+| ----------- | -------- | --------------------------------------------------------- |
+| `order`     | int      | The position of the event in the queue.                   |
+| `id`        | string   | The identity of the event.                                |
+| `payload`   | Object[] | The write command.                                        |
+| `createdAt` | datetime | The time the event was created.                           |
+| `attempts`  | int      | The number of attempts to process the event. Default `0`. |
 
 The event loop comes with a factory that creates an event from a payload:
 

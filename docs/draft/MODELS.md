@@ -13,13 +13,13 @@ The engine reacts to changes of the data files. The question is what it takes as
 
 Two stores hold the truth, the data files and the events, and most of the machinery keeps them in agreement. Each fix creates a new case to fix:
 
-| Problem | Mechanism |
-|---|---|
+| Problem                                           | Mechanism                                                                                    |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------- |
 | The file and the event are not written atomically | Outbox, hashes, temp path, wait up to 10 s (or `prepare` and `commit`, option A of QUEUE.md) |
-| An event can be lost | Recovery sweep of the leader, `recoveries`, at most once |
-| A process dies midway | `claims/{pid}`, a manual command, or a lease with `renew` |
-| Recovery and a claim can meet | `hasPending`, read the queue before the claims |
-| A chain of events can loop | `depth` and a depth limit |
+| An event can be lost                              | Recovery sweep of the leader, `recoveries`, at most once                                     |
+| A process dies midway                             | `claims/{pid}`, a manual command, or a lease with `renew`                                    |
+| Recovery and a claim can meet                     | `hasPending`, read the queue before the claims                                               |
+| A chain of events can loop                        | `depth` and a depth limit                                                                    |
 
 ## The two models
 
@@ -55,13 +55,13 @@ The engine runs one loop: read the state, find what is missing, do it. A wake-up
 
 The rules of 1.5 and 1.6 already read as conditions on the data. Written that way, each is a function of the current state:
 
-| Rule | Condition on the data | Action |
-|---|---|---|
-| Create the tasks | A work has a `type`, and has no tasks | Create one task per step, `OPEN` |
-| Start a task | A task is `OPEN` and every task in its `dependOn` is `DONE` | Set it `IN_PROGRESS` |
-| Do a task (bot) | A task is `IN_PROGRESS`, its assignee is a bot role, and nobody holds its lease | Call the brain |
-| Finish a work | Every task of a work is `DONE`, and the work is not `DONE` | Set the work `DONE` |
-| Approve (bot) | A work is `DONE`, it is given to a bot role, it has no decision, and nobody holds its lease | Call the brain |
+| Rule             | Condition on the data                                                                       | Action                           |
+| ---------------- | ------------------------------------------------------------------------------------------- | -------------------------------- |
+| Create the tasks | A work has a `type`, and has no tasks                                                       | Create one task per step, `OPEN` |
+| Start a task     | A task is `OPEN` and every task in its `dependOn` is `DONE`                                 | Set it `IN_PROGRESS`             |
+| Do a task (bot)  | A task is `IN_PROGRESS`, its assignee is a bot role, and nobody holds its lease             | Call the brain                   |
+| Finish a work    | Every task of a work is `DONE`, and the work is not `DONE`                                  | Set the work `DONE`              |
+| Approve (bot)    | A work is `DONE`, it is given to a bot role, it has no decision, and nobody holds its lease | Call the brain                   |
 
 In the event-driven model the same rules run as "on `_task:update` to `DONE`, do this". The conditions are the same: only the trigger of the evaluation differs.
 
@@ -125,21 +125,21 @@ The brain's answer writes a task, and that write wakes the engine up again.
 
 ## Comparison
 
-| | Event-driven | Reconcile |
-|---|---|---|
-| Source of truth | Data files and events | Data files |
-| Queue | Messages with content | Leases by record key, and a wake-up |
-| Write and event consistency | Outbox, hashes, or `prepare` and `commit` | Not needed |
-| A lost wake-up or message | Can leave work stuck, repaired only for some cases | Repaired by the next wake-up, for every case |
-| Recovery | A second path, with its own rules | The normal path |
-| Process dies | `claims/{pid}` or a lease, a manual command | A lease expires |
-| Parallel and repeated work | Guards in code | The condition and the lease make it safe |
-| Loop protection | `depth` | Idempotent rules, attempts on the record |
-| Knowing what just changed | `changes` of the event | A marker per record, kept at runtime |
-| Addon delivery | Once, no retry | At least once, so an addon tolerates a duplicate |
-| Order of work | The id of the queue | None guaranteed. The rules do not depend on an order |
-| Cost of a wake-up | Reads one message | Reads the state. Scoped by the key of the record that changed, plus a full pass on the timer |
-| Reading the history of what happened | Messages, until they are removed | Git and the data files |
+|                                      | Event-driven                                       | Reconcile                                                                                    |
+| ------------------------------------ | -------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Source of truth                      | Data files and events                              | Data files                                                                                   |
+| Queue                                | Messages with content                              | Leases by record key, and a wake-up                                                          |
+| Write and event consistency          | Outbox, hashes, or `prepare` and `commit`          | Not needed                                                                                   |
+| A lost wake-up or message            | Can leave work stuck, repaired only for some cases | Repaired by the next wake-up, for every case                                                 |
+| Recovery                             | A second path, with its own rules                  | The normal path                                                                              |
+| Process dies                         | `claims/{pid}` or a lease, a manual command        | A lease expires                                                                              |
+| Parallel and repeated work           | Guards in code                                     | The condition and the lease make it safe                                                     |
+| Loop protection                      | `depth`                                            | Idempotent rules, attempts on the record                                                     |
+| Knowing what just changed            | `changes` of the event                             | A marker per record, kept at runtime                                                         |
+| Addon delivery                       | Once, no retry                                     | At least once, so an addon tolerates a duplicate                                             |
+| Order of work                        | The id of the queue                                | None guaranteed. The rules do not depend on an order                                         |
+| Cost of a wake-up                    | Reads one message                                  | Reads the state. Scoped by the key of the record that changed, plus a full pass on the timer |
+| Reading the history of what happened | Messages, until they are removed                   | Git and the data files                                                                       |
 
 ## What reconcile asks for
 

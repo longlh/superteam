@@ -38,28 +38,28 @@ The foundation of the plugin. It defines the core entities, stores and serves th
 
 Core entities are defined by the engine and have a `_` prefix. Their schemas are JSON Schema files in `superteam-engine/src/schemas/`, named `<entity>.schema.json`. Entities without the prefix belong to the project.
 
-| Entity | Description |
-| --- | --- |
-| `_work` | A unit of work that follows a `_process` and is split into tasks; the tasks do the work (1.5). Its status is `OPEN`, `IN_PROGRESS` or `DONE`. A work is approved or rejected as a whole (1.6). |
-| `_task` | A part of a work, created by the engine from a step of the `_process`. It is assigned to a role and may wait for sibling tasks (1.5). Its status is `OPEN`, `IN_PROGRESS` or `DONE`. |
-| `_artifact` | An output of a task, or of a work (the note of its approver), such as a document, source code or a pull request. It embeds the output or refers to it where it is stored. It records a result and is only ever created: a task that rewrites or deletes content in the project files creates a new artifact that records what it did. |
-| `_role` | A team member of the project, either `bot` or `human`. |
-| `_process` | A named definition of a process: the steps of a flow, the role of each, and which steps each one waits for. It also holds the default instructions of each step. It knows nothing about `_work` and `_task`: the engine creates the tasks of a work from its steps (1.5). |
-| `_rejection` | A record of a batch of process events the engine rejected: the brain that was called, the event sent, what the brain returned, and which checks it broke. A business error, recorded so the process, the instructions or the brain can be fixed; versioned in git. |
-| `_subscription` | A subscription of an addon to events: which topic (`{entity}:{operation}`) is delivered to which addon (`addon`), and the names of the environment variables that configure it (`env`), such as the URL of a webhook. Every subscription of a topic receives its events, unlike a `_brain` (1.7). It is project data, with no TTL, and holds no secret. |
-| `_brain` | A brain: which topic (`topic`, as `{entity}:{operation}`, such as `_work:create`) is sent to which `endpoint` (an address), and which implementation of the brain it is (`implementation`: name and version). It has a TTL (`expiresAt`): its creator renews it while it is alive, and one that is not renewed expires and is ignored. Created by an external system; the engine only reads it to know where to send events. |
-| `_event` | An outbox record written with each data write, which triggers the engine. The `_event` folder is a queue: the write scripts enqueue events in id order, and the engine dequeues each one by moving its file to another folder (1). The event id is only the order in the queue, not a unique identity: it can start over once the queue is drained. It also carries the hash of the record before and after the write and the path of a temp file, so the engine can check that the write completed (1.3). Immutable: once written it is never modified. |
+| Entity          | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `_work`         | A unit of work that follows a `_process` and is split into tasks; the tasks do the work (1.5). Its status is `OPEN`, `IN_PROGRESS` or `DONE`. A work is approved or rejected as a whole (1.6).                                                                                                                                                                                                                                                                                                                                                           |
+| `_task`         | A part of a work, created by the engine from a step of the `_process`. It is assigned to a role and may wait for sibling tasks (1.5). Its status is `OPEN`, `IN_PROGRESS` or `DONE`.                                                                                                                                                                                                                                                                                                                                                                     |
+| `_artifact`     | An output of a task, or of a work (the note of its approver), such as a document, source code or a pull request. It embeds the output or refers to it where it is stored. It records a result and is only ever created: a task that rewrites or deletes content in the project files creates a new artifact that records what it did.                                                                                                                                                                                                                    |
+| `_role`         | A team member of the project, either `bot` or `human`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `_process`      | A named definition of a process: the steps of a flow, the role of each, and which steps each one waits for. It also holds the default instructions of each step. It knows nothing about `_work` and `_task`: the engine creates the tasks of a work from its steps (1.5).                                                                                                                                                                                                                                                                                |
+| `_rejection`    | A record of a batch of process events the engine rejected: the brain that was called, the event sent, what the brain returned, and which checks it broke. A business error, recorded so the process, the instructions or the brain can be fixed; versioned in git.                                                                                                                                                                                                                                                                                       |
+| `_subscription` | A subscription of an addon to events: which topic (`{entity}:{operation}`) is delivered to which addon (`addon`), and the names of the environment variables that configure it (`env`), such as the URL of a webhook. Every subscription of a topic receives its events, unlike a `_brain` (1.7). It is project data, with no TTL, and holds no secret.                                                                                                                                                                                                  |
+| `_brain`        | A brain: which topic (`topic`, as `{entity}:{operation}`, such as `_work:create`) is sent to which `endpoint` (an address), and which implementation of the brain it is (`implementation`: name and version). It has a TTL (`expiresAt`): its creator renews it while it is alive, and one that is not renewed expires and is ignored. Created by an external system; the engine only reads it to know where to send events.                                                                                                                             |
+| `_event`        | An outbox record written with each data write, which triggers the engine. The `_event` folder is a queue: the write scripts enqueue events in id order, and the engine dequeues each one by moving its file to another folder (1). The event id is only the order in the queue, not a unique identity: it can start over once the queue is drained. It also carries the hash of the record before and after the write and the path of a temp file, so the engine can check that the write completed (1.3). Immutable: once written it is never modified. |
 
 Schemas use a few keywords of their own, which start with `x-`. They are not part of JSON Schema: the standard validator ignores them. The shared library (1.4) reads `x-type`, `x-scope` and `x-ref`; `x-level` is only a note for the reader.
 
-| Keyword | Value | Meaning |
-| --- | --- | --- |
-| `x-type` | `auto_id` | The id of a record, allocated under the write lock as the next free integer, read from the latest state on disk. |
-| `x-type` | `auto_increment_int` | An integer counter allocated under the write lock, starting at 1 and starting over for each value of `x-scope`. |
-| `x-type` | `path` | The value is a path to a file. |
+| Keyword   | Value                 | Meaning                                                                                                                                                                                                                                                                                                                                  |
+| --------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `x-type`  | `auto_id`             | The id of a record, allocated under the write lock as the next free integer, read from the latest state on disk.                                                                                                                                                                                                                         |
+| `x-type`  | `auto_increment_int`  | An integer counter allocated under the write lock, starting at 1 and starting over for each value of `x-scope`.                                                                                                                                                                                                                          |
+| `x-type`  | `path`                | The value is a path to a file.                                                                                                                                                                                                                                                                                                           |
 | `x-scope` | a list of field names | Used with `auto_increment_int`. The key of the counter is the tuple of the values of these fields, and a field that is not set counts as null. For example `["task", "work"]` on the `version` of an `_artifact` counts per task for the artifact of a task and per work for the artifact of a work, because exactly one of them is set. |
-| `x-ref` | an entity name | The value is the id of a record of that entity; for an array, each item is. |
-| `x-level` | `engine` or `project` | Who defines the value of the field: `engine` when the engine does, in the shape the schema gives; `project` when the project picks the values, such as the id of a role or of a process. It is documentation only: no code acts on it. |
+| `x-ref`   | an entity name        | The value is the id of a record of that entity; for an array, each item is.                                                                                                                                                                                                                                                              |
+| `x-level` | `engine` or `project` | Who defines the value of the field: `engine` when the engine does, in the shape the schema gives; `project` when the project picks the values, such as the id of a role or of a process. It is documentation only: no code acts on it.                                                                                                   |
 
 The engine is a script. It is not a watcher or a background process: it only runs when a write script (1.4) triggers it after changing data. Data changed outside the scripts (manual edits, git pull) is not supported for now: it does not trigger the engine. On each trigger it claims the events of the queue one at a time (see below). For each event it first runs the process in code (1.5, 1.6), then finds the `_brain` records that have not expired and whose `topic` is the topic of the event, and calls their `endpoint` one at a time, the one with the latest `expiresAt` first, until the response of one is accepted. The engine relies only on this data.
 
@@ -67,13 +67,13 @@ The endpoint is the engine's brain. After a write, the engine sends it the event
 
 What the engine sends to the brain:
 
-| Item | What |
-| --- | --- |
-| Sent | The `_event` record, unchanged. Nothing else is sent: not the data records, not the `_process`. |
-| Topics | Changes of an entity, by topic `{entity}:{operation}`: `_work:create`, `_work:update`, `_work:delete`, and so on. A `_brain` names the topic; the topic of an `_event` is its `target.entity` and its `operation`. |
-| Delivered to | The `endpoint` of one brain. The live brains of the topic are called one at a time, the one with the latest `expiresAt` first, and the first whose response the engine accepts wins: the others are not called. |
-| Sent along | The `depth` the returned events must carry: the depth of the event plus one. |
-| Returned | A list of process events (requests to write, not `_event` records), each with its `depth`. They are not sent to the brain: the engine validates them and applies them through the write scripts, and those writes enqueue new `_event` records. As soon as the brain has started an agent, the response may carry the header `X-Agent-Pid` with the pid of that agent, ahead of the body. |
+| Item         | What                                                                                                                                                                                                                                                                                                                                                                                      |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sent         | The `_event` record, unchanged. Nothing else is sent: not the data records, not the `_process`.                                                                                                                                                                                                                                                                                           |
+| Topics       | Changes of an entity, by topic `{entity}:{operation}`: `_work:create`, `_work:update`, `_work:delete`, and so on. A `_brain` names the topic; the topic of an `_event` is its `target.entity` and its `operation`.                                                                                                                                                                        |
+| Delivered to | The `endpoint` of one brain. The live brains of the topic are called one at a time, the one with the latest `expiresAt` first, and the first whose response the engine accepts wins: the others are not called.                                                                                                                                                                           |
+| Sent along   | The `depth` the returned events must carry: the depth of the event plus one.                                                                                                                                                                                                                                                                                                              |
+| Returned     | A list of process events (requests to write, not `_event` records), each with its `depth`. They are not sent to the brain: the engine validates them and applies them through the write scripts, and those writes enqueue new `_event` records. As soon as the brain has started an agent, the response may carry the header `X-Agent-Pid` with the pid of that agent, ahead of the body. |
 
 The engine validates the returned list in code. The brain is asked to work on one item, the one the event is about: a task that has just started, or a work to approve.
 
@@ -112,10 +112,10 @@ Core entities (`_` prefix) follow the same layout, e.g. `.superteam/data/_task/1
 
 Records are read directly from the data files by path pattern:
 
-| Query | Path pattern |
-| --- | --- |
-| get one record | `.superteam/data/{entity}/{id}.json` |
-| list the records of an entity | `.superteam/data/{entity}/*.json` |
+| Query                         | Path pattern                         |
+| ----------------------------- | ------------------------------------ |
+| get one record                | `.superteam/data/{entity}/{id}.json` |
+| list the records of an entity | `.superteam/data/{entity}/*.json`    |
 
 - Reads need no script: the data files are read natively.
 - Reads go to disk, so they always see the latest write. They need no index and no running process.
@@ -150,6 +150,7 @@ They share one library that handles:
 Register: a script that creates or renews a `_brain`. Under the write lock it scans the existing `_brain` records; there are few of them, so scanning is cheap. If one has the same `endpoint` and `topic`, it updates that record's `expiresAt` and `implementation`; otherwise it creates a new record. The event is `update` or `create` accordingly.
 
 Finish: a script for a human to finish a task or to decide on a work. Writing the artifact and the status by hand means building JSON that follows the conventions of the entities, which a person rarely gets right, so the script holds the conventions and the person only gives the content. It is a layer above the write script: every write goes through the same pipeline.
+
 - `finish task <id> --as <role> (--content <text> | --ref <reference>)`. `--as` is the role the person acts as, since an assignee is a role and not a person. The script checks that the role is a human role, and that the task is `IN_PROGRESS` and assigned to that role. It then creates an `_artifact` for the task, and sets the task to `DONE`. If it stops after the artifact, the task is still `IN_PROGRESS` and running it again adds a new artifact.
 - `finish work <id> --as <role> (--approve | --reject) (--content <text> | --ref <reference>)`. The script checks that the role is a human role in `canApprovedBy`, and that the work is `DONE` with no decision yet. It creates the artifact that holds the note of the approver (1.6), then writes the decision.
 
@@ -158,12 +159,13 @@ Cleanup: a script, run manually, that deletes the expired `_brain` records (`exp
 #### 1.5. Work flow
 
 A work follows a `_process`. The engine runs the work flow in code, on the events of the queue, with no AI. A work and a task each have the status `OPEN`, `IN_PROGRESS` or `DONE`.
-| When | Who | What |
-| --- | --- | --- |
-| A work is created, and its `type` is the id of a `_process` | Engine | Creates one task for each step of the process, with status `OPEN`: `work` is the work, `assignee` is its role, `dependOn` points to the sibling tasks it waits for, and `instructions` is the `customInstructions` of the work for that name if there is one, else the default of the step. |
-| A task has no `dependOn` that is not `DONE`, at creation or when its last dependency becomes `DONE` | Engine | Sets it to `IN_PROGRESS`. Tasks that do not depend on each other start at the same time. |
-| A task is `IN_PROGRESS` | Its assignee role | Does the work and writes its `_artifact` records, then sets the task to `DONE`. A bot role does it through the brain (2.1.2), a human role with the finish script (1.4). |
-| Every task of a work is `DONE` | Engine | Sets the work to `DONE`. The approval (1.6) starts. |
+
+| When                                                                                                | Who               | What                                                                                                                                                                                                                                                                                        |
+| --------------------------------------------------------------------------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A work is created, and its `type` is the id of a `_process`                                         | Engine            | Creates one task for each step of the process, with status `OPEN`: `work` is the work, `assignee` is its role, `dependOn` points to the sibling tasks it waits for, and `instructions` is the `customInstructions` of the work for that name if there is one, else the default of the step. |
+| A task has no `dependOn` that is not `DONE`, at creation or when its last dependency becomes `DONE` | Engine            | Sets it to `IN_PROGRESS`. Tasks that do not depend on each other start at the same time.                                                                                                                                                                                                    |
+| A task is `IN_PROGRESS`                                                                             | Its assignee role | Does the work and writes its `_artifact` records, then sets the task to `DONE`. A bot role does it through the brain (2.1.2), a human role with the finish script (1.4).                                                                                                                    |
+| Every task of a work is `DONE`                                                                      | Engine            | Sets the work to `DONE`. The approval (1.6) starts.                                                                                                                                                                                                                                         |
 
 - A task that is `OPEN` while a `dependOn` is not `DONE` is waiting for its turn.
 - A work is `IN_PROGRESS` as soon as one of its tasks is. Its progress, the number of `DONE` tasks over all tasks, is computed when it is read and is not stored.
@@ -207,19 +209,19 @@ A JS script loads the JSON files into memory, builds indexes, and exposes querie
 
 What is indexed:
 
-| Item | Rule |
-| --- | --- |
+| Item         | Rule                                                                                                               |
+| ------------ | ------------------------------------------------------------------------------------------------------------------ |
 | Indexed keys | Keys other than id, declared in the entity schemas. Typically foreign keys (fields that reference another entity). |
-| Not indexed | `id`: a record by id is read directly from its data file (1.2). |
-| Current set | None declared yet. Keys are added to the schemas as real query needs appear. |
+| Not indexed  | `id`: a record by id is read directly from its data file (1.2).                                                    |
+| Current set  | None declared yet. Keys are added to the schemas as real query needs appear.                                       |
 
 When it re-indexes:
 
-| Trigger | Scope | Notes |
-| --- | --- | --- |
-| Bootstrap | All records, all indexes | When the MCP server starts. |
+| Trigger      | Scope                                                               | Notes                                                                                                                                          |
+| ------------ | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bootstrap    | All records, all indexes                                            | When the MCP server starts.                                                                                                                    |
 | Change event | The changed record only: its entries are added, replaced or removed | When the file watcher sees a data file created, changed or deleted, whoever made the change (scripts, manual edits, git pull, other sessions). |
-| Manual | All records, rebuilt from scratch | On demand through a reload tool of the server. Recovery when the watcher missed an event. |
+| Manual       | All records, rebuilt from scratch                                   | On demand through a reload tool of the server. Recovery when the watcher missed an event.                                                      |
 
 A change to the declared keys in a schema takes effect at the next bootstrap or manual rebuild.
 
@@ -237,21 +239,21 @@ The endpoint the engine calls. In the real integration it is Claude, reached thr
 
 Topics the brain needs, as the `topic` of `_brain` records whose `endpoint` is the MCP server. The MCP server (2.1) registers them when it starts:
 
-| Topic | Starts |
-| --- | --- |
-| `_task:update` | a task that the engine has just set to `IN_PROGRESS` |
+| Topic          | Starts                                                |
+| -------------- | ----------------------------------------------------- |
+| `_task:update` | a task that the engine has just set to `IN_PROGRESS`  |
 | `_work:update` | a work that the engine has just assigned for approval |
 
 #### 2.2. Skills
 
 Skills provided by the plugin:
 
-| Skill | Syntax | Description |
-| --- | --- | --- |
-| Define role | `/superteam:def-role` | Use AI to create `_role` records, written through the scripts (1.4). |
-| Define process | `/superteam:def-process` | Use AI to create `_process` records, written through the scripts (1.4). |
-| Finish | `/superteam:finish <task\|work> <id>` | Help a person finish a task or decide on a work: Claude asks for the role the person acts as, and for the content, then calls the finish script (1.4). It writes nothing by itself. |
-| Query data | `/superteam:query-data <entity> [id]` | Query project data. A record by id is always read directly from its data file (1.2). Other queries go through the MCP server (2.1) when it is available, otherwise by listing the data files (1.2). |
+| Skill          | Syntax                                | Description                                                                                                                                                                                         |
+| -------------- | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Define role    | `/superteam:def-role`                 | Use AI to create `_role` records, written through the scripts (1.4).                                                                                                                                |
+| Define process | `/superteam:def-process`              | Use AI to create `_process` records, written through the scripts (1.4).                                                                                                                             |
+| Finish         | `/superteam:finish <task\|work> <id>` | Help a person finish a task or decide on a work: Claude asks for the role the person acts as, and for the content, then calls the finish script (1.4). It writes nothing by itself.                 |
+| Query data     | `/superteam:query-data <entity> [id]` | Query project data. A record by id is always read directly from its data file (1.2). Other queries go through the MCP server (2.1) when it is available, otherwise by listing the data files (1.2). |
 
 #### 2.3. Installation
 
@@ -259,27 +261,27 @@ Sets the project up to run with Claude Code. A script does three things: it tran
 
 Transform:
 
-| Entity | Claude Code file | Notes |
-| --- | --- | --- |
+| Entity  | Claude Code file           | Notes                                                                                   |
+| ------- | -------------------------- | --------------------------------------------------------------------------------------- |
 | `_role` | `.claude/agents/{role}.md` | the role record (`description`, `tools`, `model`) combined with its `instructions` file |
 
 Edit:
 
-| File | Change | Notes |
-| --- | --- | --- |
-| `.gitignore` | adds `.superteam/data/_event/` | `_event` is a temporary queue, not project data. |
+| File         | Change                         | Notes                                                                                               |
+| ------------ | ------------------------------ | --------------------------------------------------------------------------------------------------- |
+| `.gitignore` | adds `.superteam/data/_event/` | `_event` is a temporary queue, not project data.                                                    |
 | `.gitignore` | adds `.superteam/data/_brain/` | `_brain` records are runtime registrations that change while the MCP server runs, not project data. |
-| `.gitignore` | adds `.superteam/pid` | The leader file of the MCP server (2.1) is a runtime file, not project data. |
-| `.gitignore` | adds `.superteam/secret` | The secret is specific to one installation, so it is not shared through git. |
-| `.gitignore` | adds `.superteam/claims/` | The events the engine processes are runtime files, not project data. |
-| `.gitignore` | adds `.superteam/tmp/` | The temp files of the write scripts are runtime files, not project data. |
+| `.gitignore` | adds `.superteam/pid`          | The leader file of the MCP server (2.1) is a runtime file, not project data.                        |
+| `.gitignore` | adds `.superteam/secret`       | The secret is specific to one installation, so it is not shared through git.                        |
+| `.gitignore` | adds `.superteam/claims/`      | The events the engine processes are runtime files, not project data.                                |
+| `.gitignore` | adds `.superteam/tmp/`         | The temp files of the write scripts are runtime files, not project data.                            |
 
 A line is added only if it is missing.
 
 Generate:
 
-| File | Content | Notes |
-| --- | --- | --- |
+| File                | Content        | Notes                                                                                                                                                  |
+| ------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `.superteam/secret` | a random value | Returned by the healthcheck of the MCP server leader (2.1). Created only if the file is missing, so running the installation again does not change it. |
 
 The script reads the JSON files directly, following the storage layout from 1.1 (no index, no MCP server). The Claude Code files, the `.gitignore` and the secret are written outside `.superteam/data/`, so they need no write lock.

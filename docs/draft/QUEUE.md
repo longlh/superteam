@@ -72,25 +72,25 @@ classDiagram
     RenewOptions --> ClaimMeta
 ```
 
-| Field | Meaning |
-|---|---|
-| `Message.id` | Order in the queue. Never reused within one queue. It is not the identity of a record. |
-| `Message.key` | The record the message is about, as `{entity}/{id}` such as `_task/5`. Used by recovery to know if a record has work waiting. |
-| `Message.topic` | `{entity}:{operation}` such as `_task:update`. |
-| `Message.attempts` | How many times the message has been claimed. Incremented on each claim. |
-| `Claim.owner` | The identity of the engine process that holds the claim. |
-| `Claim.leaseUntil` | When the claim expires. After that another process may claim the message. |
-| `ClaimMeta.agentPid` | The pid of the agent the brain started for this message. Lets recovery know the work is being done. |
-| `NackOptions.dead` | Put the message in the dead state instead of back in the queue. |
+| Field                | Meaning                                                                                                                       |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `Message.id`         | Order in the queue. Never reused within one queue. It is not the identity of a record.                                        |
+| `Message.key`        | The record the message is about, as `{entity}/{id}` such as `_task/5`. Used by recovery to know if a record has work waiting. |
+| `Message.topic`      | `{entity}:{operation}` such as `_task:update`.                                                                                |
+| `Message.attempts`   | How many times the message has been claimed. Incremented on each claim.                                                       |
+| `Claim.owner`        | The identity of the engine process that holds the claim.                                                                      |
+| `Claim.leaseUntil`   | When the claim expires. After that another process may claim the message.                                                     |
+| `ClaimMeta.agentPid` | The pid of the agent the brain started for this message. Lets recovery know the work is being done.                           |
+| `NackOptions.dead`   | Put the message in the dead state instead of back in the queue.                                                               |
 
-| Operation | Behavior |
-|---|---|
-| `enqueue` | Adds a message and returns its id. Ids increase. |
-| `claim` | Returns the ready message with the lowest id, or null if there is none. Atomic: of several callers, exactly one gets a given message. A message with an expired lease is ready again and its `attempts` is incremented. |
-| `renew` | Extends the lease of a claim and may set its meta, such as `agentPid`. The engine calls it while the agent is alive, so a job of hours keeps its claim. |
-| `ack` | The message is processed. It leaves the queue. |
-| `nack` | The message was not processed. It goes back to the queue, or to the dead state when `dead` is true. |
-| `hasPending` | True if a message with this key is waiting or is claimed with a lease that has not expired. Replaces reading the queue and then the claims in the recovery (2.1). |
+| Operation    | Behavior                                                                                                                                                                                                                |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enqueue`    | Adds a message and returns its id. Ids increase.                                                                                                                                                                        |
+| `claim`      | Returns the ready message with the lowest id, or null if there is none. Atomic: of several callers, exactly one gets a given message. A message with an expired lease is ready again and its `attempts` is incremented. |
+| `renew`      | Extends the lease of a claim and may set its meta, such as `agentPid`. The engine calls it while the agent is alive, so a job of hours keeps its claim.                                                                 |
+| `ack`        | The message is processed. It leaves the queue.                                                                                                                                                                          |
+| `nack`       | The message was not processed. It goes back to the queue, or to the dead state when `dead` is true.                                                                                                                     |
+| `hasPending` | True if a message with this key is waiting or is claimed with a lease that has not expired. Replaces reading the queue and then the claims in the recovery (2.1).                                                       |
 
 ## Usage
 
@@ -262,15 +262,15 @@ classDiagram
 
 ### Comparison
 
-| | Option B | Option A |
-|---|---|---|
-| Interface | `enqueue` | `prepare`, `commit`, `preparedGraceMs` |
-| Data file | Moved first, then the message | Message first, then the file |
+|                        | Option B                                                                       | Option A                                                             |
+| ---------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| Interface              | `enqueue`                                                                      | `prepare`, `commit`, `preparedGraceMs`                               |
+| Data file              | Moved first, then the message                                                  | Message first, then the file                                         |
 | Script dies in the gap | Message lost. Recovery repairs bot cases (task, work), not addon notifications | Message kept. The engine checks the hashes and processes or drops it |
-| Hash and temp file | None | Hash of the record before and after |
-| Reading the data file | Never | Only for a `prepared` message past the grace period |
-| Queue calls per write | 1 | 2 |
-| Complexity | Low | Medium: a state, a grace period, a hash check |
+| Hash and temp file     | None                                                                           | Hash of the record before and after                                  |
+| Reading the data file  | Never                                                                          | Only for a `prepared` message past the grace period                  |
+| Queue calls per write  | 1                                                                              | 2                                                                    |
+| Complexity             | Low                                                                            | Medium: a state, a grace period, a hash check                        |
 
 ## Not in the interface
 

@@ -1,0 +1,10 @@
+{
+  "name": "superteam",
+  "private": true,
+  "scripts": {
+    "format": "prettier --write \"**/*.md\""
+  },
+  "devDependencies": {
+    "prettier": "^3.9.10"
+  }
+}

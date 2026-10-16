@@ -68,19 +68,19 @@ The status of a work or a task only shows which step it is at. It does not show 
 
 Work:
 
-| Status | Meaning |
-|---|---|
-| `OPEN` | The team lead has not taken the work yet, so it has not been coordinated. |
+| Status        | Meaning                                                                                |
+| ------------- | -------------------------------------------------------------------------------------- |
+| `OPEN`        | The team lead has not taken the work yet, so it has not been coordinated.              |
 | `IN_PROGRESS` | Set automatically once its tasks have been created (the team lead has coordinated it). |
-| `DONE` | Set automatically when all the tasks of the work are done. |
+| `DONE`        | Set automatically when all the tasks of the work are done.                             |
 
 Task:
 
-| Status | Meaning |
-|---|---|
-| `PENDING` | The task has appeared in the work, but it is not ready to start yet (no one assigned, missing input...). |
+| Status        | Meaning                                                                                                                             |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `PENDING`     | The task has appeared in the work, but it is not ready to start yet (no one assigned, missing input...).                            |
 | `IN_PROGRESS` | Set automatically when the task is ready to start: it is assigned, and it has its input from the output of the tasks it depends on. |
-| `DONE` | Set by the person doing the task, together with the DOD checklist of the task. |
+| `DONE`        | Set by the person doing the task, together with the DOD checklist of the task.                                                      |
 
 ##### Output
 
@@ -103,12 +103,12 @@ Normally an approval flow is independent from the workflow and has many steps of
 
 A work has an `approval_status`, separate from its status:
 
-| Approval status | Meaning |
-|---|---|
-| `DRAFT` | The default when the work is created. |
-| `PROPOSED` | Set automatically when the status of the work becomes `DONE`. The work is then submitted to the approver. |
-| `APPROVED` | Decided by the approver. |
-| `REJECTED` | Decided by the approver. |
+| Approval status | Meaning                                                                                                   |
+| --------------- | --------------------------------------------------------------------------------------------------------- |
+| `DRAFT`         | The default when the work is created.                                                                     |
+| `PROPOSED`      | Set automatically when the status of the work becomes `DONE`. The work is then submitted to the approver. |
+| `APPROVED`      | Decided by the approver.                                                                                  |
+| `REJECTED`      | Decided by the approver.                                                                                  |
 
 #### Approval result
 
