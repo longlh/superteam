@@ -107,3 +107,15 @@ events of the queue.
 | Notification | Fired when                                          |
 | ------------ | --------------------------------------------------- |
 | `write:done` | The write of an event has succeeded (step 4 above). |
+
+The `write:done` notification carries:
+
+| Field    | Type     | Description                               |
+| -------- | -------- | ----------------------------------------- |
+| `hash`   | string   | The hash of the content that was written. |
+| `target` | string   | The path of the file that was written.    |
+| `time`   | datetime | The time the write was done.              |
+
+A subscriber can compare the `hash` with the hash of the file at `target`. If
+they are the same, the subscriber knows that it reads the up-to-date content of
+the file.
