@@ -34,6 +34,17 @@ these fields:
 | `createdAt` | datetime | The time the event was created.                           |
 | `attempts`  | int      | The number of attempts to process the event. Default `0`. |
 
+Each item of the `payload` is a write command with these fields:
+
+| Field       | Type   | Description                                |
+| ----------- | ------ | ------------------------------------------ |
+| `command`   | string | The command. Here it is `write`.           |
+| `target`    | string | The path of the file to write.             |
+| `src`       | string | The content to write, given as text.       |
+| `remoteSrc` | string | The path of the file that has the content. |
+
+A write command uses exactly one of `src` and `remoteSrc`.
+
 The event loop comes with a factory that creates an event from a payload:
 
 - `order`: the factory reads the current queue and takes the maximum `order`

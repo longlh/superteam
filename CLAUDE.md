@@ -5,3 +5,5 @@ project's own workflow.
 
 - Chat in Vietnamese; write all plugin files in English.
 - User is learning: explain step by step, only create files when asked.
+- After writing or editing a Markdown file, run `npx prettier --write <file>` on
+  it.
