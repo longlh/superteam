@@ -9,12 +9,19 @@ const payload = {
   src: "hi",
 };
 const createdAt = "2026-01-01T00:00:00.000Z";
-const makeEvent = (attempts = 0) => ({
+// An entry of `errors`, for the attempt that failed.
+const failure = (attempt, error = "old") => ({
+  attempt,
+  error,
+  time: "2025-12-31T00:00:00.000Z",
+});
+const makeEvent = (attempts = 0, errors = []) => ({
   order: 1,
   id: eventId(createdAt, 1),
   payload,
   createdAt,
   attempts,
+  errors,
 });
 
 // The loop with fakes for all its parts. `calls` records what happened.
@@ -28,7 +35,8 @@ function setup({
   const calls = [];
   const queue = {
     listClaims: async () => claims,
-    readClaim: async () => claimRaw ?? JSON.stringify(makeEvent(2)),
+    readClaim: async () =>
+      claimRaw ?? JSON.stringify(makeEvent(2, [failure(1), failure(2)])),
     claimNext: async () => {
       calls.push(["claimNext"]);
       return (
@@ -40,13 +48,15 @@ function setup({
     },
     put: async (event) => calls.push(["put", event]),
     deleteClaim: async (name) => calls.push(["deleteClaim", name]),
-    toDlq: async (name) => calls.push(["toDlq", name]),
+    toDlq: async (name, event) =>
+      calls.push(event ? ["toDlq", name, event] : ["toDlq", name]),
   };
   const factory = {
-    createAtHead: (p, attempts) => ({
+    createAtHead: (p, attempts, errors) => ({
       payload: p,
       order: 0,
       attempts,
+      errors,
     }),
   };
   const writer = {
@@ -134,8 +144,10 @@ test("a retry waits 2^attempts seconds, a first try does not wait", async () => 
   }
 });
 
-test("a failed write is enqueued again at order 0 with attempts plus one", async () => {
-  const event = makeEvent(1);
+test("a failed write is enqueued again at order 0 with attempts plus one and the error added", async () => {
+  const event = makeEvent(1, [failure(1)]);
+  const errors = [failure(1), failure(2, "boom")];
+  errors[1].time = createdAt;
   const { calls, loop } = setup({
     next: event,
     writeError: new Error("boom"),
@@ -148,6 +160,7 @@ test("a failed write is enqueued again at order 0 with attempts plus one", async
         payload,
         order: 0,
         attempts: 2,
+        errors,
       },
     ],
     ["deleteClaim", "claimed"],
@@ -155,27 +168,35 @@ test("a failed write is enqueued again at order 0 with attempts plus one", async
       "emit",
       "write:retry",
       {
-        event,
+        event: {
+          ...event,
+          errors,
+        },
         error: "boom",
       },
     ],
   ]);
 });
 
-test("when attempts reaches the maximum the event goes to the DLQ", async () => {
-  const event = makeEvent(2);
+test("when attempts reaches the maximum the event goes to the DLQ with the last error", async () => {
+  const event = makeEvent(2, [failure(1), failure(2)]);
+  const failed = {
+    ...event,
+    errors: [failure(1), failure(2), failure(3, "boom")],
+  };
+  failed.errors[2].time = createdAt;
   const { calls, loop } = setup({
     next: event,
     writeError: new Error("boom"),
   });
   await loop.iterate();
   assert.deepEqual(calls.slice(-2), [
-    ["toDlq", "claimed"],
+    ["toDlq", "claimed", failed],
     [
       "emit",
       "write:error",
       {
-        event,
+        event: failed,
         error: "boom",
       },
     ],
@@ -197,7 +218,7 @@ test("an event with a wrong structure goes to the DLQ without a retry", async ()
   });
 });
 
-test("recover puts an abandoned claim back at the head, with the same attempts", async () => {
+test("recover puts an abandoned claim back at the head, with the same attempts and errors", async () => {
   const { calls, loop } = setup({
     claims: ["crashed"],
   });
@@ -209,6 +230,7 @@ test("recover puts an abandoned claim back at the head, with the same attempts",
         payload,
         order: 0,
         attempts: 2,
+        errors: [failure(1), failure(2)],
       },
     ],
     ["deleteClaim", "crashed"],

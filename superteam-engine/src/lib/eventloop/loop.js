@@ -20,15 +20,34 @@ export function createLoop({
     });
   }
 
-  // The write failed: retry at the head of the queue, or give up.
+  // The write failed: record the error in the event, then retry at the head of
+  // the queue, or give up. The notifications carry the event with the error.
   async function fail(name, event, error) {
-    if (event.attempts + 1 >= maxAttempts) {
-      return reject(name, event, error.message);
+    const failed = {
+      ...event,
+      errors: [
+        ...event.errors,
+        {
+          attempt: event.attempts + 1,
+          error: error.message,
+          time: now().toISOString(),
+        },
+      ],
+    };
+    if (failed.attempts + 1 >= maxAttempts) {
+      await queue.toDlq(name, failed);
+      subscribers.emit("write:error", {
+        event: failed,
+        error: error.message,
+      });
+      return;
     }
-    await queue.put(factory.createAtHead(event.payload, event.attempts + 1));
+    await queue.put(
+      factory.createAtHead(failed.payload, failed.attempts + 1, failed.errors),
+    );
     await queue.deleteClaim(name);
     subscribers.emit("write:retry", {
-      event,
+      event: failed,
       error: error.message,
     });
   }
@@ -75,7 +94,7 @@ export function createLoop({
   }
 
   // Recovers from a crash: each abandoned claim goes back to the head of the
-  // queue with the same attempts.
+  // queue with the same attempts and errors.
   async function recover() {
     for (const name of await queue.listClaims()) {
       const { event, parsed, error } = parseEvent(await queue.readClaim(name));
@@ -83,7 +102,9 @@ export function createLoop({
         await reject(name, parsed ?? null, error);
         continue;
       }
-      await queue.put(factory.createAtHead(event.payload, event.attempts));
+      await queue.put(
+        factory.createAtHead(event.payload, event.attempts, event.errors),
+      );
       await queue.deleteClaim(name);
     }
   }

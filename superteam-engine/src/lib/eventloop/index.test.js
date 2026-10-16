@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
+import { writeFileSync } from "node:fs";
 import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -87,6 +88,7 @@ function eventFile(order, payload, attempts = 0) {
     payload,
     createdAt,
     attempts,
+    errors: [],
   });
 }
 
@@ -166,6 +168,10 @@ test("a write fails: the retry is 000000.json, and the loop waits 2^attempts sec
   );
   assert.equal(retry.attempts, 1);
   assert.equal(retry.order, 0);
+  assert.deepEqual(
+    retry.errors.map((e) => e.attempt),
+    [1],
+  );
   assert.deepEqual(retry.payload, event.payload);
   assert.notEqual(retry.id, event.id);
   assert.deepEqual(ctx.sleeps, []);
@@ -188,7 +194,19 @@ test("attempts reaches maxAttempts: the event is in the DLQ", async () => {
     [0, 1, 2],
   );
   assert.deepEqual(ctx.sleeps, [2000, 4000]);
-  assert.equal((await ls(ctx.dir("dlq"))).length, 1);
+  // The DLQ file keeps the error of every attempt, the last one too.
+  const [dlqFile] = await ls(ctx.dir("dlq"));
+  const dead = JSON.parse(
+    await readFile(path.join(ctx.dir("dlq"), dlqFile), "utf8"),
+  );
+  assert.deepEqual(
+    dead.errors.map((e) => e.attempt),
+    [1, 2, 3],
+  );
+  assert.ok(
+    dead.errors.every((e) => e.error && !Number.isNaN(Date.parse(e.time))),
+  );
+  assert.deepEqual(ctx.seen.at(-1).event, dead);
   assert.deepEqual(await ls(ctx.dir("queue")), []);
   assert.deepEqual(await ls(ctx.dir("claim")), []);
 });
@@ -221,12 +239,14 @@ test("an abandoned claim found by the loop goes to the DLQ", async () => {
   ]);
   // After the first write, something leaves a file in the claim folder.
   let dropped = false;
-  ctx.loop.subscribe("write:done", async () => {
+  // The handler is not awaited, so it writes synchronously: the file is there
+  // before the loop starts the next iteration.
+  ctx.loop.subscribe("write:done", () => {
     if (dropped) {
       return;
     }
     dropped = true;
-    await writeFile(path.join(ctx.dir("claim"), "abandoned.json"), "{}");
+    writeFileSync(path.join(ctx.dir("claim"), "abandoned.json"), "{}");
   });
   await runUntil(ctx, (seen) => seen.length === 2);
 

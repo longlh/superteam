@@ -12,32 +12,34 @@ The plan to implement the module described in `eventloop.md`.
 
 ## 2. Decisions
 
-| Topic               | Decision                                                                                                                                                                           |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Language            | JavaScript, ES modules, Node 24. No runtime dependency.                                                                                                                            |
-| Location            | `superteam-engine/src/lib/eventloop/`. Each unit test is next to its code: `paths.js` has `paths.test.js`.                                                                         |
-| Test runner         | `node:test` and `node:assert`. No extra dependency.                                                                                                                                |
-| Base directory      | A `baseDir` option. The folders are `{baseDir}/.superteam/.w/{queue,claim,dlq,tmp}`.                                                                                               |
-| Folders             | Created with `mkdir -p` at start.                                                                                                                                                  |
-| Hash                | SHA-256, hex. `id` is the hash of `createdAt` and `order`. The `hash` of `write:done` is of the bytes.                                                                             |
-| `createdAt`         | `new Date().toISOString()`, UTC, to the millisecond.                                                                                                                               |
-| Content             | Written as bytes (`Buffer`), so a binary file such as an image is kept as it is.                                                                                                   |
-| `remoteSrc`         | `file://` with `fs.readFile`, `http(s)` with the global `fetch`, `GET` only. A timeout of 30 seconds.                                                                              |
-| Temporary file name | A random uuid with the `.tmp` extension, in `.superteam/.w/tmp/`.                                                                                                                  |
-| Validation          | A hand-written validator for the event and the payload. No schema library.                                                                                                         |
-| Subscribers         | Called in the order of the subscription, not awaited. A `try` and `catch` only isolates an error of a subscriber from the loop: handling it is out of the scope of the event loop. |
-| Options             | `createEventLoop` takes `maxAttempts` (3), `pollIntervalMs` (1000), `sleep` and `now` (for tests). `start()` takes `fetchTimeoutMs` (30000).                                       |
-| Claim name          | `{id}.json`. An event that has no valid `id` (broken JSON, or an `id` that is not a hash) uses its queue file name, such as `000003.json`.                                         |
-| Error notifications | `write:error` and `write:retry` carry an extra `error` (the reason, as text). For a broken event, `event` is the parsed object, or `null`.                                         |
-| Broken claim        | At the recovery, a claim that is not valid goes to the DLQ and `write:error` is fired. An abandoned claim found by `loop()` only goes to the DLQ: no notification.                 |
-| `target`            | The writer creates the parent folder of `target` (`mkdir -p`) before it moves the file.                                                                                            |
-| Counter             | Increased synchronously in `create()`, so two calls in the same process never get the same `order`.                                                                                |
-| `order` limit       | `create()` throws `order above 999999 is not supported` when the counter reaches the maximum.                                                                                      |
-| `EXDEV`             | The writer turns a cross-device `rename` error into `target ... on another device is not supported`. It is a write failure, so it is retried and then goes to the DLQ.             |
-| Tmp clean-up        | The start stage deletes every file in `.superteam/.w/tmp/` (`clearTmp()`), before the recovery.                                                                                    |
-| `start()` guard     | `start()` throws `start() can be called only once` on a second call, also after `shutdown()`.                                                                                      |
-| Force quit          | A second `SIGINT` or `SIGTERM` calls `exit(130)` at once. The claim stays, and the next start recovers from it like from a crash. `shutdown()` called by code does not count.      |
-| Fail fast           | An error of the file system inside `iterate()` is not caught: `start()` rejects and the loop stops. A claim that is left is recovered at the next start.                           |
+| Topic               | Decision                                                                                                                                                                                                                                                                                                               |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Language            | JavaScript, ES modules, Node 24. No runtime dependency.                                                                                                                                                                                                                                                                |
+| Location            | `superteam-engine/src/lib/eventloop/`. Each unit test is next to its code: `paths.js` has `paths.test.js`.                                                                                                                                                                                                             |
+| Test runner         | `node:test` and `node:assert`. No extra dependency.                                                                                                                                                                                                                                                                    |
+| Base directory      | A `baseDir` option. The folders are `{baseDir}/.superteam/.w/{queue,claim,dlq,tmp}`.                                                                                                                                                                                                                                   |
+| Folders             | Created with `mkdir -p` at start.                                                                                                                                                                                                                                                                                      |
+| Hash                | SHA-256, hex. `id` is the hash of `createdAt` and `order`. The `hash` of `write:done` is of the bytes.                                                                                                                                                                                                                 |
+| `createdAt`         | `new Date().toISOString()`, UTC, to the millisecond.                                                                                                                                                                                                                                                                   |
+| Content             | Written as bytes (`Buffer`), so a binary file such as an image is kept as it is.                                                                                                                                                                                                                                       |
+| `remoteSrc`         | `file://` with `fs.readFile`, `http(s)` with the global `fetch`, `GET` only. A timeout of 30 seconds.                                                                                                                                                                                                                  |
+| Temporary file name | A random uuid with the `.tmp` extension, in `.superteam/.w/tmp/`.                                                                                                                                                                                                                                                      |
+| Validation          | A hand-written validator for the event and the payload. No schema library.                                                                                                                                                                                                                                             |
+| Subscribers         | Called in the order of the subscription, not awaited. A `try` and `catch` only isolates an error of a subscriber from the loop: handling it is out of the scope of the event loop.                                                                                                                                     |
+| Options             | `createEventLoop` takes `maxAttempts` (3), `pollIntervalMs` (1000), `sleep` and `now` (for tests). `start()` takes `fetchTimeoutMs` (30000).                                                                                                                                                                           |
+| Claim name          | `{id}.json`. An event that has no valid `id` (broken JSON, or an `id` that is not a hash) uses its queue file name, such as `000003.json`.                                                                                                                                                                             |
+| `errors` field      | An event has `errors`, a required array of `{ attempt, error, time }`: `attempt` counts from 1, `error` is the message, `time` is ISO. `create()` gives `[]`, and `createAtHead(payload, attempts, errors)` keeps the errors. `fail()` adds the entry. There is no old event file, so a missing `errors` is not valid. |
+| DLQ file            | `toDlq(name, event)` writes the given event to the DLQ (atomic) and deletes the claim, so the file of a write that failed for good has the last error. Without `event` it only moves the claim.                                                                                                                        |
+| Error notifications | `write:error` and `write:retry` carry the event with the error of this attempt added to `errors`, and an extra `error` (the reason, as text). For a broken event, `event` is the parsed object, or `null`.                                                                                                             |
+| Broken claim        | At the recovery, a claim that is not valid goes to the DLQ and `write:error` is fired. An abandoned claim found by `loop()` only goes to the DLQ: no notification.                                                                                                                                                     |
+| `target`            | The writer creates the parent folder of `target` (`mkdir -p`) before it moves the file.                                                                                                                                                                                                                                |
+| Counter             | Increased synchronously in `create()`, so two calls in the same process never get the same `order`.                                                                                                                                                                                                                    |
+| `order` limit       | `create()` throws `order above 999999 is not supported` when the counter reaches the maximum.                                                                                                                                                                                                                          |
+| `EXDEV`             | The writer turns a cross-device `rename` error into `target ... on another device is not supported`. It is a write failure, so it is retried and then goes to the DLQ.                                                                                                                                                 |
+| Tmp clean-up        | The start stage deletes every file in `.superteam/.w/tmp/` (`clearTmp()`), before the recovery.                                                                                                                                                                                                                        |
+| `start()` guard     | `start()` throws `start() can be called only once` on a second call, also after `shutdown()`.                                                                                                                                                                                                                          |
+| Force quit          | A second `SIGINT` or `SIGTERM` calls `exit(130)` at once. The claim stays, and the next start recovers from it like from a crash. `shutdown()` called by code does not count.                                                                                                                                          |
+| Fail fast           | An error of the file system inside `iterate()` is not caught: `start()` rejects and the loop stops. A claim that is left is recovered at the next start.                                                                                                                                                               |
 
 ## 3. Code style
 
@@ -137,13 +139,13 @@ with its tests passing before the next step starts.
    the hash functions, and the padding of `order` to 6 digits.
 2. **Factory** (`factory.js`): the counter, `create()` with `order`, `id` and
    `createdAt`, and `createAtHead()` with the `order` `0`, for the retry and the
-   recovery. `create()` throws when `order` would pass `999999`. The factory
-   does not know where the events go.
+   recovery, which keeps the `errors`. `create()` throws when `order` would pass
+   `999999`. The factory does not know where the events go.
 3. **Queue** (`queue.js`): the only place that knows the queue folders. `put()`
    writes an event atomically (write to tmp, then move into the queue), and
    overwrites a file with the same name. It also lists the queue in `order`,
    claims the lowest event by moving it, deletes the claim, moves an event to
-   the DLQ, and reads the claim.
+   the DLQ (with an updated event when it is given), and reads the claim.
 4. **Writer** (`writer.js`): get the content from `src` or from `remoteSrc`
    (`src` first), write it to tmp, move it to `target`, and return the hash. A
    `target` on another device (`EXDEV`) is not supported: it throws a clear
@@ -179,12 +181,13 @@ Unit tests, each in the `.test.js` file next to its code:
 - `paths.test.js`: the folders are the right ones, they are created when they
   are missing, and `clearTmp()` deletes what is left in the tmp folder.
 - `event.test.js`: the padding of `order`, the `id` and the `hash`, the
-  validator, and the parsing of an event file.
+  validator (with the checks of `errors`), and the parsing of an event file.
 - `factory.test.js`: 100 calls of `create()` at the same time give 100 different
-  `order`, `createAtHead()` gives the `order` `0`, and `create()` throws above
-  `999999`.
+  `order`, `create()` gives `errors` `[]`, `createAtHead()` gives the `order`
+  `0` and keeps the `errors`, and `create()` throws above `999999`.
 - `queue.test.js`: `put` is atomic and overwrites, the list is in `order`, the
-  claim moves the lowest event, and the move to the DLQ.
+  claim moves the lowest event, and the move to the DLQ, also with an updated
+  event.
 - `writer.test.js`: the `src` first rule, `file://`, `http` with a local test
   server, and a binary file that is written byte for byte. The `EXDEV` error is
   tested with a mock of `rename`, because a second device is not needed for it.
@@ -209,10 +212,11 @@ them:
 - `enqueue()` before `start()` throws.
 - A write succeeds: the target is written, the claim is deleted, `write:done`
   carries the event, the `hash` and the `time`.
-- A write fails: the new event is `000000.json` with `attempts` plus one, and
-  `write:retry` is fired. The loop waits `2^attempts` seconds before the retry.
-- `attempts` reaches `maxAttempts`: the event is in the DLQ and `write:error` is
-  fired.
+- A write fails: the new event is `000000.json` with `attempts` plus one and the
+  error in `errors`, and `write:retry` is fired. The loop waits `2^attempts`
+  seconds before the retry.
+- `attempts` reaches `maxAttempts`: the DLQ file has the error of every attempt,
+  the last one too, and `write:error` is fired.
 - An event with a wrong structure, or one that is not valid JSON, goes to the
   DLQ without a retry.
 - An abandoned claim found by `loop()` goes to the DLQ.

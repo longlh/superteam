@@ -97,6 +97,30 @@ test("toDlq moves the claim to the DLQ", async () => {
   assert.deepEqual(await readdir(paths.dlq), [`${name}.json`]);
 });
 
+test("toDlq with an event writes that event to the DLQ and deletes the claim", async () => {
+  const { paths, queue } = await setup();
+  await put(paths, "000001.json", "{}");
+  const { name } = await queue.claimNext();
+  const event = {
+    order: 1,
+    errors: [
+      {
+        attempt: 1,
+        error: "boom",
+        time: "t",
+      },
+    ],
+  };
+  await queue.toDlq(name, event);
+  assert.deepEqual(await queue.listClaims(), []);
+  assert.deepEqual(await readdir(paths.dlq), [`${name}.json`]);
+  assert.deepEqual(
+    JSON.parse(await readFile(path.join(paths.dlq, `${name}.json`), "utf8")),
+    event,
+  );
+  assert.deepEqual(await readdir(paths.tmp), []);
+});
+
 test("put writes the file into the queue, named by the order, with no tmp file left", async () => {
   const { paths, queue } = await setup();
   const event = {
@@ -121,6 +145,7 @@ test("put overwrites an existing 000000.json", async () => {
     id: "y",
     payload: {},
     attempts: 1,
+    errors: [],
   };
   await queue.put(event);
   const saved = JSON.parse(

@@ -6,7 +6,7 @@ export function createFactory({ now = () => new Date() }) {
   let counter = 0;
 
   // Synchronous on purpose: two calls never get the same `order`.
-  function build(payload, order, attempts) {
+  function build(payload, order, attempts, errors) {
     const createdAt = now().toISOString();
     return {
       order,
@@ -14,6 +14,7 @@ export function createFactory({ now = () => new Date() }) {
       payload,
       createdAt,
       attempts,
+      errors,
     };
   }
 
@@ -28,11 +29,13 @@ export function createFactory({ now = () => new Date() }) {
       if (counter >= MAX_ORDER) {
         throw new Error(`order above ${MAX_ORDER} is not supported`);
       }
-      return build(payload, ++counter, 0);
+      return build(payload, ++counter, 0, []);
     },
 
     // An event goes back to the head of the queue: `order` 0 is reserved for the
-    // event of a retry and the event that is recovered at the start.
-    createAtHead: (payload, attempts) => build(payload, 0, attempts),
+    // event of a retry and the event that is recovered at the start. It keeps
+    // the errors of the attempts that failed.
+    createAtHead: (payload, attempts, errors) =>
+      build(payload, 0, attempts, errors),
   };
 }

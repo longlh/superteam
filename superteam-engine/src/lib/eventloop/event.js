@@ -56,6 +56,25 @@ export function validatePayload(payload) {
   return validateRemoteSrc(payload.remoteSrc);
 }
 
+// Each entry records one failed attempt: which one, why, and when.
+function validateErrors(errors) {
+  if (!Array.isArray(errors)) {
+    return "event.errors must be an array";
+  }
+  for (const entry of errors) {
+    if (
+      !isObject(entry) ||
+      !Number.isInteger(entry.attempt) ||
+      entry.attempt < 1 ||
+      typeof entry.error !== "string" ||
+      typeof entry.time !== "string"
+    ) {
+      return "event.errors must hold { attempt, error, time } entries";
+    }
+  }
+  return null;
+}
+
 export function validateEvent(event) {
   if (!isObject(event)) {
     return "event must be an object";
@@ -72,7 +91,7 @@ export function validateEvent(event) {
   if (!isCount(event.attempts)) {
     return "event.attempts must be an integer";
   }
-  return validatePayload(event.payload);
+  return validateErrors(event.errors) ?? validatePayload(event.payload);
 }
 
 // Reads the text of an event file. Returns { event } when it is valid, and

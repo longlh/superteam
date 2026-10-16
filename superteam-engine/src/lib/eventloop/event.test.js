@@ -20,6 +20,7 @@ const event = {
   payload,
   createdAt: "2026-01-01T00:00:00.000Z",
   attempts: 0,
+  errors: [],
 };
 
 test("padOrder pads to 6 digits", () => {
@@ -39,6 +40,19 @@ test("sha256 is hex, and the id depends on createdAt and order", () => {
 
 test("a valid event and payload pass", () => {
   assert.equal(validateEvent(event), null);
+  assert.equal(
+    validateEvent({
+      ...event,
+      errors: [
+        {
+          attempt: 1,
+          error: "boom",
+          time: "2026-01-01T00:00:00.000Z",
+        },
+      ],
+    }),
+    null,
+  );
   assert.equal(
     validatePayload({
       command: "write",
@@ -174,6 +188,33 @@ test("invalid events are rejected", () => {
     {
       ...event,
       attempts: undefined,
+    },
+    {
+      ...event,
+      errors: undefined,
+    },
+    {
+      ...event,
+      errors: "boom",
+    },
+    {
+      ...event,
+      errors: [
+        {
+          attempt: 1,
+          error: "boom",
+        },
+      ],
+    },
+    {
+      ...event,
+      errors: [
+        {
+          attempt: 0,
+          error: "boom",
+          time: "t",
+        },
+      ],
     },
     {
       ...event,

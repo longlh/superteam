@@ -37,6 +37,13 @@ these fields:
 | `payload`   | Object   | The write command.                                        |
 | `createdAt` | datetime | The time the event was created.                           |
 | `attempts`  | int      | The number of attempts to process the event. Default `0`. |
+| `errors`    | Object[] | The errors of the attempts that failed. Default `[]`.     |
+
+Each entry of `errors` has the fields `attempt` (int, the number of the attempt
+that failed, from `1`), `error` (string, the reason) and `time` (datetime, when
+it failed). A retry creates a new event, so the factory copies `errors` to it
+and the loop adds the new entry: the errors of all the attempts are kept, and
+the last one is in the file of the DLQ too.
 
 The `payload` is a write command with these fields:
 
@@ -106,9 +113,11 @@ The event loop itself detects the abandoned claims. On each iteration of
    the event is retried: the factory creates a new event with the same payload,
    `attempts` plus one and the `order` `0`. The event loop enqueues it as
    `000000.json`, which is the head of the queue, so the writes keep their
-   order, the claim is deleted, and `write:retry` is fired. The maximum number
-   of attempts is configurable, and the default is 3. When `attempts` reaches
-   it, the event is moved to the DLQ instead, and `write:error` is fired. An
+   order, the claim is deleted, and `write:retry` is fired. Before it creates
+   the new event, the loop adds the error to `errors`, and the new event keeps
+   all of them. The maximum number of attempts is configurable, and the default
+   is 3. When `attempts` reaches it, the event is moved to the DLQ instead, with
+   the last error added to `errors` in its file, and `write:error` is fired. An
    event with an invalid structure, or with a syntax error, is never retried: it
    is moved to the DLQ, and `write:error` is fired.
 
@@ -122,11 +131,12 @@ The event loop has three stages:
    2. Finds the maximum `order` in the queue, and sets the counter of the
       factory to it. When the queue is empty, the counter is 0.
    3. Recovers from a crash: it checks the abandoned claims. For each one, the
-      factory creates a new event with the same payload and the same `attempts`,
-      and the `order` `0`. The event loop enqueues it as `000000.json`, which is
-      the head of the queue, and the claim is deleted. If `000000.json` already
-      exists, a crash happened in the middle of an earlier recovery, and the
-      file is for the same event, so it is overwritten.
+      factory creates a new event with the same payload, the same `attempts` and
+      the same `errors`, and the `order` `0`. The event loop enqueues it as
+      `000000.json`, which is the head of the queue, and the claim is deleted.
+      If `000000.json` already exists, a crash happened in the middle of an
+      earlier recovery, and the file is for the same event, so it is
+      overwritten.
 2. **Loop:** the event loop runs `loop()` again and again (see "Loop").
 3. **Shutdown:** the event loop stops gracefully. When it receives a signal such
    as `SIGINT` or `SIGTERM`, it sets the global flag `isShuttingDown` to `true`.
@@ -149,8 +159,10 @@ events of the queue.
 | `write:retry` | The write has failed, and the event is enqueued again (step 4 above). |
 | `write:error` | The write has failed for good, and the event goes to the DLQ.         |
 
-Every notification carries the event. The `write:done` notification also
-carries:
+Every notification carries the event. For a failed write (`write:retry` and
+`write:error`) it is the event with the error of this attempt added to `errors`,
+and the notification also carries `error`, the reason as text. The `write:done`
+notification also carries:
 
 | Field  | Type     | Description                               |
 | ------ | -------- | ----------------------------------------- |

@@ -14,7 +14,7 @@ const setup = () =>
     now: () => new Date(createdAt),
   });
 
-test("create gives order, id, createdAt and attempts", () => {
+test("create gives order, id, createdAt, attempts and no errors", () => {
   const factory = setup();
   assert.deepEqual(factory.create(payload), {
     order: 1,
@@ -22,6 +22,7 @@ test("create gives order, id, createdAt and attempts", () => {
     payload,
     createdAt,
     attempts: 0,
+    errors: [],
   });
   assert.equal(factory.create(payload).order, 2);
 });
@@ -48,15 +49,23 @@ test("setCounter continues from the given maximum", () => {
   assert.equal(factory.create(payload).order, 3);
 });
 
-test("createAtHead gives order 0 with the attempts, and keeps the counter", () => {
+test("createAtHead gives order 0 with the attempts and the errors, and keeps the counter", () => {
   const factory = setup();
-  const event = factory.createAtHead(payload, 2);
+  const errors = [
+    {
+      attempt: 1,
+      error: "boom",
+      time: createdAt,
+    },
+  ];
+  const event = factory.createAtHead(payload, 2, errors);
   assert.deepEqual(event, {
     order: 0,
     id: eventId(createdAt, 0),
     payload,
     createdAt,
     attempts: 2,
+    errors,
   });
   assert.equal(factory.create(payload).order, 1);
 });

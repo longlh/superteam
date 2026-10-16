@@ -32,18 +32,23 @@ export function createQueue(paths) {
       .sort();
   }
 
+  // Atomic: write to tmp first, then move to `file`, so nobody reads a file that
+  // is half written. An existing file is overwritten.
+  async function writeAtomic(file, event) {
+    const tmpFile = path.join(paths.tmp, `${randomUUID()}.tmp`);
+    await writeFile(tmpFile, JSON.stringify(event));
+    await rename(tmpFile, file);
+  }
+
   return {
     // Atomic: write to tmp, then move into the queue, so the loop never reads
     // an event that is half written. An existing file with the same name is
     // overwritten.
-    async put(event) {
-      const tmpFile = path.join(paths.tmp, `${randomUUID()}.tmp`);
-      await writeFile(tmpFile, JSON.stringify(event));
-      await rename(
-        tmpFile,
+    put: (event) =>
+      writeAtomic(
         path.join(paths.queue, `${padOrder(event.order)}.json`),
-      );
-    },
+        event,
+      ),
 
     list,
 
@@ -81,8 +86,15 @@ export function createQueue(paths) {
 
     deleteClaim: (name) => rm(claimFile(name)),
 
-    // Moves a claim to the DLQ.
-    toDlq: (name) =>
-      rename(claimFile(name), path.join(paths.dlq, `${name}.json`)),
+    // Moves a claim to the DLQ. With `event`, the DLQ file holds that event
+    // (the one with the last error) and the claim is deleted.
+    async toDlq(name, event) {
+      const dlqFile = path.join(paths.dlq, `${name}.json`);
+      if (!event) {
+        return rename(claimFile(name), dlqFile);
+      }
+      await writeAtomic(dlqFile, event);
+      await rm(claimFile(name));
+    },
   };
 }
