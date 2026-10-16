@@ -113,19 +113,25 @@ Planned files, none created yet. README section numbers in brackets.
 
 ## Rules
 
-- The plugin root holds only what Claude Code requires there: `.claude-plugin/`, `skills/`, and later `.mcp.json` and `package.json`. Everything else we write goes in `src/`.
+- The plugin root holds only what Claude Code requires there: `.claude-plugin/`,
+  `skills/`, and later `.mcp.json` and `package.json`. Everything else we write
+  goes in `src/`.
 - `lib/` imports nothing else in the plugin.
-- `engine/` and `scripts/` import only `lib/` and `engine/`. They never import `mcp/`, so the engine stays free of AI.
+- `engine/` and `scripts/` import only `lib/` and `engine/`. They never import
+  `mcp/`, so the engine stays free of AI.
 - `mcp/` imports `lib/`, not `engine/`.
-- Tests live in `test/` at the repo root, outside the plugin, so they are not shipped.
+- Tests live in `test/` at the repo root, outside the plugin, so they are not
+  shipped.
 
 ## Implementation plan
 
-Phases are ordered by dependency. Phase 1 needs no AI and can be built and tested alone, against a fake brain. README section numbers in brackets.
+Phases are ordered by dependency. Phase 1 needs no AI and can be built and
+tested alone, against a fake brain. README section numbers in brackets.
 
 ### Decisions to confirm
 
-These are proposals. The plan below assumes them, and each one is cheap to change before Phase 1 starts.
+These are proposals. The plan below assumes them, and each one is cheap to
+change before Phase 1 starts.
 
 | #   | Decision                      | Proposal                                                                                                                                                                                                                                                                                                                             |
 | --- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -140,11 +146,19 @@ These are proposals. The plan below assumes them, and each one is cheap to chang
 
 ### Phase 0: how the brain runs (done)
 
-The MCP server starts Claude by spawning a child `claude -p` (2.1.2). Checked so far: the child signs in with the user's account and returns a validated `structured_output`. Three things go to Phase 3 because they are not checked yet: running the agent of a role with `--agent`, a child started in a project with this plugin loading the plugin and its MCP server again, and how the usage counts against the account's limit.
+The MCP server starts Claude by spawning a child `claude -p` (2.1.2). Checked so
+far: the child signs in with the user's account and returns a validated
+`structured_output`. Three things go to Phase 3 because they are not checked
+yet: running the agent of a role with `--agent`, a child started in a project
+with this plugin loading the plugin and its MCP server again, and how the usage
+counts against the account's limit.
 
 ### Phase 1: engine core, no AI
 
-Goal: write a record through a script and have the engine run the process, send the event to the endpoint of the brain, validate the answer and apply it. Tested against a fake brain, an HTTP server in `test/fixtures/` that returns a configured answer.
+Goal: write a record through a script and have the engine run the process, send
+the event to the endpoint of the brain, validate the answer and apply it. Tested
+against a fake brain, an HTTP server in `test/fixtures/` that returns a
+configured answer.
 
 | #    | Task                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Files                                       |
 | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
@@ -168,23 +182,34 @@ Goal: write a record through a script and have the engine run the process, send 
 
 Done when, with the fake brain:
 
-- Creating a work creates its tasks from its process. Tasks that do not depend on each other start together, and a task that depends on others starts only when they are `DONE`.
-- When every task is `DONE` the work is `DONE`, and the approval is assigned to the first bot role of `canApprovedBy`, or left to a human when there is none.
+- Creating a work creates its tasks from its process. Tasks that do not depend
+  on each other start together, and a task that depends on others starts only
+  when they are `DONE`.
+- When every task is `DONE` the work is `DONE`, and the approval is assigned to
+  the first bot role of `canApprovedBy`, or left to a human when there is none.
 - The process events the fake brain returns are applied.
-- A batch that breaks a check (`schema`, `scope`, `approver`, `depth`) applies nothing and leaves a `_rejection` with the right `check`.
-- A dead endpoint is retried and then the next brain is tried. A rejected answer moves on only to a brain with a different implementation name or version.
+- A batch that breaks a check (`schema`, `scope`, `approver`, `depth`) applies
+  nothing and leaves a `_rejection` with the right `check`.
+- A dead endpoint is retried and then the next brain is tried. A rejected answer
+  moves on only to a brain with a different implementation name or version.
 - The depth limit stops a loop.
 - Two writers at the same time get different ids and no lost write.
-- Two engine processes never claim the same event, and two tasks that do not depend on each other wait for the brain at the same time.
+- Two engine processes never claim the same event, and two tasks that do not
+  depend on each other wait for the brain at the same time.
 - Two tasks that finish at the same time set the work `DONE` once.
-- Every `_subscription` of a topic receives the event, an addon that fails or is too slow is skipped, and the brain is still called.
-- An endpoint that sends `X-Agent-Pid` is waited for as long as the agent is alive, with no 10 minute limit, and it is not called again while that agent is alive.
-- An event whose write completed late is processed after it completes, and an event whose write never completed (the writer died) is dropped.
+- Every `_subscription` of a topic receives the event, an addon that fails or is
+  too slow is skipped, and the brain is still called.
+- An endpoint that sends `X-Agent-Pid` is waited for as long as the agent is
+  alive, with no 10 minute limit, and it is not called again while that agent is
+  alive.
+- An event whose write completed late is processed after it completes, and an
+  event whose write never completed (the writer died) is dropped.
 - `npm test` passes.
 
 ### Phase 2: MCP server, read side
 
-Goal: an MCP server that Claude Code starts with the session, that serves queries and registers itself.
+Goal: an MCP server that Claude Code starts with the session, that serves
+queries and registers itself.
 
 | #   | Task                                                                                                                                                                                                                                                   | Files                        |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------- |
@@ -196,11 +221,15 @@ Goal: an MCP server that Claude Code starts with the session, that serves querie
 | 2.6 | Leader election: claim `.superteam/pid` with an exclusive create, check the pid and then the healthcheck (the secret in `.superteam/secret`) every 3 seconds, take over when the leader is gone, never volunteer when `SUPERTEAM__MEMBER_ONLY` is set. | `mcp/leader.js`              |
 | 2.7 | Recovery: once the new leader has registered, and then every 13 minutes, scan for abandoned work (read the queue first, then the claims) and touch it once (`recoveries`).                                                                             | `mcp/recovery.js`            |
 
-Done when the server starts in a Claude Code session, its `_brain` records appear in `.superteam/data/_brain/` and are renewed, and the query tools answer from the index. With two sessions on one project only one is the leader and registers; when the leader stops, the other takes over within a few seconds.
+Done when the server starts in a Claude Code session, its `_brain` records
+appear in `.superteam/data/_brain/` and are renewed, and the query tools answer
+from the index. With two sessions on one project only one is the leader and
+registers; when the leader stops, the other takes over within a few seconds.
 
 ### Phase 3: AI integration
 
-Goal: events reach Claude, agents do the tasks and the approvals, results come back.
+Goal: events reach Claude, agents do the tasks and the approvals, results come
+back.
 
 | #   | Task                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Files                |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
@@ -209,4 +238,5 @@ Goal: events reach Claude, agents do the tasks and the approvals, results come b
 | 3.3 | The skills: Define role, Define process, Query data, Finish (2.2).                                                                                                                                                                                                                                                                                                                                                                                      | `skills/*/SKILL.md`  |
 | 3.4 | End to end: a research process with `WORK` and `REVIEW` steps. A work is created, agents do its tasks, and the approval goes to a human or to an agent.                                                                                                                                                                                                                                                                                                 | `test/fixtures/`     |
 
-Done when a work of the research type ends `DONE` with the artifacts written by real agents, and an agent that goes beyond its task leaves a `_rejection`.
+Done when a work of the research type ends `DONE` with the artifacts written by
+real agents, and an agent that goes beyond its task leaves a `_rejection`.

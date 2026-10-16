@@ -1,13 +1,20 @@
 # Queue
 
-Draft. The interface of the queue that holds the engine's events (`_event`, a message in the queue). The backend (SQLite or files) is chosen later: the engine depends only on this interface.
+Draft. The interface of the queue that holds the engine's events (`_event`, a
+message in the queue). The backend (SQLite or files) is chosen later: the engine
+depends only on this interface.
 
 ## Principles
 
-- A message is runtime data, not project data. It is not in git and the queue can be deleted safely: the data files are the source of truth, and the recovery of the leader rebuilds what is missing from them.
-- Pull model, no daemon. A short-lived engine process claims one message, works on it and exits.
-- A claim is a lease. A message whose lease has expired goes back to the queue, so a dead engine process needs no manual cleanup.
-- The queue knows nothing about hashes, temp files or data files. Retry, backoff, routing to brains and fan-out to addons stay in the engine.
+- A message is runtime data, not project data. It is not in git and the queue
+  can be deleted safely: the data files are the source of truth, and the
+  recovery of the leader rebuilds what is missing from them.
+- Pull model, no daemon. A short-lived engine process claims one message, works
+  on it and exits.
+- A claim is a lease. A message whose lease has expired goes back to the queue,
+  so a dead engine process needs no manual cleanup.
+- The queue knows nothing about hashes, temp files or data files. Retry,
+  backoff, routing to brains and fan-out to addons stay in the engine.
 
 ## Model
 
@@ -94,7 +101,8 @@ classDiagram
 
 ## Usage
 
-The first three diagrams follow option B of the open questions (move the data file first, then enqueue). Option A follows after them, for comparison.
+The first three diagrams follow option B of the open questions (move the data
+file first, then enqueue). Option A follows after them, for comparison.
 
 ### Option B: a write, and the engine processing its message
 
@@ -154,7 +162,8 @@ sequenceDiagram
 
 ### Both options: the leader looks for work nobody is doing
 
-A message that found no brain was acked and is gone, but the state it was about is still on disk. The recovery asks the queue before it touches a record.
+A message that found no brain was acked and is gone, but the state it was about
+is still on disk. The recovery asks the queue before it touches a record.
 
 ```mermaid
 sequenceDiagram
@@ -178,7 +187,9 @@ sequenceDiagram
 
 ### Option A: two phases
 
-The message is stored before the data file is in place, in the state `prepared`, with the hash of the record before and after the write. The write script commits it after the move. The engine claims only `ready` messages.
+The message is stored before the data file is in place, in the state `prepared`,
+with the hash of the record before and after the write. The write script commits
+it after the move. The engine claims only `ready` messages.
 
 ```mermaid
 sequenceDiagram
@@ -201,7 +212,9 @@ sequenceDiagram
 
 ### Option A: the write script dies between prepare and commit
 
-The message stays `prepared`. After a grace period the queue hands it to an engine process, which checks the data file against the hashes. No polling and no temp path in the message.
+The message stays `prepared`. After a grace period the queue hands it to an
+engine process, which checks the data file against the hashes. No polling and no
+temp path in the message.
 
 ```mermaid
 sequenceDiagram
@@ -258,7 +271,10 @@ classDiagram
     PrepareInput --> HashPair
 ```
 
-`Message` gets a `state` (`prepared` or `ready`) and the `hash`. `enqueue` is replaced by `prepare` and `commit`. `claim` returns a `ready` message at once and a `prepared` one only after `preparedGraceMs`, so the engine checks the hashes of those only.
+`Message` gets a `state` (`prepared` or `ready`) and the `hash`. `enqueue` is
+replaced by `prepare` and `commit`. `claim` returns a `ready` message at once
+and a `prepared` one only after `preparedGraceMs`, so the engine checks the
+hashes of those only.
 
 ### Comparison
 
@@ -276,12 +292,17 @@ classDiagram
 
 - Retry, backoff and the choice of the next brain: the engine (1).
 - Delivery to addons (1.7): the engine, after it claims the message.
-- The check that the write of the data file completed: the write script and the engine, see the open questions.
+- The check that the write of the data file completed: the write script and the
+  engine, see the open questions.
 
 ## Open questions
 
-1. Fan-out: one message in the queue and the engine calls the addons itself (current design), or one queue per subscriber.
+1. Fan-out: one message in the queue and the engine calls the addons itself
+   (current design), or one queue per subscriber.
 2. The gap between writing the data file and enqueueing the message:
-   - A: two phases (`prepared`, then `ready`) with a hash. Safe, but the interface needs `prepare` and `commit`.
-   - B: move the data file first, then enqueue, with no hash and no temp path. A script that dies in the gap loses the message. Recovery repairs the bot cases (task, work), not the addon notifications.
+   - A: two phases (`prepared`, then `ready`) with a hash. Safe, but the
+     interface needs `prepare` and `commit`.
+   - B: move the data file first, then enqueue, with no hash and no temp path. A
+     script that dies in the gap loses the message. Recovery repairs the bot
+     cases (task, work), not the addon notifications.
 3. Backend: SQLite or files, chosen after the interface is agreed.

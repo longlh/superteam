@@ -93,7 +93,8 @@ These statuses are not stored. They are derived from the fields of the entities.
 
 ### Work approval status
 
-The approval status of a work is derived from the fields of the work and its tasks.
+The approval status of a work is derived from the fields of the work and its
+tasks.
 
 | Approval status | Formula                                                                                  |
 | --------------- | ---------------------------------------------------------------------------------------- |

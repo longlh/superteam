@@ -6,8 +6,10 @@ A Claude Code plugin that runs a team of agents on any project's own workflow.
 
 In teamwork, the team lead has to:
 
-- split the job into smaller pieces and give them to the members of the team, based on what each one can do (their role);
-- coordinate the pieces, so that the final result comes back after a chain of activities that depend on each other through a chain of inputs and outputs.
+- split the job into smaller pieces and give them to the members of the team,
+  based on what each one can do (their role);
+- coordinate the pieces, so that the final result comes back after a chain of
+  activities that depend on each other through a chain of inputs and outputs.
 
 When the work does not flow, it is usually because:
 
@@ -18,9 +20,11 @@ When the work does not flow, it is usually because:
 
 Build an **engine** that replaces the team lead. The engine:
 
-- coordinates the work according to the workflow: it breaks the work down into tasks and assigns them;
+- coordinates the work according to the workflow: it breaks the work down into
+  tasks and assigns them;
 - records the results and keeps the statuses correct;
-- triggers each task at the right time: only when it is its turn and it has enough input, so the tasks run in the right order;
+- triggers each task at the right time: only when it is its turn and it has
+  enough input, so the tasks run in the right order;
 - tracks the work and summarizes its results.
 
 ## Appendix
@@ -29,7 +33,9 @@ The meaning of the terms used above.
 
 ### Workflow
 
-The way a job is split follows a predefined procedure that belongs to the nature of that job. This procedure is called a **workflow**: workflow A is the teamwork activity that does job A.
+The way a job is split follows a predefined procedure that belongs to the nature
+of that job. This procedure is called a **workflow**: workflow A is the teamwork
+activity that does job A.
 
 For a kind of job, the workflow provides:
 
@@ -40,31 +46,39 @@ For a kind of job, the workflow provides:
 - the DOD template of the job;
 - which roles can be the approver.
 
-The team lead uses the workflow as the framework to coordinate a work, the unit of job given to the team (see "Work and task").
+The team lead uses the workflow as the framework to coordinate a work, the unit
+of job given to the team (see "Work and task").
 
 #### Role
 
 A **role** represents a set of capabilities and responsibilities to do work.
 
 - The team lead gives out the work based on roles.
-- A role is not a member: it describes what is needed to do a job, not who does it.
+- A role is not a member: it describes what is needed to do a job, not who does
+  it.
 
 #### DOD
 
-A job is done when it meets its **DOD** (definition of done). Both a work and a task have one (see "Work and task").
+A job is done when it meets its **DOD** (definition of done). Both a work and a
+task have one (see "Work and task").
 
-- The DOD templates are in the workflow: one for the kind of job (the work) and one for each step (the task). They can be customized for each work or task.
+- The DOD templates are in the workflow: one for the kind of job (the work) and
+  one for each step (the task). They can be customized for each work or task.
 - The team lead uses the DOD of the work to create the DOD of its tasks.
 
 #### Work and task
 
 - A **work** is the unit of job given to the team.
 - A **task** is the unit of job given to a member.
-- A work is a list of tasks. They are executed in an order that depends on their inputs and outputs: a task starts when it has the outputs of the tasks it depends on.
+- A work is a list of tasks. They are executed in an order that depends on their
+  inputs and outputs: a task starts when it has the outputs of the tasks it
+  depends on.
 
 ##### Status
 
-The status of a work or a task only shows which step it is at. It does not show the result of the job (see "Output"). The approval of a work is tracked separately (see "Approval flow").
+The status of a work or a task only shows which step it is at. It does not show
+the result of the job (see "Output"). The approval of a work is tracked
+separately (see "Approval flow").
 
 Work:
 
@@ -87,17 +101,23 @@ Task:
 The result of a job is its output, made of:
 
 - **artifacts**: the products a task can create while it is `IN_PROGRESS`;
-- the **DOD checklist**: the completion report of a task, based on the DOD of that task.
+- the **DOD checklist**: the completion report of a task, based on the DOD of
+  that task.
 
-The output of a work is all the artifacts and all the DOD checklists of the tasks in it.
+The output of a work is all the artifacts and all the DOD checklists of the
+tasks in it.
 
-The approval flow adds one more artifact to the work: the reason for the decision of the approver (see "Approval result").
+The approval flow adds one more artifact to the work: the reason for the
+decision of the approver (see "Approval result").
 
 ### Approval flow
 
-The approval flow happens when the workflow ends. An **approver** evaluates the whole output of the work, then either approves or rejects it. The workflow says which roles can be the approver.
+The approval flow happens when the workflow ends. An **approver** evaluates the
+whole output of the work, then either approves or rejects it. The workflow says
+which roles can be the approver.
 
-Normally an approval flow is independent from the workflow and has many steps of its own. It is not the main target of the engine, so it is kept simple here.
+Normally an approval flow is independent from the workflow and has many steps of
+its own. It is not the main target of the engine, so it is kept simple here.
 
 #### Approval status
 
@@ -112,4 +132,6 @@ A work has an `approval_status`, separate from its status:
 
 #### Approval result
 
-The result of the approval flow is the decision (`APPROVED` or `REJECTED`) and an **artifact** that records the reason for the decision. The approver creates this artifact for the work, together with the decision.
+The result of the approval flow is the decision (`APPROVED` or `REJECTED`) and
+an **artifact** that records the reason for the decision. The approver creates
+this artifact for the work, together with the decision.
