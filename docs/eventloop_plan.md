@@ -187,7 +187,7 @@ Unit tests, each in the `.test.js` file next to its code:
   claim moves the lowest event, and the move to the DLQ.
 - `writer.test.js`: the `src` first rule, `file://`, `http` with a local test
   server, and a binary file that is written byte for byte. The `EXDEV` error is
-  not tested, because it needs a second device.
+  tested with a mock of `rename`, because a second device is not needed for it.
 - `subscribers.test.js`: the function that `subscribe()` returns unsubscribes
   the handler, and a subscriber that throws does not stop the other subscribers.
 - `loop.test.js`: one iteration with fakes for the parts it uses, the wait of

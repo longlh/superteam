@@ -1,7 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
-import { mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
+import fsPromises, {
+  mkdtemp,
+  readdir,
+  readFile,
+  writeFile,
+} from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -181,4 +187,28 @@ test("a slow server hits the timeout", async () => {
     server.closeAllConnections();
     server.close();
   }
+});
+
+test("a target on another device throws a clear error and leaves no tmp file", async (t) => {
+  const { dir, paths, writer } = await setup();
+  // The named imports of a built-in module follow the mock after the sync.
+  t.mock.method(fsPromises, "rename", async () => {
+    throw Object.assign(new Error("cross-device link"), {
+      code: "EXDEV",
+    });
+  });
+  syncBuiltinESMExports();
+  t.after(() => {
+    t.mock.restoreAll();
+    syncBuiltinESMExports();
+  });
+  await assert.rejects(
+    writer.write({
+      command: "write",
+      target: path.join(dir, "out.txt"),
+      src: "a",
+    }),
+    /on another device is not supported/,
+  );
+  assert.deepEqual(await readdir(paths.tmp), []);
 });

@@ -397,3 +397,15 @@ test("a second call of start throws", async () => {
     /only once/,
   );
 });
+
+test("without a sleep option the loop waits with a real timer", async () => {
+  const baseDir = await mkdtemp(path.join(tmpdir(), "eventloop-"));
+  const loop = createEventLoop({
+    baseDir,
+    pollIntervalMs: 1,
+  });
+  setTimeout(() => loop.shutdown(), 20);
+  await loop.start({
+    handleSignals: false,
+  });
+});
