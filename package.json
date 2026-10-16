@@ -2,7 +2,9 @@
   "name": "superteam",
   "private": true,
   "scripts": {
-    "format:md": "prettier --write \"**/*.md\""
+    "format:md": "prettier --write \"**/*.md\"",
+    "test": "node --test \"superteam-engine/src/**/*.test.js\"",
+    "coverage": "node --test --experimental-test-coverage \"superteam-engine/src/**/*.test.js\""
   },
   "devDependencies": {
     "prettier": "^3.9.10"

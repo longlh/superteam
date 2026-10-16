@@ -27,6 +27,10 @@ The plan to implement the module described in `eventloop.md`.
 | Validation          | A hand-written validator for the event and the payload. No schema library.                                                                                                         |
 | Subscribers         | Called in the order of the subscription, not awaited. A `try` and `catch` only isolates an error of a subscriber from the loop: handling it is out of the scope of the event loop. |
 | Options             | `createEventLoop` takes `maxAttempts` (3), `pollIntervalMs` (1000), `sleep` and `now` (for tests). `start()` takes `fetchTimeoutMs` (30000).                                       |
+| Claim name          | `{id}.json`. An event that has no valid `id` (broken JSON, or an `id` that is not a hash) uses its queue file name, such as `000003.json`.                                         |
+| Error notifications | `write:error` and `write:retry` carry an extra `error` (the reason, as text). For a broken event, `event` is the parsed object, or `null`.                                         |
+| Broken claim        | At the recovery, a claim that is not valid goes to the DLQ and `write:error` is fired. An abandoned claim found by `loop()` only goes to the DLQ: no notification.                 |
+| `target`            | The writer creates the parent folder of `target` (`mkdir -p`) before it moves the file.                                                                                            |
 | Counter             | Increased synchronously in `create()`, so two calls in the same process never get the same `order`.                                                                                |
 
 ## 3. Code style
@@ -40,7 +44,7 @@ The plan to implement the module described in `eventloop.md`.
 ## 4. Layout
 
 ```
-superteam-engine/src/eventloop/
+superteam-engine/src/lib/eventloop/
   index.js            createEventLoop(options): only exports, nothing to test
   index.test.js       the flow tests of the whole module
   paths.js            the folders of the module, and mkdir -p
@@ -72,7 +76,9 @@ loop.shutdown(); // sets isShuttingDown to true
 
 - `start()` also adds the `SIGINT` and `SIGTERM` handlers, which call
   `shutdown()`. The option `handleSignals: false` turns this off, for tests.
-- `enqueue()` can be called before `start()`. The event waits in the queue.
+- `enqueue()` throws if it is called before `start()` has finished its start
+  stage: it returns a promise that is rejected with
+  `enqueue() needs start() first`.
 
 ## 6. Steps
 
@@ -99,7 +105,9 @@ with its tests passing before the next step starts.
    `order` and set the counter, recover the abandoned claim as `000000.json`,
    overwrite it if it exists), the loop that waits 1 second when the queue is
    empty, and the shutdown with `isShuttingDown`, checked before each new
-   iteration.
+   iteration. The start stage is `prepare()` (the counter and the recovery), and
+   the loop is `run()`. `index.js` sets `isStarted` between the two, so
+   `enqueue()` never runs while the counter is not right.
 
 ## 7. Tests
 
@@ -122,8 +130,10 @@ Unit tests, each in the `.test.js` file next to its code:
 
 Flow tests, in `index.test.js` because `index.js` only exports. They go through
 the public API, with the folders prepared on a temporary disk folder and `sleep`
-replaced:
+replaced. `enqueue()` needs `start()` first, so a helper `seed()` writes the
+events into the queue by hand, as if an earlier run left them:
 
+- `enqueue()` before `start()` throws.
 - A write succeeds: the target is written, the claim is deleted, `write:done`
   carries the event, the `hash` and the `time`.
 - A write fails: the new event is `000000.json` with `attempts` plus one, and
@@ -138,3 +148,6 @@ replaced:
   0 when the queue is empty.
 - Shutdown during an iteration: the iteration finishes, and no new one starts.
 - The `claim` folder never has more than one file.
+
+Run all the tests with `npm test`. It uses a glob, because Node 24 does not take
+a folder.
