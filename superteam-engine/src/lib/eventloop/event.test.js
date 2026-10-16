@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   eventId,
   padOrder,
+  parseEvent,
   sha256,
   validateEvent,
   validatePayload,
@@ -105,4 +106,16 @@ test("invalid events are rejected", () => {
   for (const value of bad) {
     assert.equal(typeof validateEvent(value), "string", JSON.stringify(value));
   }
+});
+
+test("parseEvent returns the event when it is valid", () => {
+  assert.deepEqual(parseEvent(JSON.stringify(event)), { event });
+});
+
+test("parseEvent returns the error, and the parsed value when there is one", () => {
+  const broken = parseEvent("{not json");
+  assert.match(broken.error, /^invalid JSON/);
+  assert.equal(broken.parsed, undefined);
+  assert.deepEqual(parseEvent('{"a":1}').parsed, { a: 1 });
+  assert.equal(typeof parseEvent('{"a":1}').error, "string");
 });

@@ -336,17 +336,3 @@ test("start with a claim that is not valid: it goes to the DLQ", async () => {
   );
   assert.equal(ctx.seen[0].event, null);
 });
-
-test("SIGTERM and SIGINT shut the loop down, and the handlers are removed", async () => {
-  for (const signal of ["SIGTERM", "SIGINT"]) {
-    const ctx = await setup();
-    const before = process.listenerCount(signal);
-    // Emitting the event on `process` runs the handlers without a real signal.
-    setTimeout(() => {
-      assert.equal(process.listenerCount(signal), before + 1);
-      process.emit(signal);
-    }, 20);
-    await ctx.loop.start();
-    assert.equal(process.listenerCount(signal), before);
-  }
-});

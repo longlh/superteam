@@ -1,34 +1,16 @@
-import { validateEvent } from "./event.js";
+import { parseEvent } from "./event.js";
 
-const defaultSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-// Reads the text of an event file. Returns { event } when it is valid, and
-// { error, parsed } when it is not JSON or has a wrong structure.
-function parseEvent(raw) {
-  let parsed;
-  try {
-    parsed = JSON.parse(raw);
-  } catch (error) {
-    return { error: `invalid JSON: ${error.message}` };
-  }
-  const error = validateEvent(parsed);
-  return error ? { error, parsed } : { event: parsed };
-}
-
-// The loop takes its parts as arguments, so it knows none of their jobs.
+// The loop does the work of the events: one iteration, and the recovery. It
+// knows nothing of its own life cycle: see control.js.
 export function createLoop({
   queue,
   factory,
   writer,
   subscribers,
   maxAttempts = 3,
-  pollIntervalMs = 1000,
-  sleep = defaultSleep,
+  sleep,
   now = () => new Date(),
 }) {
-  let isShuttingDown = false;
-  let fetchTimeoutMs;
-
   // The event cannot be processed: move it to the DLQ and notify.
   async function reject(name, event, error) {
     await queue.toDlq(name);
@@ -40,17 +22,13 @@ export function createLoop({
     if (event.attempts + 1 >= maxAttempts) {
       return reject(name, event, error.message);
     }
-    const retry = factory.create(event.payload, {
-      order: 0,
-      attempts: event.attempts + 1,
-    });
-    await factory.enqueue(retry);
+    await queue.put(factory.createAtHead(event.payload, event.attempts + 1));
     await queue.deleteClaim(name);
     subscribers.emit("write:retry", { event, error: error.message });
   }
 
   // One iteration of loop(). Returns false when the queue was empty.
-  async function iterate() {
+  async function iterate({ fetchTimeoutMs } = {}) {
     // 1. A claim that is still there is abandoned.
     for (const name of await queue.listClaims()) await queue.toDlq(name);
 
@@ -93,35 +71,10 @@ export function createLoop({
         await reject(name, parsed ?? null, error);
         continue;
       }
-      const head = factory.create(event.payload, {
-        order: 0,
-        attempts: event.attempts,
-      });
-      await factory.enqueue(head);
+      await queue.put(factory.createAtHead(event.payload, event.attempts));
       await queue.deleteClaim(name);
     }
   }
 
-  return {
-    iterate,
-
-    // The start stage: set the counter, then recover from a crash.
-    async prepare() {
-      factory.setCounter(await queue.maxOrder());
-      await recover();
-    },
-
-    // The loop, until the shutdown.
-    async run({ fetchTimeoutMs: timeoutMs } = {}) {
-      fetchTimeoutMs = timeoutMs;
-      while (!isShuttingDown) {
-        if (!(await iterate())) await sleep(pollIntervalMs);
-      }
-    },
-
-    // The iteration in progress finishes, then the loop stops.
-    shutdown() {
-      isShuttingDown = true;
-    },
-  };
+  return { iterate, recover };
 }

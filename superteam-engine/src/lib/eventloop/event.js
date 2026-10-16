@@ -62,3 +62,16 @@ export function validateEvent(event) {
   if (!isCount(event.attempts)) return "event.attempts must be an integer";
   return validatePayload(event.payload);
 }
+
+// Reads the text of an event file. Returns { event } when it is valid, and
+// { error, parsed } when it is not JSON or has a wrong structure.
+export function parseEvent(raw) {
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    return { error: `invalid JSON: ${error.message}` };
+  }
+  const error = validateEvent(parsed);
+  return error ? { error, parsed } : { event: parsed };
+}

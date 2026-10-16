@@ -1,5 +1,7 @@
-import { readdir, readFile, rename, rm } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { padOrder } from "./event.js";
 
 const QUEUE_FILE = /^\d{6}\.json$/;
 const ID = /^[0-9a-f]{64}$/;
@@ -29,6 +31,18 @@ export function createQueue(paths) {
   }
 
   return {
+    // Atomic: write to tmp, then move into the queue, so the loop never reads
+    // an event that is half written. An existing file with the same name is
+    // overwritten.
+    async put(event) {
+      const tmpFile = path.join(paths.tmp, `${randomUUID()}.tmp`);
+      await writeFile(tmpFile, JSON.stringify(event));
+      await rename(
+        tmpFile,
+        path.join(paths.queue, `${padOrder(event.order)}.json`),
+      );
+    },
+
     list,
 
     // The maximum `order` in the queue, 0 when it is empty.

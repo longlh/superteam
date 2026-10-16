@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readdir, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createQueue } from "./queue.js";
@@ -72,4 +72,27 @@ test("toDlq moves the claim to the DLQ", async () => {
   await queue.toDlq(name);
   assert.deepEqual(await queue.listClaims(), []);
   assert.deepEqual(await readdir(paths.dlq), [`${name}.json`]);
+});
+
+test("put writes the file into the queue, named by the order, with no tmp file left", async () => {
+  const { paths, queue } = await setup();
+  const event = { order: 3, id: "x", payload: {} };
+  await queue.put(event);
+  assert.deepEqual(await queue.list(), ["000003.json"]);
+  assert.deepEqual(await readdir(paths.tmp), []);
+  const saved = JSON.parse(
+    await readFile(path.join(paths.queue, "000003.json"), "utf8"),
+  );
+  assert.deepEqual(saved, event);
+});
+
+test("put overwrites an existing 000000.json", async () => {
+  const { paths, queue } = await setup();
+  await put(paths, "000000.json", "old");
+  const event = { order: 0, id: "y", payload: {}, attempts: 1 };
+  await queue.put(event);
+  const saved = JSON.parse(
+    await readFile(path.join(paths.queue, "000000.json"), "utf8"),
+  );
+  assert.deepEqual(saved, event);
 });

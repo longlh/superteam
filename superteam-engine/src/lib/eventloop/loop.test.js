@@ -14,23 +14,27 @@ const makeEvent = (attempts = 0) => ({
 });
 
 // The loop with fakes for all its parts. `calls` records what happened.
-function setup({ claims = [], next = null, writeError, maxAttempts = 3 } = {}) {
+function setup({
+  claims = [],
+  claimRaw,
+  next = null,
+  writeError,
+  maxAttempts = 3,
+} = {}) {
   const calls = [];
   const queue = {
     listClaims: async () => claims,
-    readClaim: async () => JSON.stringify(makeEvent(2)),
+    readClaim: async () => claimRaw ?? JSON.stringify(makeEvent(2)),
     claimNext: async () => {
       calls.push(["claimNext"]);
       return next && { name: "claimed", raw: JSON.stringify(next) };
     },
+    put: async (event) => calls.push(["put", event]),
     deleteClaim: async (name) => calls.push(["deleteClaim", name]),
     toDlq: async (name) => calls.push(["toDlq", name]),
-    maxOrder: async () => 5,
   };
   const factory = {
-    setCounter: (n) => calls.push(["setCounter", n]),
-    create: (p, options) => ({ payload: p, ...options }),
-    enqueue: async (event) => calls.push(["enqueue", event]),
+    createAtHead: (p, attempts) => ({ payload: p, order: 0, attempts }),
   };
   const writer = {
     write: async () => {
@@ -42,10 +46,8 @@ function setup({ claims = [], next = null, writeError, maxAttempts = 3 } = {}) {
   const subscribers = {
     emit: (name, data) => calls.push(["emit", name, data]),
   };
-  const hooks = {};
   const sleep = async (ms) => {
     calls.push(["sleep", ms]);
-    hooks.onSleep?.();
   };
   const now = () => new Date(createdAt);
   const loop = createLoop({
@@ -56,9 +58,8 @@ function setup({ claims = [], next = null, writeError, maxAttempts = 3 } = {}) {
     maxAttempts,
     sleep,
     now,
-    pollIntervalMs: 1000,
   });
-  return { calls, loop, writer, hooks };
+  return { calls, loop };
 }
 
 const names = (calls) => calls.map((c) => c[0]);
@@ -106,7 +107,7 @@ test("a failed write is enqueued again at order 0 with attempts plus one", async
   const { calls, loop } = setup({ next: event, writeError: new Error("boom") });
   await loop.iterate();
   assert.deepEqual(calls.slice(-3), [
-    ["enqueue", { payload, order: 0, attempts: 2 }],
+    ["put", { payload, order: 0, attempts: 2 }],
     ["deleteClaim", "claimed"],
     ["emit", "write:retry", { event, error: "boom" }],
   ]);
@@ -120,7 +121,7 @@ test("when attempts reaches the maximum the event goes to the DLQ", async () => 
     ["toDlq", "claimed"],
     ["emit", "write:error", { event, error: "boom" }],
   ]);
-  assert.ok(!names(calls).includes("enqueue"));
+  assert.ok(!names(calls).includes("put"));
 });
 
 test("an event with a wrong structure goes to the DLQ without a retry", async () => {
@@ -131,36 +132,25 @@ test("an event with a wrong structure goes to the DLQ without a retry", async ()
   assert.deepEqual(calls[2][2].event, { nope: true });
 });
 
-test("prepare sets the counter and recovers a claim, and run checks the shutdown flag", async () => {
+test("recover puts an abandoned claim back at the head, with the same attempts", async () => {
   const { calls, loop } = setup({ claims: ["crashed"] });
-  loop.shutdown();
-  await loop.prepare();
-  await loop.run();
+  await loop.recover();
   assert.deepEqual(calls, [
-    ["setCounter", 5],
-    ["enqueue", { payload, order: 0, attempts: 2 }],
+    ["put", { payload, order: 0, attempts: 2 }],
     ["deleteClaim", "crashed"],
   ]);
 });
 
-test("a shutdown during an iteration finishes it and starts no new one", async () => {
-  const { calls, loop, writer } = setup({ next: makeEvent() });
-  const write = writer.write;
-  writer.write = async (...args) => {
-    loop.shutdown();
-    return write(...args);
-  };
-  await loop.run();
-  assert.equal(calls.filter((c) => c[0] === "claimNext").length, 1);
-  assert.ok(names(calls).includes("deleteClaim"));
+test("recover sends a claim that is not valid to the DLQ", async () => {
+  const { calls, loop } = setup({ claims: ["broken"], claimRaw: "{not json" });
+  await loop.recover();
+  assert.deepEqual(names(calls), ["toDlq", "emit"]);
+  assert.deepEqual(calls[1].slice(1, 2), ["write:error"]);
+  assert.equal(calls[1][2].event, null);
 });
 
-test("the loop waits pollIntervalMs when the queue is empty", async () => {
-  const { calls, loop, hooks } = setup();
-  hooks.onSleep = () => loop.shutdown();
-  await loop.run();
-  assert.deepEqual(
-    calls.filter((c) => c[0] === "sleep"),
-    [["sleep", 1000]],
-  );
+test("recover does nothing when there is no claim", async () => {
+  const { calls, loop } = setup();
+  await loop.recover();
+  assert.deepEqual(calls, []);
 });

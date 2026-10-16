@@ -45,22 +45,24 @@ The plan to implement the module described in `eventloop.md`.
 
 ```
 superteam-engine/src/lib/eventloop/
-  index.js            createEventLoop(options): only exports, nothing to test
+  index.js            createEventLoop(options): puts the parts together, no logic
   index.test.js       the flow tests of the whole module
   paths.js            the folders of the module, and mkdir -p
   paths.test.js
-  event.js            the event shape, validation, and the hashes
+  event.js            the event shape, parsing, validation, and the hashes
   event.test.js
-  factory.js          the counter, create(), and the atomic enqueue
+  factory.js          the counter, and create events: it does not know the queue
   factory.test.js
-  queue.js            list, claim, delete a claim, move to the DLQ, recover
+  queue.js            the queue folders: put, list, claim, delete a claim, move to the DLQ
   queue.test.js
   writer.js           get the content, write to tmp, move to the target
   writer.test.js
   subscribers.js      subscribe and emit, with the errors isolated
   subscribers.test.js
-  loop.js             the loop, the retry, the start and the shutdown
+  loop.js             one iteration and the recovery: the work on the events
   loop.test.js
+  control.js          the life cycle of the loop, the signals, and enqueue()
+  control.test.js
 ```
 
 ## 5. Public API
@@ -86,28 +88,38 @@ Each step comes with the unit test file of its code, next to it. A step ends
 with its tests passing before the next step starts.
 
 1. **Foundation** (`paths.js`, `event.js`): the folders, the event shape, the
-   validator, the hash functions, and the padding of `order` to 6 digits.
+   parsing of an event file, the validator, the hash functions, and the padding
+   of `order` to 6 digits.
 2. **Factory** (`factory.js`): the counter, `create()` with `order`, `id` and
-   `createdAt`, the explicit `order` `0` for the retry and the recovery, and the
-   atomic enqueue (write to tmp, then move into the queue).
-3. **Queue** (`queue.js`): list the queue in `order`, claim the lowest event by
-   moving it, delete the claim, move an event to the DLQ, and read the claim.
+   `createdAt`, and `createAtHead()` with the `order` `0`, for the retry and the
+   recovery. The factory does not know where the events go.
+3. **Queue** (`queue.js`): the only place that knows the queue folders. `put()`
+   writes an event atomically (write to tmp, then move into the queue), and
+   overwrites a file with the same name. It also lists the queue in `order`,
+   claims the lowest event by moving it, deletes the claim, moves an event to
+   the DLQ, and reads the claim.
 4. **Writer** (`writer.js`): get the content from `src` or from `remoteSrc`
    (`src` first), write it to tmp, move it to `target`, and return the hash.
 5. **Subscribers** (`subscribers.js`): subscribe, unsubscribe, and emit with
    each handler in a try and catch.
-6. **Loop** (`loop.js`): one iteration of `loop()` with the four steps of
-   `eventloop.md`: the abandoned claim goes to the DLQ, claim a new event and
-   wait `2^attempts` seconds for a retry, process the write, then delete the
-   claim and fire `write:done`, or retry with `write:retry`, or go to the DLQ
-   with `write:error`. An event that is not valid is never retried.
-7. **Life cycle** (`loop.js`, `index.js`): the start stage (find the maximum
-   `order` and set the counter, recover the abandoned claim as `000000.json`,
-   overwrite it if it exists), the loop that waits 1 second when the queue is
-   empty, and the shutdown with `isShuttingDown`, checked before each new
-   iteration. The start stage is `prepare()` (the counter and the recovery), and
-   the loop is `run()`. `index.js` sets `isStarted` between the two, so
-   `enqueue()` never runs while the counter is not right.
+6. **Loop** (`loop.js`): `iterate()`, one iteration of `loop()`, with the four
+   steps of `eventloop.md`: the abandoned claim goes to the DLQ, claim a new
+   event and wait `2^attempts` seconds for a retry, process the write, then
+   delete the claim and fire `write:done`, or retry with `write:retry`, or go to
+   the DLQ with `write:error`. An event that is not valid is never retried.
+   `recover()` puts each abandoned claim back at the head of the queue as
+   `000000.json`, with the same `attempts`, and overwrites the file if it
+   exists. The loop knows nothing of its own life cycle: it has no flag, no
+   signal and no wait for an empty queue.
+7. **Control** (`control.js`, `index.js`): the life cycle of the loop. `start()`
+   is the three stages of `eventloop.md`: the start stage makes the folders
+   (`ensurePaths()`), finds the maximum `order` and sets the counter, and calls
+   `loop.recover()`; then it sets `isStarted`. The loop stage calls
+   `loop.iterate()` again and again, and waits 1 second when the queue is empty.
+   The shutdown stage is `shutdown()`, which sets `isShuttingDown`, checked
+   before each new iteration. The control also owns the `SIGINT` and `SIGTERM`
+   handlers, which call `shutdown()`, and `enqueue()`, which needs `isStarted`,
+   so `enqueue()` never runs while the counter is not right.
 
 ## 7. Tests
 
@@ -115,23 +127,28 @@ Unit tests, each in the `.test.js` file next to its code:
 
 - `paths.test.js`: the folders are the right ones, and they are created when
   they are missing.
-- `event.test.js`: the padding of `order`, the `id` and the `hash`, and the
-  validator.
+- `event.test.js`: the padding of `order`, the `id` and the `hash`, the
+  validator, and the parsing of an event file.
 - `factory.test.js`: 100 calls of `create()` at the same time give 100 different
-  `order`, the explicit `order` `0`, and the atomic enqueue.
-- `queue.test.js`: the list is in `order`, the claim moves the lowest event, and
-  the move to the DLQ.
+  `order`, and `createAtHead()` gives the `order` `0`.
+- `queue.test.js`: `put` is atomic and overwrites, the list is in `order`, the
+  claim moves the lowest event, and the move to the DLQ.
 - `writer.test.js`: the `src` first rule, `file://`, `http` with a local test
   server, and a binary file that is written byte for byte.
 - `subscribers.test.js`: the function that `subscribe()` returns unsubscribes
   the handler, and a subscriber that throws does not stop the other subscribers.
 - `loop.test.js`: one iteration with fakes for the parts it uses, the wait of
-  `2^attempts` seconds, and the check of `isShuttingDown`.
+  `2^attempts` seconds, and `recover()`.
+- `control.test.js`: with a fake loop, the order of the three stages, the wait
+  when the queue is empty, the check of `isShuttingDown`, `enqueue()` before and
+  after the start stage, and the signals (`process.emit`, no real signal): they
+  call `shutdown()`, and the handlers are removed after `start()`.
 
-Flow tests, in `index.test.js` because `index.js` only exports. They go through
-the public API, with the folders prepared on a temporary disk folder and `sleep`
-replaced. `enqueue()` needs `start()` first, so a helper `seed()` writes the
-events into the queue by hand, as if an earlier run left them:
+Flow tests, in `index.test.js` because `index.js` puts all the parts together.
+They go through the public API, with the folders prepared on a temporary disk
+folder and `sleep` replaced. `enqueue()` needs `start()` first, so a helper
+`seed()` writes the events into the queue by hand, as if an earlier run left
+them:
 
 - `enqueue()` before `start()` throws.
 - A write succeeds: the target is written, the claim is deleted, `write:done`
