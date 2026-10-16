@@ -73,7 +73,7 @@ The event loop comes with a factory that creates an event from a payload:
   the head of the queue, which are the event that is recovered at the start and
   the event of a retry.
 - `createdAt`: `now()`.
-- `id`: a hash of `createdAt`.
+- `id`: a hash of `createdAt` and `order`.
 
 The factory writes an event atomically. It writes the file of the event to the
 temporary folder first, and when the write is finished it moves the file into
@@ -85,8 +85,7 @@ The loop claims the events from the queue and processes them one at a time, in
 order, so there is no race condition.
 
 The loop runs continuously while there are events in the queue. When the queue
-is empty, it resets the counter of the factory to 0, and waits 1 second before
-it checks again.
+is empty, it waits 1 second before it checks again.
 
 The event loop itself detects the abandoned claims. On each iteration of
 `loop()` it does:
