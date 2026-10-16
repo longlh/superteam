@@ -29,7 +29,9 @@ export function createControl({
   // A second signal is a force quit. The
   // claim stays, and the next start() recovers from it like from a crash.
   function onSignal() {
-    if (isSignaled) exit(130);
+    if (isSignaled) {
+      exit(130);
+    }
     isSignaled = true;
     shutdown();
   }
@@ -37,7 +39,9 @@ export function createControl({
   return {
     // Creates the event and writes it to the queue. Needs start() first.
     async enqueue(payload) {
-      if (!isStarted) throw new Error("enqueue() needs start() first");
+      if (!isStarted) {
+        throw new Error("enqueue() needs start() first");
+      }
       const event = factory.create(payload);
       await queue.put(event);
       return event;
@@ -48,9 +52,13 @@ export function createControl({
     // The signals call shutdown() unless handleSignals is false. A second
     // signal quits at once.
     async start({ fetchTimeoutMs, handleSignals = true } = {}) {
-      if (isStartCalled) throw new Error("start() can be called only once");
+      if (isStartCalled) {
+        throw new Error("start() can be called only once");
+      }
       isStartCalled = true;
-      if (handleSignals) SIGNALS.forEach((s) => process.on(s, onSignal));
+      if (handleSignals) {
+        SIGNALS.forEach((s) => process.on(s, onSignal));
+      }
       try {
         await ensurePaths(paths);
         await clearTmp(paths);
@@ -58,7 +66,11 @@ export function createControl({
         await loop.recover();
         isStarted = true;
         while (!isShuttingDown) {
-          if (!(await loop.iterate({ fetchTimeoutMs }))) {
+          if (
+            !(await loop.iterate({
+              fetchTimeoutMs,
+            }))
+          ) {
             await sleep(pollIntervalMs);
           }
         }

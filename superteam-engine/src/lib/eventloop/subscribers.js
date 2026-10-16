@@ -6,7 +6,10 @@ export function createSubscribers() {
   return {
     // Returns a function that unsubscribes the handler.
     subscribe(name, handler) {
-      const entry = { name, handler };
+      const entry = {
+        name,
+        handler,
+      };
       entries.push(entry);
       return () => {
         entries = entries.filter((e) => e !== entry);

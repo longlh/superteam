@@ -16,15 +16,21 @@ export function createEventLoop({
   sleep = defaultSleep,
   now,
 }) {
-  if (!baseDir) throw new Error("baseDir is required");
+  if (!baseDir) {
+    throw new Error("baseDir is required");
+  }
   const paths = getPaths(baseDir);
-  const factory = createFactory({ now });
+  const factory = createFactory({
+    now,
+  });
   const subscribers = createSubscribers();
   const queue = createQueue(paths);
   const loop = createLoop({
     queue,
     factory,
-    writer: createWriter({ paths }),
+    writer: createWriter({
+      paths,
+    }),
     subscribers,
     maxAttempts,
     sleep,

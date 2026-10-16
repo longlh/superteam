@@ -11,7 +11,9 @@ const ID = /^[0-9a-f]{64}$/;
 function claimNameOf(raw, queueFile) {
   try {
     const { id } = JSON.parse(raw);
-    if (ID.test(id)) return id;
+    if (ID.test(id)) {
+      return id;
+    }
   } catch {
     // Not valid JSON: use the queue file name.
   }
@@ -55,12 +57,17 @@ export function createQueue(paths) {
     // Returns { name, raw } or null when the queue is empty.
     async claimNext() {
       const [file] = await list();
-      if (!file) return null;
+      if (!file) {
+        return null;
+      }
       const from = path.join(paths.queue, file);
       const raw = await readFile(from, "utf8");
       const name = claimNameOf(raw, file);
       await rename(from, claimFile(name));
-      return { name, raw };
+      return {
+        name,
+        raw,
+      };
     },
 
     async listClaims() {

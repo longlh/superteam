@@ -9,7 +9,11 @@ import {
   validatePayload,
 } from "./event.js";
 
-const payload = { command: "write", target: "/a/b.txt", src: "hi" };
+const payload = {
+  command: "write",
+  target: "/a/b.txt",
+  src: "hi",
+};
 const event = {
   order: 1,
   id: "x",
@@ -39,7 +43,12 @@ test("a valid event and payload pass", () => {
     validatePayload({
       command: "write",
       target: "/a",
-      remoteSrc: { url: "https://x.test/f", headers: { a: "b" } },
+      remoteSrc: {
+        url: "https://x.test/f",
+        headers: {
+          a: "b",
+        },
+      },
     }),
     null,
   );
@@ -47,39 +56,86 @@ test("a valid event and payload pass", () => {
     validatePayload({
       command: "write",
       target: "/a",
-      remoteSrc: { url: "file:///f" },
+      remoteSrc: {
+        url: "file:///f",
+      },
     }),
     null,
   );
 });
 
 test("src wins, so a bad remoteSrc is ignored when src is set", () => {
-  assert.equal(validatePayload({ ...payload, remoteSrc: "nope" }), null);
+  assert.equal(
+    validatePayload({
+      ...payload,
+      remoteSrc: "nope",
+    }),
+    null,
+  );
 });
 
 test("an empty src is still content", () => {
-  assert.equal(validatePayload({ ...payload, src: "" }), null);
+  assert.equal(
+    validatePayload({
+      ...payload,
+      src: "",
+    }),
+    null,
+  );
 });
 
 test("invalid payloads are rejected", () => {
   const bad = [
     null,
-    { ...payload, command: "delete" },
-    { ...payload, target: "relative.txt" },
-    { ...payload, target: 1 },
-    { ...payload, src: 5 },
-    { command: "write", target: "/a" },
-    { command: "write", target: "/a", remoteSrc: { url: "ftp://x" } },
-    { command: "write", target: "/a", remoteSrc: { url: "not a url" } },
     {
-      command: "write",
-      target: "/a",
-      remoteSrc: { url: "file:///f", method: "POST" },
+      ...payload,
+      command: "delete",
+    },
+    {
+      ...payload,
+      target: "relative.txt",
+    },
+    {
+      ...payload,
+      target: 1,
+    },
+    {
+      ...payload,
+      src: 5,
     },
     {
       command: "write",
       target: "/a",
-      remoteSrc: { url: "file:///f", headers: [] },
+    },
+    {
+      command: "write",
+      target: "/a",
+      remoteSrc: {
+        url: "ftp://x",
+      },
+    },
+    {
+      command: "write",
+      target: "/a",
+      remoteSrc: {
+        url: "not a url",
+      },
+    },
+    {
+      command: "write",
+      target: "/a",
+      remoteSrc: {
+        url: "file:///f",
+        method: "POST",
+      },
+    },
+    {
+      command: "write",
+      target: "/a",
+      remoteSrc: {
+        url: "file:///f",
+        headers: [],
+      },
     },
   ];
   for (const value of bad) {
@@ -95,13 +151,34 @@ test("invalid events are rejected", () => {
   const bad = [
     null,
     [],
-    { ...event, order: -1 },
-    { ...event, order: 1000000 },
-    { ...event, order: 1.5 },
-    { ...event, id: 1 },
-    { ...event, createdAt: 1 },
-    { ...event, attempts: undefined },
-    { ...event, payload: {} },
+    {
+      ...event,
+      order: -1,
+    },
+    {
+      ...event,
+      order: 1000000,
+    },
+    {
+      ...event,
+      order: 1.5,
+    },
+    {
+      ...event,
+      id: 1,
+    },
+    {
+      ...event,
+      createdAt: 1,
+    },
+    {
+      ...event,
+      attempts: undefined,
+    },
+    {
+      ...event,
+      payload: {},
+    },
   ];
   for (const value of bad) {
     assert.equal(typeof validateEvent(value), "string", JSON.stringify(value));
@@ -109,13 +186,17 @@ test("invalid events are rejected", () => {
 });
 
 test("parseEvent returns the event when it is valid", () => {
-  assert.deepEqual(parseEvent(JSON.stringify(event)), { event });
+  assert.deepEqual(parseEvent(JSON.stringify(event)), {
+    event,
+  });
 });
 
 test("parseEvent returns the error, and the parsed value when there is one", () => {
   const broken = parseEvent("{not json");
   assert.match(broken.error, /^invalid JSON/);
   assert.equal(broken.parsed, undefined);
-  assert.deepEqual(parseEvent('{"a":1}').parsed, { a: 1 });
+  assert.deepEqual(parseEvent('{"a":1}').parsed, {
+    a: 1,
+  });
   assert.equal(typeof parseEvent('{"a":1}').error, "string");
 });

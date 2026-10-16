@@ -14,7 +14,10 @@ export function createLoop({
   // The event cannot be processed: move it to the DLQ and notify.
   async function reject(name, event, error) {
     await queue.toDlq(name);
-    subscribers.emit("write:error", { event, error });
+    subscribers.emit("write:error", {
+      event,
+      error,
+    });
   }
 
   // The write failed: retry at the head of the queue, or give up.
@@ -24,23 +27,32 @@ export function createLoop({
     }
     await queue.put(factory.createAtHead(event.payload, event.attempts + 1));
     await queue.deleteClaim(name);
-    subscribers.emit("write:retry", { event, error: error.message });
+    subscribers.emit("write:retry", {
+      event,
+      error: error.message,
+    });
   }
 
   // One iteration of loop(). Returns false when the queue was empty.
   async function iterate({ fetchTimeoutMs } = {}) {
     // 1. A claim that is still there is abandoned.
-    for (const name of await queue.listClaims()) await queue.toDlq(name);
+    for (const name of await queue.listClaims()) {
+      await queue.toDlq(name);
+    }
 
     // 2. Claim a new event. A retry waits 2^attempts seconds.
     const claim = await queue.claimNext();
-    if (!claim) return false;
+    if (!claim) {
+      return false;
+    }
     const { event, parsed, error } = parseEvent(claim.raw);
     if (error) {
       await reject(claim.name, parsed ?? null, error);
       return true;
     }
-    if (event.attempts > 0) await sleep(2 ** event.attempts * 1000);
+    if (event.attempts > 0) {
+      await sleep(2 ** event.attempts * 1000);
+    }
 
     // 3. Process the write.
     let hash;
@@ -76,5 +88,8 @@ export function createLoop({
     }
   }
 
-  return { iterate, recover };
+  return {
+    iterate,
+    recover,
+  };
 }

@@ -6,15 +6,21 @@ import { sha256 } from "./event.js";
 
 // The content as bytes: `src` first, then `remoteSrc`.
 async function getContent({ src, remoteSrc }, timeoutMs) {
-  if (typeof src === "string") return Buffer.from(src);
+  if (typeof src === "string") {
+    return Buffer.from(src);
+  }
   const { url, headers, method = "GET" } = remoteSrc;
-  if (new URL(url).protocol === "file:") return readFile(fileURLToPath(url));
+  if (new URL(url).protocol === "file:") {
+    return readFile(fileURLToPath(url));
+  }
   const response = await fetch(url, {
     method,
     headers,
     signal: AbortSignal.timeout(timeoutMs),
   });
-  if (!response.ok) throw new Error(`${method} ${url} gave ${response.status}`);
+  if (!response.ok) {
+    throw new Error(`${method} ${url} gave ${response.status}`);
+  }
   return Buffer.from(await response.arrayBuffer());
 }
 
@@ -28,10 +34,14 @@ export function createWriter({ paths }) {
       const tmpFile = path.join(paths.tmp, `${randomUUID()}.tmp`);
       try {
         await writeFile(tmpFile, content);
-        await mkdir(path.dirname(payload.target), { recursive: true });
+        await mkdir(path.dirname(payload.target), {
+          recursive: true,
+        });
         await rename(tmpFile, payload.target);
       } catch (error) {
-        await rm(tmpFile, { force: true });
+        await rm(tmpFile, {
+          force: true,
+        });
         if (error.code === "EXDEV") {
           throw new Error(
             `target ${payload.target} on another device is not supported`,

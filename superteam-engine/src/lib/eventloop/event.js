@@ -18,7 +18,9 @@ const isCount = (value) => Number.isInteger(value) && value >= 0;
 
 // Each validator returns an error message, or null when the value is valid.
 function validateRemoteSrc(remoteSrc) {
-  if (!isObject(remoteSrc)) return "payload needs src or remoteSrc";
+  if (!isObject(remoteSrc)) {
+    return "payload needs src or remoteSrc";
+  }
   let url;
   try {
     url = new URL(remoteSrc.url);
@@ -38,8 +40,12 @@ function validateRemoteSrc(remoteSrc) {
 }
 
 export function validatePayload(payload) {
-  if (!isObject(payload)) return "payload must be an object";
-  if (payload.command !== "write") return 'payload.command must be "write"';
+  if (!isObject(payload)) {
+    return "payload must be an object";
+  }
+  if (payload.command !== "write") {
+    return 'payload.command must be "write"';
+  }
   if (typeof payload.target !== "string" || !path.isAbsolute(payload.target)) {
     return "payload.target must be an absolute path";
   }
@@ -51,15 +57,21 @@ export function validatePayload(payload) {
 }
 
 export function validateEvent(event) {
-  if (!isObject(event)) return "event must be an object";
+  if (!isObject(event)) {
+    return "event must be an object";
+  }
   if (!isCount(event.order) || event.order > MAX_ORDER) {
     return "event.order must be an integer from 0 to 999999";
   }
-  if (typeof event.id !== "string") return "event.id must be a string";
+  if (typeof event.id !== "string") {
+    return "event.id must be a string";
+  }
   if (typeof event.createdAt !== "string") {
     return "event.createdAt must be a string";
   }
-  if (!isCount(event.attempts)) return "event.attempts must be an integer";
+  if (!isCount(event.attempts)) {
+    return "event.attempts must be an integer";
+  }
   return validatePayload(event.payload);
 }
 
@@ -70,8 +82,17 @@ export function parseEvent(raw) {
   try {
     parsed = JSON.parse(raw);
   } catch (error) {
-    return { error: `invalid JSON: ${error.message}` };
+    return {
+      error: `invalid JSON: ${error.message}`,
+    };
   }
   const error = validateEvent(parsed);
-  return error ? { error, parsed } : { event: parsed };
+  return error
+    ? {
+        error,
+        parsed,
+      }
+    : {
+        event: parsed,
+      };
 }

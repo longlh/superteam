@@ -26,11 +26,18 @@ async function setup(options = {}) {
   });
   const seen = [];
   for (const name of NOTIFICATIONS) {
-    loop.subscribe(name, (data) => seen.push({ name, ...data }));
+    loop.subscribe(name, (data) =>
+      seen.push({
+        name,
+        ...data,
+      }),
+    );
   }
   const prepare = async () => {
     for (const name of ["queue", "claim", "dlq", "tmp"]) {
-      await mkdir(dir(name), { recursive: true });
+      await mkdir(dir(name), {
+        recursive: true,
+      });
     }
   };
   return {
@@ -58,7 +65,9 @@ async function runUntil(ctx, isDone) {
     "write:error",
     () => isDone(ctx.seen) && ctx.loop.shutdown(),
   );
-  await ctx.loop.start({ handleSignals: false });
+  await ctx.loop.start({
+    handleSignals: false,
+  });
 }
 
 const count = (seen, name) => seen.filter((n) => n.name === name).length;
@@ -136,14 +145,18 @@ test("events are written in order", async () => {
 });
 
 test("a write fails: the retry is 000000.json, and the loop waits 2^attempts seconds", async () => {
-  const ctx = await setup({ maxAttempts: 3 });
+  const ctx = await setup({
+    maxAttempts: 3,
+  });
   // The parent of the target is a file, so every write fails.
   await writeFile(ctx.target("blocker"), "a file");
   const [event] = await seed(ctx, [writeCmd(ctx.target("blocker/out.txt"))]);
 
   // Stop at the first retry, before the loop picks it up.
   ctx.loop.subscribe("write:retry", () => ctx.loop.shutdown());
-  await ctx.loop.start({ handleSignals: false });
+  await ctx.loop.start({
+    handleSignals: false,
+  });
 
   assert.equal(count(ctx.seen, "write:retry"), 1);
   assert.deepEqual(await ls(ctx.dir("queue")), ["000000.json"]);
@@ -159,7 +172,9 @@ test("a write fails: the retry is 000000.json, and the loop waits 2^attempts sec
 });
 
 test("attempts reaches maxAttempts: the event is in the DLQ", async () => {
-  const ctx = await setup({ maxAttempts: 3 });
+  const ctx = await setup({
+    maxAttempts: 3,
+  });
   await writeFile(ctx.target("blocker"), "a file");
   await seed(ctx, [writeCmd(ctx.target("blocker/out.txt"))]);
   await runUntil(ctx, (seen) => count(seen, "write:error") === 1);
@@ -185,7 +200,10 @@ test("a bad event goes to the DLQ without a retry", async () => {
   await writeFile(path.join(ctx.dir("queue"), "000002.json"), '{"a":1}');
   await writeFile(
     path.join(ctx.dir("queue"), "000003.json"),
-    eventFile(3, { command: "delete", target: "/x" }),
+    eventFile(3, {
+      command: "delete",
+      target: "/x",
+    }),
   );
   await runUntil(ctx, (seen) => count(seen, "write:error") === 3);
 
@@ -204,7 +222,9 @@ test("an abandoned claim found by the loop goes to the DLQ", async () => {
   // After the first write, something leaves a file in the claim folder.
   let dropped = false;
   ctx.loop.subscribe("write:done", async () => {
-    if (dropped) return;
+    if (dropped) {
+      return;
+    }
     dropped = true;
     await writeFile(path.join(ctx.dir("claim"), "abandoned.json"), "{}");
   });
@@ -227,7 +247,9 @@ test("start with a claim: it becomes 000000.json and overwrites the old one", as
   await writeFile(path.join(ctx.dir("queue"), "000000.json"), "half recovered");
 
   ctx.loop.shutdown(); // only the start stage runs
-  await ctx.loop.start({ handleSignals: false });
+  await ctx.loop.start({
+    handleSignals: false,
+  });
 
   assert.deepEqual(await ls(ctx.dir("claim")), []);
   assert.deepEqual(await ls(ctx.dir("queue")), ["000000.json"]);
@@ -250,7 +272,9 @@ test("the counter starts at the maximum order of the queue", async () => {
     );
   }
   ctx.loop.shutdown();
-  await ctx.loop.start({ handleSignals: false });
+  await ctx.loop.start({
+    handleSignals: false,
+  });
   const event = await ctx.loop.enqueue(payload);
   assert.equal(event.order, 8);
   assert.ok((await ls(ctx.dir("queue"))).includes("000008.json"));
@@ -259,7 +283,9 @@ test("the counter starts at the maximum order of the queue", async () => {
 test("the counter starts at 0 when the queue is empty", async () => {
   const ctx = await setup();
   ctx.loop.shutdown();
-  await ctx.loop.start({ handleSignals: false });
+  await ctx.loop.start({
+    handleSignals: false,
+  });
   const event = await ctx.loop.enqueue(writeCmd(ctx.target("out.txt")));
   assert.equal(event.order, 1);
   assert.deepEqual(await ls(ctx.dir("queue")), ["000001.json"]);
@@ -272,7 +298,9 @@ test("a shutdown during an iteration finishes it, and no new one starts", async 
     writeCmd(ctx.target("b.txt"), "b"),
   ]);
   ctx.loop.subscribe("write:done", () => ctx.loop.shutdown());
-  await ctx.loop.start({ handleSignals: false });
+  await ctx.loop.start({
+    handleSignals: false,
+  });
 
   assert.equal(await readFile(ctx.target("a.txt"), "utf8"), "a");
   await assert.rejects(readFile(ctx.target("b.txt")));
@@ -281,9 +309,13 @@ test("a shutdown during an iteration finishes it, and no new one starts", async 
 });
 
 test("an empty queue waits pollIntervalMs", async () => {
-  const ctx = await setup({ pollIntervalMs: 1000 });
+  const ctx = await setup({
+    pollIntervalMs: 1000,
+  });
   setTimeout(() => ctx.loop.shutdown(), 20);
-  await ctx.loop.start({ handleSignals: false });
+  await ctx.loop.start({
+    handleSignals: false,
+  });
   assert.ok(ctx.sleeps.length > 0);
   assert.ok(ctx.sleeps.every((ms) => ms === 1000));
 });
@@ -304,7 +336,9 @@ test("the claim folder never has more than one file", async () => {
       ["a", "b", "c"].map((name) => ({
         command: "write",
         target: ctx.target(`${name}.txt`),
-        remoteSrc: { url },
+        remoteSrc: {
+          url,
+        },
       })),
     );
     await runUntil(ctx, (seen) => seen.length === 3);
@@ -325,7 +359,9 @@ test("start with a claim that is not valid: it goes to the DLQ", async () => {
   await writeFile(path.join(ctx.dir("claim"), "broken.json"), "{not json");
 
   ctx.loop.shutdown(); // only the start stage runs
-  await ctx.loop.start({ handleSignals: false });
+  await ctx.loop.start({
+    handleSignals: false,
+  });
 
   assert.deepEqual(await ls(ctx.dir("claim")), []);
   assert.deepEqual(await ls(ctx.dir("dlq")), ["broken.json"]);
@@ -342,13 +378,22 @@ test("the tmp folder is empty after the start stage", async () => {
   await ctx.prepare();
   await writeFile(path.join(ctx.dir("tmp"), "left.tmp"), "from a crash");
   ctx.loop.shutdown(); // only the start stage runs
-  await ctx.loop.start({ handleSignals: false });
+  await ctx.loop.start({
+    handleSignals: false,
+  });
   assert.deepEqual(await ls(ctx.dir("tmp")), []);
 });
 
 test("a second call of start throws", async () => {
   const ctx = await setup();
   ctx.loop.shutdown(); // only the start stage runs
-  await ctx.loop.start({ handleSignals: false });
-  await assert.rejects(ctx.loop.start({ handleSignals: false }), /only once/);
+  await ctx.loop.start({
+    handleSignals: false,
+  });
+  await assert.rejects(
+    ctx.loop.start({
+      handleSignals: false,
+    }),
+    /only once/,
+  );
 });

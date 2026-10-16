@@ -15,7 +15,11 @@ export function getPaths(baseDir) {
 // mkdir -p for every folder. Safe to call many times.
 export async function ensurePaths(paths) {
   await Promise.all(
-    Object.values(paths).map((dir) => mkdir(dir, { recursive: true })),
+    Object.values(paths).map((dir) =>
+      mkdir(dir, {
+        recursive: true,
+      }),
+    ),
   );
 }
 
@@ -23,6 +27,9 @@ export async function ensurePaths(paths) {
 // so what is left there comes from a crash.
 export async function clearTmp(paths) {
   for (const file of await readdir(paths.tmp)) {
-    await rm(path.join(paths.tmp, file), { recursive: true, force: true });
+    await rm(path.join(paths.tmp, file), {
+      recursive: true,
+      force: true,
+    });
   }
 }

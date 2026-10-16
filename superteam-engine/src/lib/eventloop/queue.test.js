@@ -10,7 +10,10 @@ import { sha256 } from "./event.js";
 async function setup() {
   const paths = getPaths(await mkdtemp(path.join(tmpdir(), "queue-")));
   await ensurePaths(paths);
-  return { paths, queue: createQueue(paths) };
+  return {
+    paths,
+    queue: createQueue(paths),
+  };
 }
 
 const put = (paths, file, content) =>
@@ -39,11 +42,25 @@ test("maxOrder is 0 when the queue is empty", async () => {
 test("claimNext moves the lowest event, named by its id", async () => {
   const { paths, queue } = await setup();
   const id = sha256("x");
-  await put(paths, "000002.json", JSON.stringify({ id: sha256("y") }));
-  await put(paths, "000001.json", JSON.stringify({ id }));
+  await put(
+    paths,
+    "000002.json",
+    JSON.stringify({
+      id: sha256("y"),
+    }),
+  );
+  await put(
+    paths,
+    "000001.json",
+    JSON.stringify({
+      id,
+    }),
+  );
   const claim = await queue.claimNext();
   assert.equal(claim.name, id);
-  assert.deepEqual(JSON.parse(claim.raw), { id });
+  assert.deepEqual(JSON.parse(claim.raw), {
+    id,
+  });
   assert.deepEqual(await readdir(paths.queue), ["000002.json"]);
   assert.deepEqual(await queue.listClaims(), [id]);
   assert.equal(await queue.readClaim(id), claim.raw);
@@ -52,7 +69,13 @@ test("claimNext moves the lowest event, named by its id", async () => {
 test("a broken event is claimed under its queue file name", async () => {
   const { paths, queue } = await setup();
   await put(paths, "000003.json", "{not json");
-  await put(paths, "000004.json", JSON.stringify({ id: "../escape" }));
+  await put(
+    paths,
+    "000004.json",
+    JSON.stringify({
+      id: "../escape",
+    }),
+  );
   assert.equal((await queue.claimNext()).name, "000003");
   assert.equal((await queue.claimNext()).name, "000004");
 });
@@ -76,7 +99,11 @@ test("toDlq moves the claim to the DLQ", async () => {
 
 test("put writes the file into the queue, named by the order, with no tmp file left", async () => {
   const { paths, queue } = await setup();
-  const event = { order: 3, id: "x", payload: {} };
+  const event = {
+    order: 3,
+    id: "x",
+    payload: {},
+  };
   await queue.put(event);
   assert.deepEqual(await queue.list(), ["000003.json"]);
   assert.deepEqual(await readdir(paths.tmp), []);
@@ -89,7 +116,12 @@ test("put writes the file into the queue, named by the order, with no tmp file l
 test("put overwrites an existing 000000.json", async () => {
   const { paths, queue } = await setup();
   await put(paths, "000000.json", "old");
-  const event = { order: 0, id: "y", payload: {}, attempts: 1 };
+  const event = {
+    order: 0,
+    id: "y",
+    payload: {},
+    attempts: 1,
+  };
   await queue.put(event);
   const saved = JSON.parse(
     await readFile(path.join(paths.queue, "000000.json"), "utf8"),

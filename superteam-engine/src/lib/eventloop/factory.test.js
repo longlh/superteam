@@ -3,9 +3,16 @@ import assert from "node:assert/strict";
 import { createFactory } from "./factory.js";
 import { MAX_ORDER, eventId } from "./event.js";
 
-const payload = { command: "write", target: "/a/b.txt", src: "hi" };
+const payload = {
+  command: "write",
+  target: "/a/b.txt",
+  src: "hi",
+};
 const createdAt = "2026-01-01T00:00:00.000Z";
-const setup = () => createFactory({ now: () => new Date(createdAt) });
+const setup = () =>
+  createFactory({
+    now: () => new Date(createdAt),
+  });
 
 test("create gives order, id, createdAt and attempts", () => {
   const factory = setup();
@@ -22,7 +29,12 @@ test("create gives order, id, createdAt and attempts", () => {
 test("100 calls at the same time give 100 different orders", async () => {
   const factory = setup();
   const events = await Promise.all(
-    Array.from({ length: 100 }, async () => factory.create(payload)),
+    Array.from(
+      {
+        length: 100,
+      },
+      async () => factory.create(payload),
+    ),
   );
   assert.equal(new Set(events.map((e) => e.order)).size, 100);
   assert.equal(new Set(events.map((e) => e.id)).size, 100);

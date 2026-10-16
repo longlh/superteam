@@ -6,7 +6,11 @@ import path from "node:path";
 import { createControl } from "./control.js";
 import { getPaths } from "./paths.js";
 
-const payload = { command: "write", target: "/a/b.txt", src: "hi" };
+const payload = {
+  command: "write",
+  target: "/a/b.txt",
+  src: "hi",
+};
 
 // The control with fakes for all its parts, and the folders on a temporary
 // disk folder. `calls` records what happened. `iterations` is what each call of
@@ -21,7 +25,9 @@ async function setup({ iterations = [], exit } = {}) {
   };
   const factory = {
     setCounter: (n) => calls.push(["setCounter", n]),
-    create: (p) => ({ payload: p }),
+    create: (p) => ({
+      payload: p,
+    }),
   };
   const loop = {
     recover: async () => calls.push(["recover"]),
@@ -46,7 +52,12 @@ async function setup({ iterations = [], exit } = {}) {
     pollIntervalMs: 1000,
     exit,
   });
-  return { calls, control, hooks, paths };
+  return {
+    calls,
+    control,
+    hooks,
+    paths,
+  };
 }
 
 const names = (calls) => calls.map((c) => c[0]);
@@ -54,7 +65,9 @@ const names = (calls) => calls.map((c) => c[0]);
 test("start makes the folders, sets the counter, recovers, and checks the shutdown flag", async () => {
   const { calls, control, paths } = await setup();
   control.shutdown();
-  await control.start({ handleSignals: false });
+  await control.start({
+    handleSignals: false,
+  });
   assert.deepEqual(calls, [["setCounter", 5], ["recover"]]);
   for (const folder of Object.values(paths)) {
     assert.deepEqual(await readdir(folder), []);
@@ -62,23 +75,47 @@ test("start makes the folders, sets the counter, recovers, and checks the shutdo
 });
 
 test("the loop passes fetchTimeoutMs to each iteration", async () => {
-  const { calls, control, hooks } = await setup({ iterations: [true, true] });
+  const { calls, control, hooks } = await setup({
+    iterations: [true, true],
+  });
   hooks.onSleep = () => control.shutdown();
-  await control.start({ fetchTimeoutMs: 50, handleSignals: false });
+  await control.start({
+    fetchTimeoutMs: 50,
+    handleSignals: false,
+  });
   assert.deepEqual(
     calls.filter((c) => c[0] === "iterate"),
     [
-      ["iterate", { fetchTimeoutMs: 50 }],
-      ["iterate", { fetchTimeoutMs: 50 }],
-      ["iterate", { fetchTimeoutMs: 50 }],
+      [
+        "iterate",
+        {
+          fetchTimeoutMs: 50,
+        },
+      ],
+      [
+        "iterate",
+        {
+          fetchTimeoutMs: 50,
+        },
+      ],
+      [
+        "iterate",
+        {
+          fetchTimeoutMs: 50,
+        },
+      ],
     ],
   );
 });
 
 test("the loop waits pollIntervalMs only when the queue is empty", async () => {
-  const { calls, control, hooks } = await setup({ iterations: [true, true] });
+  const { calls, control, hooks } = await setup({
+    iterations: [true, true],
+  });
   hooks.onSleep = () => control.shutdown();
-  await control.start({ handleSignals: false });
+  await control.start({
+    handleSignals: false,
+  });
   // Two iterations with an event do not wait, the third one finds it empty.
   assert.deepEqual(names(calls).slice(2), [
     "iterate",
@@ -90,9 +127,13 @@ test("the loop waits pollIntervalMs only when the queue is empty", async () => {
 });
 
 test("a shutdown during an iteration finishes it and starts no new one", async () => {
-  const { calls, control, hooks } = await setup({ iterations: [true, true] });
+  const { calls, control, hooks } = await setup({
+    iterations: [true, true],
+  });
   hooks.onIterate = () => control.shutdown();
-  await control.start({ handleSignals: false });
+  await control.start({
+    handleSignals: false,
+  });
   assert.equal(calls.filter((c) => c[0] === "iterate").length, 1);
   assert.ok(!names(calls).includes("sleep"));
 });
@@ -101,9 +142,13 @@ test("enqueue before start rejects, and after the start stage it writes the even
   const { calls, control } = await setup();
   await assert.rejects(control.enqueue(payload), /start\(\) first/);
   control.shutdown(); // only the start stage runs
-  await control.start({ handleSignals: false });
+  await control.start({
+    handleSignals: false,
+  });
   const event = await control.enqueue(payload);
-  assert.deepEqual(event, { payload });
+  assert.deepEqual(event, {
+    payload,
+  });
   assert.deepEqual(calls.at(-1), ["put", event]);
 });
 
@@ -114,8 +159,12 @@ test("enqueue works while the loop runs", async () => {
     event = await control.enqueue(payload);
     control.shutdown();
   };
-  await control.start({ handleSignals: false });
-  assert.deepEqual(event, { payload });
+  await control.start({
+    handleSignals: false,
+  });
+  assert.deepEqual(event, {
+    payload,
+  });
 });
 
 test("SIGTERM and SIGINT shut the loop down, and the handlers are removed", async () => {
@@ -139,7 +188,9 @@ test("handleSignals false adds no handler", async () => {
     assert.equal(process.listenerCount("SIGTERM"), before);
     control.shutdown();
   };
-  await control.start({ handleSignals: false });
+  await control.start({
+    handleSignals: false,
+  });
 });
 
 test("the handlers are removed when the start stage fails", async () => {
@@ -160,23 +211,36 @@ test("the handlers are removed when the start stage fails", async () => {
 
 test("start clears the tmp folder", async () => {
   const { control, paths } = await setup();
-  await mkdir(paths.tmp, { recursive: true });
+  await mkdir(paths.tmp, {
+    recursive: true,
+  });
   await writeFile(path.join(paths.tmp, "left.tmp"), "from a crash");
   control.shutdown();
-  await control.start({ handleSignals: false });
+  await control.start({
+    handleSignals: false,
+  });
   assert.deepEqual(await readdir(paths.tmp), []);
 });
 
 test("start can be called only once", async () => {
   const { control } = await setup();
   control.shutdown();
-  await control.start({ handleSignals: false });
-  await assert.rejects(control.start({ handleSignals: false }), /only once/);
+  await control.start({
+    handleSignals: false,
+  });
+  await assert.rejects(
+    control.start({
+      handleSignals: false,
+    }),
+    /only once/,
+  );
 });
 
 test("a second signal force quits, and the first one does not", async () => {
   const codes = [];
-  const { control, hooks } = await setup({ exit: (code) => codes.push(code) });
+  const { control, hooks } = await setup({
+    exit: (code) => codes.push(code),
+  });
   hooks.onSleep = () => {
     process.emit("SIGINT");
     assert.deepEqual(codes, []);
@@ -188,7 +252,9 @@ test("a second signal force quits, and the first one does not", async () => {
 
 test("shutdown() followed by one signal is not a force quit", async () => {
   const codes = [];
-  const { control, hooks } = await setup({ exit: (code) => codes.push(code) });
+  const { control, hooks } = await setup({
+    exit: (code) => codes.push(code),
+  });
   hooks.onSleep = () => {
     control.shutdown();
     process.emit("SIGTERM");

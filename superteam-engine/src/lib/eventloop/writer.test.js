@@ -13,14 +13,23 @@ async function setup() {
   const dir = await mkdtemp(path.join(tmpdir(), "writer-"));
   const paths = getPaths(dir);
   await ensurePaths(paths);
-  return { dir, paths, writer: createWriter({ paths }) };
+  return {
+    dir,
+    paths,
+    writer: createWriter({
+      paths,
+    }),
+  };
 }
 
 // A local server that answers every request with `body`.
 async function serve(body, status = 200) {
   const requests = [];
   const server = http.createServer((req, res) => {
-    requests.push({ method: req.method, headers: req.headers });
+    requests.push({
+      method: req.method,
+      headers: req.headers,
+    });
     res.writeHead(status);
     res.end(body);
   });
@@ -35,7 +44,11 @@ async function serve(body, status = 200) {
 test("src is written, and the hash is of the bytes", async () => {
   const { dir, paths, writer } = await setup();
   const target = path.join(dir, "out.txt");
-  const hash = await writer.write({ command: "write", target, src: "hello" });
+  const hash = await writer.write({
+    command: "write",
+    target,
+    src: "hello",
+  });
   assert.equal(await readFile(target, "utf8"), "hello");
   assert.equal(hash, sha256(Buffer.from("hello")));
   assert.deepEqual(await readdir(paths.tmp), []);
@@ -48,7 +61,9 @@ test("src wins over remoteSrc", async () => {
     command: "write",
     target,
     src: "from src",
-    remoteSrc: { url: "http://127.0.0.1:1/never-called" },
+    remoteSrc: {
+      url: "http://127.0.0.1:1/never-called",
+    },
   });
   assert.equal(await readFile(target, "utf8"), "from src");
 });
@@ -56,8 +71,16 @@ test("src wins over remoteSrc", async () => {
 test("the write replaces the whole file, and creates the folder", async () => {
   const { dir, writer } = await setup();
   const target = path.join(dir, "new", "deep", "out.txt");
-  await writer.write({ command: "write", target, src: "one long content" });
-  await writer.write({ command: "write", target, src: "short" });
+  await writer.write({
+    command: "write",
+    target,
+    src: "one long content",
+  });
+  await writer.write({
+    command: "write",
+    target,
+    src: "short",
+  });
   assert.equal(await readFile(target, "utf8"), "short");
 });
 
@@ -70,7 +93,9 @@ test("file:// is read, and a binary file is kept byte for byte", async () => {
   const hash = await writer.write({
     command: "write",
     target,
-    remoteSrc: { url: pathToFileURL(source).href },
+    remoteSrc: {
+      url: pathToFileURL(source).href,
+    },
   });
   assert.deepEqual(await readFile(target), bytes);
   assert.equal(hash, sha256(bytes));
@@ -84,7 +109,12 @@ test("http is fetched with the method and the headers", async () => {
     await writer.write({
       command: "write",
       target,
-      remoteSrc: { url: server.url, headers: { "x-test": "1" } },
+      remoteSrc: {
+        url: server.url,
+        headers: {
+          "x-test": "1",
+        },
+      },
     });
     assert.equal(await readFile(target, "utf8"), "remote text");
     assert.equal(server.requests[0].method, "GET");
@@ -103,7 +133,9 @@ test("a failing source throws and leaves nothing behind", async () => {
       writer.write({
         command: "write",
         target,
-        remoteSrc: { url: server.url },
+        remoteSrc: {
+          url: server.url,
+        },
       }),
       /500/,
     );
@@ -138,7 +170,9 @@ test("a slow server hits the timeout", async () => {
         {
           command: "write",
           target: path.join(dir, "out.txt"),
-          remoteSrc: { url: `http://127.0.0.1:${server.address().port}/` },
+          remoteSrc: {
+            url: `http://127.0.0.1:${server.address().port}/`,
+          },
         },
         50,
       ),
