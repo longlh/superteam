@@ -19,8 +19,9 @@ The queue needs three places:
 - **Claim:** a temporary folder. The engine claims an event by moving its file
   from the queue to this folder. Location: `.superteam/.w/claim/{id}.json`.
 - **Dead letter queue (DLQ):** a folder for the events that cannot be processed:
-  the events whose claim has expired, and the events whose retries have reached
-  the maximum number of attempts. Location: `.superteam/.w/dlq/{id}.json`.
+  the events whose claim was abandoned, and the events whose retries have
+  reached the maximum number of attempts. Location:
+  `.superteam/.w/dlq/{id}.json`.
 
 ## Event
 
@@ -77,12 +78,12 @@ order, so there is no race condition.
 The loop runs continuously while there are events in the queue. When the queue
 is empty, it waits 1 second before it checks again.
 
-The event loop itself detects the expired claims. On each iteration of `loop()`
-it does:
+The event loop itself detects the abandoned claims. On each iteration of
+`loop()` it does:
 
-1. Check the claim folder. A claim that is still there means the event was
-   abandoned, because a write command is processed right away and never waits.
-   The claim is expired, so the event is moved to the DLQ.
+1. Check the claim folder. A claim that is still there is abandoned, because a
+   write command is processed right away and never waits. Move its event to the
+   DLQ.
 2. Dequeue and claim a new event.
 3. Process the write: apply it to the state. The engine does not write directly
    to the target file. It writes to a temporary folder first
