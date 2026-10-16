@@ -54,8 +54,8 @@ The `remoteSrc` is an object with these fields:
 | --------- | ------ | ---------------------------------------------------------------- |
 | `url`     | string | The location of the content: `file://`, `http://` or `https://`. |
 | `headers` | Object | The headers of the request.                                      |
-| `method`  | string | `GET` or `POST`. Default `GET`.                                  |
-| `body`    | any    | The body of the request. Used when the method is not `GET`.      |
+| `method`  | string | `GET`. Default `GET`. `POST` is not supported yet.               |
+| `body`    | any    | The body of the request. Not used yet, because only `GET` works. |
 
 The `headers`, `method` and `body` are used only when the `url` is `http://` or
 `https://`.
