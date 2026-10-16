@@ -21,7 +21,8 @@ export function createLoop({
   }
 
   // The write failed: record the error in the event, then retry at the head of
-  // the queue, or give up. The notifications carry the event with the error.
+  // the queue, or give up. A write that cannot be fixed by a retry (`retryable`
+  // is false), such as a stale write, gives up at once. The notifications carry the event with the error.
   async function fail(name, event, error) {
     const failed = {
       ...event,
@@ -34,7 +35,7 @@ export function createLoop({
         },
       ],
     };
-    if (failed.attempts + 1 >= maxAttempts) {
+    if (error.retryable === false || failed.attempts + 1 >= maxAttempts) {
       await queue.toDlq(name, failed);
       subscribers.emit("write:error", {
         event: failed,

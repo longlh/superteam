@@ -253,3 +253,33 @@ test("recover does nothing when there is no claim", async () => {
   await loop.recover();
   assert.deepEqual(calls, []);
 });
+
+test("a write that is not retryable goes to the DLQ at once, with the error", async () => {
+  const event = makeEvent(0);
+  const writeError = Object.assign(new Error("stale write"), {
+    retryable: false,
+  });
+  const { calls, loop } = setup({
+    next: event,
+    writeError,
+    maxAttempts: 3,
+  });
+  await loop.iterate();
+  const failed = {
+    ...event,
+    errors: [failure(1, "stale write")],
+  };
+  failed.errors[0].time = createdAt;
+  assert.deepEqual(calls.slice(-2), [
+    ["toDlq", "claimed", failed],
+    [
+      "emit",
+      "write:error",
+      {
+        event: failed,
+        error: "stale write",
+      },
+    ],
+  ]);
+  assert.ok(!names(calls).includes("put"));
+});

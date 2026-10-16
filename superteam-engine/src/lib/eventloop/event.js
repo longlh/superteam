@@ -49,6 +49,9 @@ export function validatePayload(payload) {
   if (typeof payload.target !== "string" || !path.isAbsolute(payload.target)) {
     return "payload.target must be an absolute path";
   }
+  if (payload.version !== undefined && !isCount(payload.version)) {
+    return "payload.version must be an integer from 0";
+  }
   // `src` wins over `remoteSrc`, so a valid `src` ends the check.
   if (payload.src !== undefined) {
     return typeof payload.src === "string" ? null : "payload.src must be text";

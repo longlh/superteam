@@ -69,6 +69,13 @@ erDiagram
     WORK |o--o{ ARTIFACT : has
 ```
 
+## Entity design
+
+Entities are isolated: each one works on its own. An entity does not hold data
+that is written back by an entity that refers to it, and the references between
+entities never form a circle. So it is rare that more than one actor writes the
+same entity.
+
 ## Derived status
 
 These statuses are not stored. They are derived from the fields of the entities.

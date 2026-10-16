@@ -47,12 +47,25 @@ the last one is in the file of the DLQ too.
 
 The `payload` is a write command with these fields:
 
-| Field       | Type   | Description                               |
-| ----------- | ------ | ----------------------------------------- |
-| `command`   | string | The command. Here it is `write`.          |
-| `target`    | string | The path of the file to write.            |
-| `src`       | string | The content to write, given as text.      |
-| `remoteSrc` | Object | Where to get the content from. See below. |
+| Field       | Type   | Description                                                |
+| ----------- | ------ | ---------------------------------------------------------- |
+| `command`   | string | The command. Here it is `write`.                           |
+| `target`    | string | The path of the file to write.                             |
+| `version`   | int    | The version the write was built from. Optional. See below. |
+| `src`       | string | The content to write, given as text.                       |
+| `remoteSrc` | Object | Where to get the content from. See below.                  |
+
+The `version` makes the write conditional. When it is set, the event loop reads
+the file at `target` before it writes, and applies the write only if the
+`version` of that file is the same. The file is JSON with a `version` field. A
+file that does not exist has the version `0`, so `version` `0` means that the
+file must not exist yet: a write that creates it. A file that is not JSON, or
+has no `version`, does not match any version. When `version` is not set, nothing
+is checked, and the write is unconditional. A write that does not match is
+stale: it was built from an old state. It is never retried: it is moved to the
+DLQ, and `write:error` is fired (see "Loop"). The loop applies one event at a
+time, so the check has no race. The event loop only compares the versions. It
+does not change the `version` inside the content: the caller does.
 
 A write command gives its content in `src` or in `remoteSrc`. If both are set,
 `src` is used. The write replaces the whole content of the file at `target`.
@@ -119,7 +132,9 @@ The event loop itself detects the abandoned claims. On each iteration of
    is 3. When `attempts` reaches it, the event is moved to the DLQ instead, with
    the last error added to `errors` in its file, and `write:error` is fired. An
    event with an invalid structure, or with a syntax error, is never retried: it
-   is moved to the DLQ, and `write:error` is fired.
+   is moved to the DLQ, and `write:error` is fired. A stale write is never
+   retried either: it goes to the DLQ at once, with its error added to `errors`,
+   and `write:error` is fired.
 
 ## Life cycle
 

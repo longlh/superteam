@@ -429,3 +429,67 @@ test("without a sleep option the loop waits with a real timer", async () => {
     handleSignals: false,
   });
 });
+
+test("a stale write goes to the DLQ at once, and the target is not changed", async () => {
+  const ctx = await setup({
+    maxAttempts: 3,
+  });
+  const target = ctx.target("task.json");
+  await writeFile(
+    target,
+    JSON.stringify({
+      version: 5,
+    }),
+  );
+  await seed(ctx, [
+    {
+      command: "write",
+      target,
+      version: 4,
+      src: JSON.stringify({
+        version: 5,
+      }),
+    },
+  ]);
+  await runUntil(ctx, (seen) => count(seen, "write:error") === 1);
+
+  assert.deepEqual(
+    ctx.seen.map((n) => n.name),
+    ["write:error"],
+  );
+  assert.match(ctx.seen[0].error, /stale write/);
+  assert.deepEqual(ctx.sleeps, []);
+  assert.deepEqual(await ls(ctx.dir("queue")), []);
+  assert.deepEqual(await ls(ctx.dir("claim")), []);
+  const [dlqFile] = await ls(ctx.dir("dlq"));
+  const dead = JSON.parse(
+    await readFile(path.join(ctx.dir("dlq"), dlqFile), "utf8"),
+  );
+  assert.equal(dead.attempts, 0);
+  assert.equal(dead.errors.length, 1);
+  assert.equal(await readFile(target, "utf8"), '{"version":5}');
+});
+
+test("a write with the right version is applied through the loop", async () => {
+  const ctx = await setup();
+  const target = ctx.target("task.json");
+  await writeFile(
+    target,
+    JSON.stringify({
+      version: 1,
+    }),
+  );
+  await seed(ctx, [
+    {
+      command: "write",
+      target,
+      version: 1,
+      src: JSON.stringify({
+        version: 2,
+      }),
+    },
+  ]);
+  await runUntil(ctx, () => true);
+  assert.equal(count(ctx.seen, "write:done"), 1);
+  assert.equal(await readFile(target, "utf8"), '{"version":2}');
+});

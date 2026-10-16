@@ -212,3 +212,138 @@ test("a target on another device throws a clear error and leaves no tmp file", a
   );
   assert.deepEqual(await readdir(paths.tmp), []);
 });
+
+// The writes of the version tests: the file holds an entity at `version`.
+const entity = (version) =>
+  JSON.stringify({
+    id: "x",
+    version,
+  });
+
+test("a write with the version of the file is applied", async () => {
+  const { dir, writer } = await setup();
+  const target = path.join(dir, "task.json");
+  await writeFile(target, entity(2));
+  await writer.write({
+    command: "write",
+    target,
+    version: 2,
+    src: entity(3),
+  });
+  assert.equal(await readFile(target, "utf8"), entity(3));
+});
+
+test("a stale write is rejected, not retryable, and leaves the file and tmp as they are", async () => {
+  const { dir, paths, writer } = await setup();
+  const target = path.join(dir, "task.json");
+  await writeFile(target, entity(3));
+  await assert.rejects(
+    writer.write({
+      command: "write",
+      target,
+      version: 2,
+      src: entity(3),
+    }),
+    (error) =>
+      error.retryable === false &&
+      /stale write.*version 3.*version 2/.test(error.message),
+  );
+  assert.equal(await readFile(target, "utf8"), entity(3));
+  assert.deepEqual(await readdir(paths.tmp), []);
+});
+
+test("version 0 creates a file that does not exist, and is stale when it exists", async () => {
+  const { dir, writer } = await setup();
+  const target = path.join(dir, "new", "task.json");
+  await writer.write({
+    command: "write",
+    target,
+    version: 0,
+    src: entity(1),
+  });
+  assert.equal(await readFile(target, "utf8"), entity(1));
+  await assert.rejects(
+    writer.write({
+      command: "write",
+      target,
+      version: 0,
+      src: entity(1),
+    }),
+    (error) => error.retryable === false,
+  );
+});
+
+test("a file without a readable version is stale for a write with a version", async () => {
+  const { dir, writer } = await setup();
+  const plain = path.join(dir, "plain.txt");
+  const noVersion = path.join(dir, "no-version.json");
+  const nothing = path.join(dir, "null.json");
+  await writeFile(plain, "not json");
+  await writeFile(
+    noVersion,
+    JSON.stringify({
+      id: "x",
+    }),
+  );
+  await writeFile(nothing, "null");
+  for (const target of [plain, noVersion, nothing]) {
+    await assert.rejects(
+      writer.write({
+        command: "write",
+        target,
+        version: 1,
+        src: "a",
+      }),
+      (error) => error.retryable === false && /unknown/.test(error.message),
+    );
+  }
+});
+
+test("a write without a version is not checked", async () => {
+  const { dir, writer } = await setup();
+  const target = path.join(dir, "task.json");
+  await writeFile(target, entity(9));
+  await writer.write({
+    command: "write",
+    target,
+    src: "replaced",
+  });
+  assert.equal(await readFile(target, "utf8"), "replaced");
+});
+
+test("the version is checked before the content is fetched", async () => {
+  const { dir, writer } = await setup();
+  const target = path.join(dir, "task.json");
+  await writeFile(target, entity(2));
+  const server = await serve("never read");
+  try {
+    await assert.rejects(
+      writer.write({
+        command: "write",
+        target,
+        version: 1,
+        remoteSrc: {
+          url: server.url,
+        },
+      }),
+      (error) => error.retryable === false,
+    );
+    assert.deepEqual(server.requests, []);
+  } finally {
+    server.close();
+  }
+});
+
+test("an error that reads the file is not marked as not retryable", async () => {
+  const { dir, writer } = await setup();
+  // The target is a folder: reading it gives EISDIR, not ENOENT.
+  await assert.rejects(
+    writer.write({
+      command: "write",
+      target: dir,
+      version: 1,
+      src: "a",
+    }),
+    (error) => error.code === "EISDIR" && error.retryable !== false,
+  );
+});

@@ -38,6 +38,23 @@ test("sha256 is hex, and the id depends on createdAt and order", () => {
   assert.notEqual(id, eventId("2026-01-01T00:00:00.001Z", 1));
 });
 
+test("a payload with a version passes", () => {
+  assert.equal(
+    validatePayload({
+      ...payload,
+      version: 0,
+    }),
+    null,
+  );
+  assert.equal(
+    validatePayload({
+      ...payload,
+      version: 3,
+    }),
+    null,
+  );
+});
+
 test("a valid event and payload pass", () => {
   assert.equal(validateEvent(event), null);
   assert.equal(
@@ -101,6 +118,18 @@ test("an empty src is still content", () => {
 test("invalid payloads are rejected", () => {
   const bad = [
     null,
+    {
+      ...payload,
+      version: -1,
+    },
+    {
+      ...payload,
+      version: "1",
+    },
+    {
+      ...payload,
+      version: 1.5,
+    },
     {
       ...payload,
       command: "delete",
