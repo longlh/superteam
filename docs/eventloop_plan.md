@@ -29,7 +29,15 @@ The plan to implement the module described in `eventloop.md`.
 | Options             | `createEventLoop` takes `maxAttempts` (3), `pollIntervalMs` (1000), `sleep` and `now` (for tests). `start()` takes `fetchTimeoutMs` (30000).                                       |
 | Counter             | Increased synchronously in `create()`, so two calls in the same process never get the same `order`.                                                                                |
 
-## 3. Layout
+## 3. Code style
+
+- Short code, fully commented with `//` comments.
+- Separation of concerns is the first priority: each file does one job, as the
+  layout in section 4 shows, and does not know the jobs of the others.
+- SOLID also applies, but not in the OOP form: plain functions and modules, no
+  classes.
+
+## 4. Layout
 
 ```
 superteam-engine/src/eventloop/
@@ -51,7 +59,7 @@ superteam-engine/src/eventloop/
   loop.test.js
 ```
 
-## 4. Public API
+## 5. Public API
 
 ```js
 const loop = createEventLoop({ baseDir, maxAttempts, pollIntervalMs });
@@ -66,7 +74,7 @@ loop.shutdown(); // sets isShuttingDown to true
   `shutdown()`. The option `handleSignals: false` turns this off, for tests.
 - `enqueue()` can be called before `start()`. The event waits in the queue.
 
-## 5. Steps
+## 6. Steps
 
 Each step comes with the unit test file of its code, next to it. A step ends
 with its tests passing before the next step starts.
@@ -93,7 +101,7 @@ with its tests passing before the next step starts.
    empty, and the shutdown with `isShuttingDown`, checked before each new
    iteration.
 
-## 6. Tests
+## 7. Tests
 
 Unit tests, each in the `.test.js` file next to its code:
 
