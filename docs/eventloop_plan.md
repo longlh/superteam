@@ -1,8 +1,6 @@
 # Event loop implementation plan
 
-The plan to implement the module described in `eventloop.md`. This plan is for
-review: the decisions in section 2 are my defaults, and section 7 lists what I
-need you to confirm.
+The plan to implement the module described in `eventloop.md`.
 
 ## 1. Scope
 
@@ -14,22 +12,22 @@ need you to confirm.
 
 ## 2. Decisions
 
-| Topic               | Decision                                                                                               |
-| ------------------- | ------------------------------------------------------------------------------------------------------ |
-| Language            | JavaScript, ES modules, Node 24. No runtime dependency.                                                |
-| Location            | `superteam-engine/src/eventloop/`. Each unit test is next to its code: `paths.js` has `paths.test.js`. |
-| Test runner         | `node:test` and `node:assert`. No extra dependency.                                                    |
-| Base directory      | A `baseDir` option. The folders are `{baseDir}/.superteam/.w/{queue,claim,dlq,tmp}`.                   |
-| Folders             | Created with `mkdir -p` at start.                                                                      |
-| Hash                | SHA-256, hex. `id` is the hash of `createdAt` and `order`. The `hash` of `write:done` is of the bytes. |
-| `createdAt`         | `new Date().toISOString()`, UTC, to the millisecond.                                                   |
-| Content             | Written as bytes (`Buffer`), so a binary file such as an image is kept as it is.                       |
-| `remoteSrc`         | `file://` with `fs.readFile`, `http(s)` with the global `fetch`, `GET` only. A timeout of 30 seconds.  |
-| Temporary file name | A random uuid with the `.tmp` extension, in `.superteam/.w/tmp/`.                                      |
-| Validation          | A hand-written validator for the event and the payload. No schema library.                             |
-| Subscribers         | Called in the order of the subscription, not awaited. An error of a subscriber is caught and ignored.  |
-| Options             | `maxAttempts` (3), `pollIntervalMs` (1000), `fetchTimeoutMs` (30000), `sleep` and `now` (for tests).   |
-| Counter             | Increased synchronously in `create()`, so two calls in the same process never get the same `order`.    |
+| Topic               | Decision                                                                                                                                                                           |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Language            | JavaScript, ES modules, Node 24. No runtime dependency.                                                                                                                            |
+| Location            | `superteam-engine/src/eventloop/`. Each unit test is next to its code: `paths.js` has `paths.test.js`.                                                                             |
+| Test runner         | `node:test` and `node:assert`. No extra dependency.                                                                                                                                |
+| Base directory      | A `baseDir` option. The folders are `{baseDir}/.superteam/.w/{queue,claim,dlq,tmp}`.                                                                                               |
+| Folders             | Created with `mkdir -p` at start.                                                                                                                                                  |
+| Hash                | SHA-256, hex. `id` is the hash of `createdAt` and `order`. The `hash` of `write:done` is of the bytes.                                                                             |
+| `createdAt`         | `new Date().toISOString()`, UTC, to the millisecond.                                                                                                                               |
+| Content             | Written as bytes (`Buffer`), so a binary file such as an image is kept as it is.                                                                                                   |
+| `remoteSrc`         | `file://` with `fs.readFile`, `http(s)` with the global `fetch`, `GET` only. A timeout of 30 seconds.                                                                              |
+| Temporary file name | A random uuid with the `.tmp` extension, in `.superteam/.w/tmp/`.                                                                                                                  |
+| Validation          | A hand-written validator for the event and the payload. No schema library.                                                                                                         |
+| Subscribers         | Called in the order of the subscription, not awaited. A `try` and `catch` only isolates an error of a subscriber from the loop: handling it is out of the scope of the event loop. |
+| Options             | `createEventLoop` takes `maxAttempts` (3), `pollIntervalMs` (1000), `sleep` and `now` (for tests). `start()` takes `fetchTimeoutMs` (30000).                                       |
+| Counter             | Increased synchronously in `create()`, so two calls in the same process never get the same `order`.                                                                                |
 
 ## 3. Layout
 
@@ -60,7 +58,7 @@ const loop = createEventLoop({ baseDir, maxAttempts, pollIntervalMs });
 
 loop.enqueue(payload); // Promise<event>: creates the event and writes it to the queue
 loop.subscribe(name, handler); // returns a function that unsubscribes
-await loop.start(); // runs the start stage, then the loop, and resolves after shutdown
+await loop.start({ fetchTimeoutMs }); // runs the start stage, then the loop, and resolves after shutdown
 loop.shutdown(); // sets isShuttingDown to true
 ```
 
@@ -109,8 +107,8 @@ Unit tests, each in the `.test.js` file next to its code:
   the move to the DLQ.
 - `writer.test.js`: the `src` first rule, `file://`, `http` with a local test
   server, and a binary file that is written byte for byte.
-- `subscribers.test.js`: a subscriber that throws does not stop the other
-  subscribers.
+- `subscribers.test.js`: the function that `subscribe()` returns unsubscribes
+  the handler, and a subscriber that throws does not stop the other subscribers.
 - `loop.test.js`: one iteration with fakes for the parts it uses, the wait of
   `2^attempts` seconds, and the check of `isShuttingDown`.
 
@@ -132,14 +130,3 @@ replaced:
   0 when the queue is empty.
 - Shutdown during an iteration: the iteration finishes, and no new one starts.
 - The `claim` folder never has more than one file.
-
-## 7. To confirm
-
-1. The location `superteam-engine/src/eventloop/`, with each unit test next to
-   its code and the flow tests in `index.test.js`.
-2. SHA-256 for both hashes, and the ISO 8601 format of `createdAt`.
-3. The `baseDir` option as the root of `.superteam/.w/`.
-4. The subscribers are not awaited, and an error in a subscriber is ignored.
-5. A timeout of 30 seconds for `remoteSrc`, which `eventloop.md` does not say.
-6. `start()` adds the signal handlers by default.
-7. JavaScript and `node:test`, with no TypeScript and no dependency.
