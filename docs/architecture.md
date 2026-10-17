@@ -106,3 +106,58 @@ flowchart LR
     E2 --> I2[Interface layer]
     I2 --> User2[User]
 ```
+
+## Sequence
+
+### Create and run a work
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant API as HTTP API
+    participant Factory as EventFactory
+    participant L as Loop
+    participant Workflow
+    participant Git
+
+    User->>API: create a work request
+    API->>Factory: create request event
+    create participant Event
+    Factory->>Event: create
+    Factory-->>API: ack
+    API-->>User: ack
+    L->>Event: claim
+    Event-->>L: event
+    L->>Workflow: find
+    Workflow-->>L: workflow
+    L->>L: create task graph
+    create participant Worktree
+    L->>Worktree: create
+    L->>Worktree: write work and task
+    Worktree-->>L: ack
+    destroy Event
+    L-xEvent: delete
+    loop for each task
+        create participant Worker
+        L->>Worker: spawn
+        Worker->>Worker: do task
+        Worker->>Worktree: write results
+        Worktree-->>Worker: ack
+        Worker->>Git: commit
+        Git-->>Worker: ack
+        Worker-->>L: ack
+        destroy Worker
+        L-xWorker: kill
+    end
+    create participant Merger
+    L->>Merger: spawn
+    Merger->>Worktree: merge
+    Worktree-->>Merger: ack
+    Merger-->>L: ack
+    destroy Merger
+    L-xMerger: kill
+    L->>Git: create PR
+    Git-->>L: ack
+    destroy Worktree
+    L-xWorktree: remove
+```
