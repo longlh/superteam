@@ -4,34 +4,33 @@
 
 ### Engine layer
 
-#### Storage
+#### Git
 
-Where the state is kept.
+The platform that the engine builds on (see `engine.md`).
 
-- It belongs to the root workspace, where the engine runs.
-- It is file-based.
-- Only part of it is versioned with git. Runtime data is not.
+- A worktree is an environment of its own for each worker.
+- A remote branch keeps the results.
+- A pull request is the way a work is approved.
+- The merge of the pull request records the result.
 
 #### Engine
 
-Owns the workflow logic and all state: works, tasks, statuses, approval status,
-artifacts and DOD checklists.
+The team lead: it takes a work, and gives back the output of the work. It owns
+the workflow logic and the runtime state: the tasks, their progress, and the
+workers. The results are kept in git.
 
 - It has no UI and runs on its own, without the MCP server.
 - It exposes an HTTP API and listens on localhost only. It is not exposed
   outside the machine.
+- The API works only at the level of the work. The tasks, the workers and the
+  worktrees are the business of the engine.
 - Its main clients are the AI sessions running on the same machine.
-- It follows CQRS: the read flow and the write flow are separate.
-- Every write is an event (a write command) that goes through a single queue,
-  including the writes from different AI sessions at the same time.
-- The write flow is asynchronous: a write is accepted into the queue and the
-  caller does not wait for it to be processed.
-- The engine runs a loop that claims the events from the queue and processes
-  them one at a time, in order, so there is no race condition.
+- An orchestrator moves each work to its next step, and it can do a step again
+  without doing it twice.
 - There is only one engine instance, in the root workspace. A workspace is a
   working directory.
 - The git worktrees created for workers have no engine.
-- It persists its state to local files (see Storage).
+- It keeps its runtime state in local files, and these are not in git.
 
 ### Worker layer
 
@@ -40,6 +39,8 @@ artifacts and DOD checklists.
 Defines an AI agent by its capabilities.
 
 - It does the work that the engine coordinates.
+- A worker role is concrete when it is put to use: a developer, a designer, a
+  business analyst.
 
 #### Worker process
 
@@ -61,8 +62,9 @@ A Claude process that runs one task.
 
 #### Merge agent
 
-A special AI agent, not a worker process, that does the git merges (see "Spawn
-worker").
+A role that does the git merges (see "Spawn worker"). It is spawned in a
+worktree by the engine, like a worker, and it is only not made abstract like the
+worker role.
 
 - It is spawned by the engine in two cases, and in both it does a merge.
 - When the engine prepares the worktree of a task: it merges the branches of the

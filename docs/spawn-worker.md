@@ -20,8 +20,7 @@ workspace, where the engine runs.
    it.
 5. The worker runs the task and commits its changes to the new branch. It only
    works in the worktree and on the branch that the engine prepared for it. The
-   branch of a task is local only. Only the branch of the work is pushed (see
-   below).
+   branch is kept on the remote, where the results are stored.
 6. The engine removes the worktree. The branch is kept, because it is merged
    later.
 
@@ -53,7 +52,7 @@ the work is `PROPOSED`, the merge agent merges the branches of all the final
 tasks of the work, the tasks at the end of the dependency chain, into one branch
 of the work. There can be more than one such branch, so this merge is needed.
 The engine pushes the branch of the work and opens a pull request on GitHub, the
-only forge that is supported for now. The branches of the tasks stay local.
+only forge that is supported for now.
 
 The approver reviews the work in the pull request, and the decision goes through
 the API of the engine (see "Work flow" in `engine.md`). When the work is
