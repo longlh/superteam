@@ -50,6 +50,14 @@ A Claude process that runs one task.
   task.
 - It returns its result to the engine as structured output defined by a JSON
   schema. It does not go through the MCP server.
+- What code can do is not left to the worker. The architecture has two ways to
+  give it that help, and keeps both open:
+  - A standalone script that the worker runs, such as the creation of an
+    artifact. It needs no engine: it works on the files and on git in the
+    worktree.
+  - A stateless API of the engine, which only computes for the worker. It keeps
+    no state, and the worker calls it over HTTP. There is no use case for it
+    yet.
 
 #### Merge agent
 
@@ -59,8 +67,9 @@ worker").
 - It is spawned by the engine in two cases, and in both it does a merge.
 - When the engine prepares the worktree of a task: it merges the branches of the
   previous tasks into the new branch, before the worker runs.
-- When the approval status of a work becomes `APPROVED`: it merges the branches
-  of all the final tasks of the work into the root branch.
+- When the work is `PROPOSED`: it merges the branches of all the final tasks of
+  the work into one branch of the work. The engine, not the merge agent, then
+  pushes this branch and opens the pull request.
 
 ### Interface layer
 

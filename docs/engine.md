@@ -37,18 +37,53 @@ flowchart TD
 | Part           | Job                                                                                                                                                        |
 | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | HTTP API       | The only door to the engine. It listens on localhost only. It turns a command into a write command for the queue, and it answers a query from the storage. |
-| Event loop     | The module of `eventloop.md`. It is the only part that writes to the storage. It knows nothing of the other parts.                                         |
+| Event loop     | The module of `eventloop.md`. It is the only part that writes to the storage of the root branch. It knows nothing of the other parts.                      |
 | Storage        | The files that hold the state. Only part of it is versioned with git. Runtime data is not.                                                                 |
 | Reactor        | Subscribes to the notifications of the event loop. When a write is done, it checks what the new state allows, and it makes the next thing happen.          |
 | Worker manager | Spawns the worker process of a task, watches it, and kills it when it runs too long (see `spawn-worker.md`).                                               |
+
+The worker manager owns the whole life of a worker process: it starts it,
+decides when its run has ended, and kills it. No other part touches a worker
+process. Everything that needs to act on a worker goes through the worker
+manager: the reactor asks it, and a client cannot start or stop a worker.
+
+## Work flow
+
+The engine is the team lead: it takes a work and gives back the output of the
+work. The HTTP API works only at the level of the work. The tasks, the workers
+and the worktrees are the business of the engine, and a client has no command
+for them.
+
+1. **Submit.** A client submits a work with one request. The engine creates the
+   work, and it creates the tasks of the work from the steps of its workflow,
+   with no other request.
+2. **Run.** The engine runs the tasks by itself: a task starts when it has its
+   inputs.
+3. **Propose.** When all the tasks are done, the work is `PROPOSED`. The merge
+   agent merges the branches of the final tasks into one branch of the work. The
+   engine pushes this branch and opens a pull request on GitHub, which is where
+   the approver reviews the output of the work. GitHub is the only forge that is
+   supported for now.
+4. **Decide.** The approver sends the decision to the API: approved or rejected.
+   The decision is recorded in the work. The pull request is not the source of
+   truth. If the work is rejected, the engine closes the pull request and keeps
+   the branch. A rejected work is final: to try again, a new work is submitted.
+5. **Merge.** When the work is approved, the engine merges the pull request into
+   the root branch.
+
+A task is not run again. If its worker fails (the process fails, it is killed
+because it runs too long, or its result does not match the schema), the whole
+work fails. The worker manager kills the other workers of the work at once, to
+save the cost, and the tasks that have not started never start. A failed work is
+final, like a rejected one: to try again, a new work is submitted.
 
 ## Write flow (command)
 
 CQRS: a command never changes the storage by itself. It becomes an event of the
 write queue, and the event loop applies it.
 
-1. The client calls the HTTP API with a command, such as "create a work" or
-   "complete a task".
+1. The client calls the HTTP API with a command, such as "submit a work" or
+   "approve a work".
 2. The API validates the command against the current state, including the
    version (see "Version"). If it is not valid, it answers with an error, and
    nothing is enqueued.
@@ -162,8 +197,8 @@ These are not decided yet.
 
 1. **The `version` field.** `data-struct.md` does not have it on the entities
    yet. The event loop already checks it (see `eventloop.md`).
-2. **The storage layout.** The path of each entity, and which entities are
-   versioned with git (workflows, works, tasks) and which are runtime data.
+2. **The storage layout.** Decided in `storage.md`, which has its own open
+   questions.
 3. **The HTTP API.** The list of the commands and the queries, and the way a
    client follows an event until it is done.
 4. **A ready signal.** `start()` of the event loop resolves only after the
@@ -173,5 +208,3 @@ These are not decided yet.
 5. **The engine restarts.** What happens to a task whose worker was running when
    the engine stopped: the pid may be alive, or dead, and the work may be half
    done in a worktree.
-6. **Worker failure.** How many times a failed task is run again, and who
-   decides: the engine, or a person.

@@ -50,6 +50,7 @@ erDiagram
         boolean[] dodChecklist
         boolean completed
         datetime completedAt
+        string error "why the task failed"
     }
 
     ARTIFACT {
@@ -82,30 +83,36 @@ These statuses are not stored. They are derived from the fields of the entities.
 
 ### Task status
 
-| Status        | Formula                                                |
-| ------------- | ------------------------------------------------------ |
-| `PENDING`     | `depend_tasks_not_completed.length > 0`                |
-| `IN_PROGRESS` | `depend_tasks_not_completed.length == 0 && !completed` |
-| `DONE`        | `completed`                                            |
+| Status        | Formula                                           |
+| ------------- | ------------------------------------------------- |
+| `PENDING`     | `depend_tasks_not_done.length > 0`                |
+| `IN_PROGRESS` | `depend_tasks_not_done.length == 0 && !completed` |
+| `DONE`        | `completed && !error`                             |
+| `FAILED`      | `completed && error`                              |
 
-`depend_tasks_not_completed` is the tasks in `dependOn` that are not completed.
+`depend_tasks_not_done` is the tasks in `dependOn` that are not `DONE`. A task
+that failed is `completed`, because its run has ended, and its `error` is the
+reason. So a task that depends on a failed task stays `PENDING`.
 
 ### Work status
 
-| Status        | Formula                                                       |
-| ------------- | ------------------------------------------------------------- |
-| `OPEN`        | `tasks.length == 0`                                           |
-| `IN_PROGRESS` | `tasks.length > 0 && tasks.length > completed_tasks.length`   |
-| `DONE`        | `tasks.length > 0 && tasks.length === completed_tasks.length` |
+| Status        | Formula                                                                                   |
+| ------------- | ----------------------------------------------------------------------------------------- |
+| `OPEN`        | `tasks.length == 0`                                                                       |
+| `IN_PROGRESS` | `tasks.length > 0 && tasks.length > completed_tasks.length && failed_tasks.length == 0`   |
+| `DONE`        | `tasks.length > 0 && tasks.length === completed_tasks.length && failed_tasks.length == 0` |
+| `FAILED`      | `failed_tasks.length > 0`                                                                 |
+
+`failed_tasks` is the tasks that are `FAILED`.
 
 ### Work approval status
 
 The approval status of a work is derived from the fields of the work and its
-tasks.
+tasks. A failed work is never proposed, so its approval status stays `DRAFT`.
 
-| Approval status | Formula                                                                                  |
-| --------------- | ---------------------------------------------------------------------------------------- |
-| `DRAFT`         | `tasks.length === 0 \|\| tasks.length > completed_tasks.length`                          |
-| `PROPOSED`      | `tasks.length > 0 && tasks.length === completed_tasks.length && !approvalAt`             |
-| `APPROVED`      | `tasks.length > 0 && tasks.length === completed_tasks.length && approvalAt && approved`  |
-| `REJECTED`      | `tasks.length > 0 && tasks.length === completed_tasks.length && approvalAt && !approved` |
+| Approval status | Formula                                                                                                              |
+| --------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `DRAFT`         | `tasks.length === 0 \|\| tasks.length > completed_tasks.length \|\| failed_tasks.length > 0`                         |
+| `PROPOSED`      | `tasks.length > 0 && tasks.length === completed_tasks.length && failed_tasks.length == 0 && !approvalAt`             |
+| `APPROVED`      | `tasks.length > 0 && tasks.length === completed_tasks.length && failed_tasks.length == 0 && approvalAt && approved`  |
+| `REJECTED`      | `tasks.length > 0 && tasks.length === completed_tasks.length && failed_tasks.length == 0 && approvalAt && !approved` |

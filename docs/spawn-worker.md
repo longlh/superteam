@@ -19,7 +19,8 @@ workspace, where the engine runs.
    configurable, the engine kills it.
 5. The worker runs the task and commits its changes to the new branch. It only
    works in the worktree and on the branch that the engine prepared for it. The
-   branch is local only: nothing is pushed to the remote.
+   branch of a task is local only. Only the branch of the work is pushed (see
+   below).
 6. The engine removes the worktree. The branch is kept, because it is merged
    later.
 
@@ -46,8 +47,14 @@ claude -p '<prompt>' --output-format json --json-schema <schema> --permission-mo
 
 ## Merging into the root branch
 
-The changes are not merged into the root branch when the worker finishes. They
-are merged when the approval status of the work becomes `APPROVED` (see
-"Approval flow" in the README). The merge agent merges the branches of all the
-final tasks of the work, the tasks at the end of the dependency chain, into the
-root branch. There can be more than one such branch.
+The changes are not merged into the root branch when the worker finishes. When
+the work is `PROPOSED`, the merge agent merges the branches of all the final
+tasks of the work, the tasks at the end of the dependency chain, into one branch
+of the work. There can be more than one such branch, so this merge is needed.
+The engine pushes the branch of the work and opens a pull request on GitHub, the
+only forge that is supported for now. The branches of the tasks stay local.
+
+The approver reviews the work in the pull request, and the decision goes through
+the API of the engine (see "Work flow" in `engine.md`). When the work is
+approved, the engine merges the pull request into the root branch. When it is
+rejected, the engine closes the pull request and keeps the branch.
