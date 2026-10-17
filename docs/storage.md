@@ -16,8 +16,9 @@ Where the engine keeps its state. The entities are described in
   and creates its artifacts in `.superteam/.p/`, on its own branch. It does not
   change the persistent data of the root branch, so the persistent data does not
   affect the worktrees of the workers.
-- The approver works on the root branch, and changes the entities in
-  `.superteam/.p/` there. The approver commits them.
+- The persistent data of a work reaches the root branch when the pull request of
+  the work is merged, so nobody commits it by hand. The root workspace gets it
+  by pulling.
 - An entity is one file, and its path comes from its identity.
 - The file of an entity is JSON, with a `version` field (see "Version" in
   `engine.md`). The event loop reads this field to check a write.
@@ -42,6 +43,15 @@ A work is persistent because it must outlive the machine: when the workspace
 moves to another device, the work can be started again, and what was done can be
 seen again.
 
+The work file is not created in `.superteam/.p/` of the root branch when the
+work is submitted. It reaches the root branch only through git, like the
+artifacts: when the work is `PROPOSED`, the engine writes it to
+`.superteam/.p/works/{id}.json` in the branch of the work, and commits it, so it
+is in the pull request. When the decision is made, the engine records it in this
+file, before the pull request is merged. This write is in a worktree, so it does
+not go through the event loop. The root branch never has a work file that is not
+committed, so pulling the merged pull request causes no conflict.
+
 ## Runtime directory
 
 `.superteam/.s/` holds:
@@ -49,6 +59,13 @@ seen again.
 | Entity | Path                                           |
 | ------ | ---------------------------------------------- |
 | Task   | `.superteam/.s/tasks/{work_id}/{task_id}.json` |
+
+The engine also keeps a dispatch record in `.superteam/.s/`, one for each work
+that was submitted. It tracks the works that were given to the engine, and it
+holds the work as the client submitted it (title, description, DOD, workflow),
+so that the engine can build the prompts of the workers, write the work file in
+the branch, and survive a restart. Until the pull request is merged, this record
+is where the engine finds the work.
 
 A task is a step on the way to a work. It can be done again, and its history is
 not kept, because a work is handed over clean.
@@ -86,7 +103,9 @@ These come from the other documents. They are what the layout has to make easy.
 
 These are not decided yet.
 
-1. **The identity.** The format of `id` for a work and a task: a counter, a
+1. **The dispatch record.** Its path and its fields.
+
+2. **The identity.** The format of `id` for a work and a task: a counter, a
    random id, or a slug. The path comes from it, and a counter needs the same
    care as the `order` of the event loop. The `id` of an artifact is decided
    (see "Artifacts").

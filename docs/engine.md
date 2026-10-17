@@ -62,8 +62,10 @@ for them.
 3. **Propose.** When all the tasks are done, the work is `PROPOSED`. The merge
    agent merges the branches of the final tasks into one branch of the work. The
    engine pushes this branch and opens a pull request on GitHub, which is where
-   the approver reviews the output of the work. GitHub is the only forge that is
-   supported for now.
+   the approver reviews the output of the work. The description of the pull
+   request is a Markdown text that holds the DOD checklists of the tasks, so the
+   approver sees them together with the artifacts. GitHub is the only forge that
+   is supported for now.
 4. **Decide.** The approver sends the decision to the API: approved or rejected.
    The decision is recorded in the work. The pull request is not the source of
    truth. If the work is rejected, the engine closes the pull request and keeps
