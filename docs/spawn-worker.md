@@ -14,9 +14,10 @@ workspace, where the engine runs.
    - The merge agent resolves the conflict itself, so the worker starts on a
      clean worktree.
 3. The engine spawns the worker process in the folder of the new worktree.
-4. The engine records the pid of the worker process and watches it. If the
-   worker runs longer than the maximum time, 12 hours by default and
-   configurable, the engine kills it.
+4. The engine records the pid of the worker process in
+   `.superteam/.r/workers/{pid}.pid`, and watches it. If the worker runs longer
+   than the maximum time, 12 hours by default and configurable, the engine kills
+   it.
 5. The worker runs the task and commits its changes to the new branch. It only
    works in the worktree and on the branch that the engine prepared for it. The
    branch of a task is local only. Only the branch of the work is pushed (see

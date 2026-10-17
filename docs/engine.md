@@ -175,12 +175,18 @@ entity is one file, and its path comes from its identity.
       `eventloop.md`).
    3. Open the HTTP API, after the start stage of the event loop is done,
       because `enqueue()` needs it.
-   4. Reconcile with the workers that were running before the engine stopped.
+   4. Kill the workers that were running before the engine stopped. The engine
+      manages the workers, so a worker that is running without the engine would
+      be stalled. The pids are in `.superteam/.r/workers/{pid}.pid`. The tasks
+      of these workers have failed, so their works have failed (see "Work
+      flow").
 2. **Run:** the API takes the commands and the queries, the event loop processes
    the writes, and the reactor reacts to them.
-3. **Shutdown:** on `SIGINT` or `SIGTERM` the engine stops taking requests, and
-   calls `shutdown()` of the event loop, which finishes the write in progress. A
-   second signal is a force quit, and the next start recovers from it.
+3. **Shutdown:** on `SIGINT` or `SIGTERM` the engine stops taking requests,
+   kills the workers that are running at once, and calls `shutdown()` of the
+   event loop, which finishes the write in progress. The tasks of the killed
+   workers fail, so their works fail. A second signal is a force quit, and the
+   next start recovers from it.
 
 ## Known issues
 
@@ -207,6 +213,3 @@ These are not decided yet.
    shutdown, and `enqueue()` fails before the start stage is done. The engine
    needs a way to know that the start stage is done, to open the API at the
    right time.
-5. **The engine restarts.** What happens to a task whose worker was running when
-   the engine stopped: the pid may be alive, or dead, and the work may be half
-   done in a worktree.

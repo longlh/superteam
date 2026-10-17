@@ -12,6 +12,8 @@ Where the engine keeps its state. The entities are described in
 - The runtime data of the storage is in `.superteam/.s/`. It is not versioned
   with git.
 - The persistent data is in `.superteam/.p/`. It is versioned with git.
+- The pids of the worker processes are in `.superteam/.r/workers/{pid}.pid`, one
+  file for each worker. They are runtime data, and are not versioned with git.
 - A worker works in its git worktree. It reads the task from the runtime data
   and creates its artifacts in `.superteam/.p/`, on its own branch. It does not
   change the persistent data of the root branch, so the persistent data does not
