@@ -166,3 +166,34 @@ sequenceDiagram
     destroy WorkWorktree
     L-xWorkWorktree: remove
 ```
+
+### Approve or reject a work
+
+```mermaid
+sequenceDiagram
+    actor Approver
+    participant API as HTTP API
+    participant Factory as EventFactory
+    participant L as Loop
+    participant Git
+
+    Approver->>API: approve or reject
+    API->>Factory: create decision event
+    create participant Event
+    Factory->>Event: create
+    Factory-->>API: ack
+    API-->>Approver: ack
+    L->>Event: claim
+    Event-->>L: event
+    alt approved
+        L->>Git: merge PR
+        Git-->>L: ack
+        L->>Git: pull root
+        Git-->>L: ack
+    else rejected
+        L->>Git: close PR
+        Git-->>L: ack
+    end
+    destroy Event
+    L-xEvent: delete
+```
