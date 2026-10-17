@@ -67,8 +67,9 @@ worktree by the engine, like a worker, and it is only not made abstract like the
 worker role.
 
 - It is spawned by the engine in two cases, and in both it does a merge.
-- When the engine prepares the worktree of a task: it merges the branches of the
-  previous tasks into the new branch, before the worker runs.
+- When the engine prepares the worktree of a task that depends on more than one
+  task: it merges the branches of the other dependencies into the new branch,
+  before the worker runs.
 - When the work is `PROPOSED`: it merges the branches of all the final tasks of
   the work into one branch of the work. The engine, not the merge agent, then
   pushes this branch and opens the pull request.
@@ -131,33 +132,37 @@ sequenceDiagram
     L->>Workflow: find
     Workflow-->>L: workflow
     L->>L: create task graph
-    create participant Worktree
-    L->>Worktree: create
-    L->>Worktree: write work and task
-    Worktree-->>L: ack
+    create participant WorkWorktree
+    L->>WorkWorktree: create from root
+    L->>WorkWorktree: write work and task
+    WorkWorktree-->>L: ack
     destroy Event
     L-xEvent: delete
     loop for each task
+        create participant TaskWorktree
+        L->>TaskWorktree: create from dependency
         create participant Worker
         L->>Worker: spawn
         Worker->>Worker: do task
-        Worker->>Worktree: write results
-        Worktree-->>Worker: ack
+        Worker->>TaskWorktree: write results
+        TaskWorktree-->>Worker: ack
         Worker->>Git: commit
         Git-->>Worker: ack
         Worker-->>L: ack
         destroy Worker
         L-xWorker: kill
+        destroy TaskWorktree
+        L-xTaskWorktree: remove
     end
     create participant Merger
     L->>Merger: spawn
-    Merger->>Worktree: merge
-    Worktree-->>Merger: ack
+    Merger->>WorkWorktree: merge final tasks
+    WorkWorktree-->>Merger: ack
     Merger-->>L: ack
     destroy Merger
     L-xMerger: kill
     L->>Git: create PR
     Git-->>L: ack
-    destroy Worktree
-    L-xWorktree: remove
+    destroy WorkWorktree
+    L-xWorkWorktree: remove
 ```

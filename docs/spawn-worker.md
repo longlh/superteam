@@ -5,12 +5,13 @@ workspace, where the engine runs.
 
 ## Steps
 
-1. The engine creates a new git worktree for the task, on a new branch made from
-   the root branch.
-2. The engine spawns the merge agent to merge the branches of the nearest
-   previous tasks in the dependency chain into the new branch. With a single
-   previous task the merge is only a fast-forward. A conflict can happen only
-   when the task joins the branches of more than one previous task.
+1. The engine creates a new git worktree for the task, on a new branch. The base
+   of the branch is the branch of the task it depends on. A task with no
+   dependency is based on the root branch. A task with more than one dependency
+   is based on one of them.
+2. If the task depends on more than one task, the engine spawns the merge agent
+   to merge the branches of the other dependencies into the new branch. A
+   conflict can happen only here.
    - The merge agent resolves the conflict itself, so the worker starts on a
      clean worktree.
 3. The engine spawns the worker process in the folder of the new worktree.
