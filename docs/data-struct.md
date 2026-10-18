@@ -31,9 +31,6 @@ erDiagram
         datetime createdAt
         datetime updatedAt
         boolean[] dodChecklist
-        string approver "role"
-        boolean approved
-        datetime approvalAt
     }
 
     TASK {
@@ -107,12 +104,19 @@ reason. So a task that depends on a failed task stays `PENDING`.
 
 ### Work approval status
 
-The approval status of a work is derived from the fields of the work and its
-tasks. A failed work is never proposed, so its approval status stays `DRAFT`.
+The approval status of a work is derived from its tasks and from its pull
+request. The decision of the approver is not stored: the merge of the pull
+request into the root branch is the approval, and the git history keeps it. A
+failed work is never proposed, so it has no pull request, and its approval
+status stays `DRAFT`.
 
-| Approval status | Formula                                                                                                              |
-| --------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `DRAFT`         | `tasks.length === 0 \|\| tasks.length > completed_tasks.length \|\| failed_tasks.length > 0`                         |
-| `PROPOSED`      | `tasks.length > 0 && tasks.length === completed_tasks.length && failed_tasks.length == 0 && !approvalAt`             |
-| `APPROVED`      | `tasks.length > 0 && tasks.length === completed_tasks.length && failed_tasks.length == 0 && approvalAt && approved`  |
-| `REJECTED`      | `tasks.length > 0 && tasks.length === completed_tasks.length && failed_tasks.length == 0 && approvalAt && !approved` |
+| Approval status | Formula                                                                                                         |
+| --------------- | --------------------------------------------------------------------------------------------------------------- |
+| `DRAFT`         | `tasks.length === 0 \|\| tasks.length > completed_tasks.length \|\| failed_tasks.length > 0`                    |
+| `PROPOSED`      | `tasks.length > 0 && tasks.length === completed_tasks.length && failed_tasks.length == 0 && pr.state == "open"` |
+| `APPROVED`      | `pr.state == "merged"`                                                                                          |
+| `REJECTED`      | `pr.state == "closed"`, which means closed without a merge                                                      |
+
+`pr` is the pull request of the work, and `pr.state` is its state in git:
+`open`, `merged`, or `closed` without a merge. A work that is not proposed has
+no pull request.

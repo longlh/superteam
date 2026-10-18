@@ -37,14 +37,14 @@ needs the `gh` command line.
 
 The data has two kinds, and each kind has one owner.
 
-| Kind       | Owner  | Where                                                                                                                   | Properties                                        |
-| ---------- | ------ | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| Runtime    | Engine | Local files of the root workspace: the progress of the tasks, the works as they were submitted, the pids of the workers | Not in git. Only the engine writes it.            |
-| Persistent | Worker | Git: the branch of the worker, on the remote, then the pull request                                                     | In git. The worker writes it in its own worktree. |
+| Kind       | Owner  | Where                                                                                                                  | Properties                                        |
+| ---------- | ------ | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| Runtime    | Engine | Local files of the root workspace: the progress of the tasks, the works as they were assigned, the pids of the workers | Not in git. Only the engine writes it.            |
+| Persistent | Worker | Git: the branch of the worker, on the remote, then the pull request                                                    | In git. The worker writes it in its own worktree. |
 
-The engine writes to git when a work is submitted (the work and the tasks, in
-the worktree of the work) and when a work is proposed (the pull request, with
-its description). See "Work flow".
+The engine writes to git when a work is assigned (the work and the tasks, in the
+worktree of the work) and when a work is proposed (the pull request, with its
+description). See "Work flow".
 
 ## Parts
 
@@ -75,7 +75,7 @@ flowchart TD
 | Engine loop    | The module of `engineloop.md`: a queue of events and a loop that gives them to the handlers, one at a time, in order.                                         |
 | Handlers       | One for each type of event. A handler does the next step of a work (see "Engine loop").                                                                       |
 | Worker manager | Prepares the worktree of a task, spawns the worker process, watches it, and kills it (see `spawn-worker.md`). It does the same for the merge agent.           |
-| Runtime state  | The local files of the engine: the tasks and their progress, the works as they were submitted, the pids of the workers.                                       |
+| Runtime state  | The local files of the engine: the tasks and their progress, the works as they were assigned, the pids of the workers.                                        |
 
 The worker manager owns the whole life of a worker process: it starts it,
 decides when its run has ended, and kills it. No other part touches a worker
@@ -101,7 +101,7 @@ twice by two events at the same time.
 
 | Event          | Raised by      | What its handler does                                                                                                                                                                                        |
 | -------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `work:submit`  | HTTP API       | Finds the workflow, creates the task graph, creates the worktree of the work from the root branch and writes the work and the tasks in it, then starts the tasks that are ready.                             |
+| `work:assign`  | HTTP API       | Finds the workflow, creates the task graph, creates the worktree of the work from the root branch and writes the work and the tasks in it, then starts the tasks that are ready.                             |
 | `worker:ended` | Worker manager | Records the result of the task: done, or failed with an `error`. Starts the tasks that are ready now. When all the tasks are done, asks the worker manager to merge the final tasks.                         |
 | `merger:ended` | Worker manager | Opens the pull request, and removes the worktree of the work.                                                                                                                                                |
 | `work:decide`  | HTTP API       | When approved, merges the pull request, pulls the root branch and deletes all the branches of the work. When rejected, closes the pull request, creates the record of the work and deletes all the branches. |
@@ -120,10 +120,10 @@ A handler follows the two rules of `engineloop.md`:
 
 ## Work flow
 
-1. **Submit.** A client submits a work with one request. The engine records that
-   the work was given to it, creates the tasks of the work from the steps of its
-   workflow, with no other request, and creates the worktree of the work, based
-   on the root branch.
+1. **Assign.** A client assigns a work to the engine with one request. The
+   engine records that the work was given to it, creates the tasks of the work
+   from the steps of its workflow, with no other request, and creates the
+   worktree of the work, based on the root branch.
 2. **Run.** The engine runs the tasks by itself: a task starts when it has its
    inputs. For each task it prepares a worktree and a branch, based on the
    branch of the task it depends on, and spawns a worker. The worker works only
@@ -141,7 +141,7 @@ A handler follows the two rules of `engineloop.md`:
    atomic action, with nothing else to update. If the work is rejected, the
    engine closes the pull request, creates a record of the work in the runtime
    storage, and deletes all the branches of the work. A rejected work is final:
-   to try again, a new work is submitted.
+   to try again, a new work is assigned.
 5. **Merge.** When the work is approved, the engine merges the pull request into
    the root branch, as rebase and squash. This merge is the approval. The engine
    then pulls the root branch, so the root workspace has the result, and deletes
@@ -152,7 +152,7 @@ A task is not run again. If its worker fails (the process fails, it is killed
 because it runs too long, or its result does not match the schema), the whole
 work fails. The worker manager kills the other workers of the work at once, to
 save the cost, and the tasks that have not started never start. A failed work is
-final, like a rejected one: to try again, a new work is submitted. A failed task
+final, like a rejected one: to try again, a new work is assigned. A failed task
 is recorded as `completed` with an `error`, so it is `FAILED` (see "Derived
 status" in `data-struct.md`).
 
@@ -189,13 +189,9 @@ These are not decided yet.
    engine needs a way to know that the start stage is done, to open the API at
    the right time.
 2. **The HTTP API.** The list of the requests and the queries at the level of
-   the work. The ones named so far are: submit a work, approve it, reject it,
+   the work. The ones named so far are: assign a work, approve it, reject it,
    and get the status and the output of a work.
-3. **The runtime state.** Its layout, and the fields of the record of a work.
-   `storage.md` has to be written again for this structure.
-4. **The approval status.** It is derived from git: the pull request is open
-   (`PROPOSED`), merged (`APPROVED`), or closed without a merge (`REJECTED`).
-   `data-struct.md` still has `approved` and `approvalAt` on the work, and
-   formulas that use them.
-5. **The module of `eventloop.md`.** The engine does not use it. Is it kept as
+3. **The runtime state.** The layout is in `storage.md`. What is open there is
+   the path and the fields of the record of a work.
+4. **The module of `eventloop.md`.** The engine does not use it. Is it kept as
    an independent module, or removed?

@@ -9,7 +9,7 @@ them.
 
 There are two kinds of request:
 
-- **A command** asks the engine to do something: submit a work, approve it or
+- **A command** asks the engine to do something: assign a work, approve it or
   reject it. The API checks the request, turns it into an event for the engine
   loop, and answers at once that the event is accepted. It does not wait for the
   event to be processed. The client follows the result with a query.
@@ -18,7 +18,7 @@ There are two kinds of request:
 
 The paths and the bodies below are a proposal.
 
-## Submit a work
+## Assign a work
 
 ```
 POST /works
@@ -45,7 +45,7 @@ Answer `202 Accepted`:
 | `eventId` | string | The id of the event that was created.                |
 
 The API checks that the body is valid and that the workflow exists. Then it
-creates the event `work:submit`. The work is in the status `OPEN` until the
+creates the event `work:assign`. The work is in the status `OPEN` until the
 engine has created its tasks.
 
 ## Approve or reject a work
@@ -135,7 +135,7 @@ work").
 
 | Request                     | Event         |
 | --------------------------- | ------------- |
-| `POST /works`               | `work:submit` |
+| `POST /works`               | `work:assign` |
 | `POST /works/{id}/decision` | `work:decide` |
 
 The events `worker:ended` and `merger:ended` do not come from the API: the
@@ -156,5 +156,5 @@ These are not decided yet.
    does the list show it?
 4. **The tasks.** A query that shows the progress of the tasks of a work, as a
    read-only view. For now the client sees only the work.
-5. **A request that is sent twice.** Submitting twice creates two works. A key
+5. **A request that is sent twice.** Assigning twice creates two works. A key
    that the client chooses could make the request safe to send again.

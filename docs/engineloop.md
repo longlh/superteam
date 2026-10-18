@@ -1,7 +1,7 @@
 # Engine loop
 
 The engine loop processes the events of the engine, one at a time, in order. An
-event is a request or a fact about a work: a work is submitted, a worker has
+event is a request or a fact about a work: a work is assigned, a worker has
 ended, a work is approved. The loop does not know what an event means. It gives
 each event to the handler of its type.
 
@@ -55,7 +55,7 @@ The `payload` has two fields:
 
 | Field  | Type   | Description                                                     |
 | ------ | ------ | --------------------------------------------------------------- |
-| `type` | string | The kind of event, such as `work:submit`. It picks a handler.   |
+| `type` | string | The kind of event, such as `work:assign`. It picks a handler.   |
 | `data` | Object | What the handler of this type needs. The loop does not read it. |
 
 The loop checks only that `type` is a string and that `data` is an object. What

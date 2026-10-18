@@ -1,5 +1,26 @@
 # Architecture
 
+## Principles
+
+1. **Data has two kinds.**
+   - **Persistence:** the data that must be kept in git. It is stored in
+     `.superteam/.p`.
+   - **Runtime:** the data that does not need to be kept in git. It is stored in
+     `.superteam/.r`.
+2. **The root branch does not create persistence data directly.** Persistence
+   data is created as the result of merging a pull request.
+3. **Persistence data has a purpose.** It is kept so that people can work across
+   devices, synced through git, and so that the history of the work is kept. The
+   unit of the history is the work.
+4. **All the work is done in worktrees.** Each job is done in a git worktree,
+   and its result is kept in a git branch.
+5. **There are two kinds of job.**
+   - **The jobs of the engine:** such as the merger and the approver.
+   - **The jobs of the project:** the project defines them, such as the
+     developer and the business analyst.
+6. **A job can be done by a person or by an AI.** The two are interchangeable:
+   one can take over from the other without interrupting the work.
+
 ## Layers
 
 ### Engine layer

@@ -1,34 +1,26 @@
 # Storage
 
-Where the engine keeps its state. The entities are described in
-`data-struct.md`, and the engine that uses the storage in `engine.md`.
+Where the data is kept. The entities are described in `data-struct.md`, and the
+engine that uses the storage in `engine.md`.
 
-## What is decided
+The storage is file-based, under `{baseDir}/.superteam/`, where `baseDir` is the
+root workspace, the place where the engine runs. It has four folders:
 
-- The storage is file-based, under `{baseDir}/.superteam/`, where `baseDir` is
-  the root workspace, the place where the engine runs.
-- The folder `.superteam/.w/` belongs to the event loop: the queue, the claim,
-  the DLQ and the tmp folders (see `eventloop.md`). The storage does not use it.
-- The runtime data of the storage is in `.superteam/.s/`. It is not versioned
-  with git.
-- The persistent data is in `.superteam/.p/`. It is versioned with git.
-- The pids of the worker processes are in `.superteam/.r/workers/{pid}.pid`, one
-  file for each worker. They are runtime data, and are not versioned with git.
-- A worker works in its git worktree. It reads the task from the runtime data
-  and creates its artifacts in `.superteam/.p/`, on its own branch. It does not
-  change the persistent data of the root branch, so the persistent data does not
-  affect the worktrees of the workers.
-- The persistent data of a work reaches the root branch when the pull request of
-  the work is merged, so nobody commits it by hand. The root workspace gets it
-  by pulling.
-- An entity is one file, and its path comes from its identity.
-- The file of an entity is JSON, with a `version` field (see "Version" in
-  `engine.md`). The event loop reads this field to check a write.
-- Only the event loop writes to the storage of the root branch. It replaces a
-  whole file, so a write carries the whole new content of the entity. A git
-  worktree is a runtime environment: what is written there does not go through
-  the event loop.
-- Only part of the storage is versioned with git. Runtime data is not.
+| Folder           | Kind       | Owner       | In git |
+| ---------------- | ---------- | ----------- | ------ |
+| `.superteam/.p/` | Persistent | Worker      | Yes    |
+| `.superteam/.s/` | Runtime    | Engine      | No     |
+| `.superteam/.r/` | Runtime    | Engine      | No     |
+| `.superteam/.e/` | Runtime    | Engine loop | No     |
+
+- **`.p`** holds the persistent data: what must outlive the machine. It is in
+  git.
+- **`.s`** holds the runtime state of the works and of the tasks.
+- **`.r`** holds the pids of the worker processes.
+- **`.e`** belongs to the engine loop: the queue, the claim, the DLQ and the tmp
+  folders (see `engineloop.md`). The storage does not use it.
+
+An entity is one JSON file, and its path comes from its identity.
 
 ## Persistent directory
 
@@ -42,17 +34,14 @@ Where the engine keeps its state. The entities are described in
 | Artifact      | `.superteam/.p/artifacts/{work_id}/{id}.json`              |
 
 A work is persistent because it must outlive the machine: when the workspace
-moves to another device, the work can be started again, and what was done can be
-seen again.
+moves to another device, what was done can be seen again.
 
-The work file is not created in `.superteam/.p/` of the root branch when the
-work is submitted. It reaches the root branch only through git, like the
-artifacts: when the work is `PROPOSED`, the engine writes it to
-`.superteam/.p/works/{id}.json` in the branch of the work, and commits it, so it
-is in the pull request. When the decision is made, the engine records it in this
-file, before the pull request is merged. This write is in a worktree, so it does
-not go through the event loop. The root branch never has a work file that is not
-committed, so pulling the merged pull request causes no conflict.
+The persistent data reaches the root branch only through git: it is written in a
+worktree, kept on a branch, and merged into the root branch with the pull
+request of the work. The root branch never has a persistent file that is not
+committed, so pulling the merged pull request causes no conflict. The worktrees
+are a runtime environment, so what is written there does not go through the
+engine loop.
 
 ## Runtime directory
 
@@ -62,15 +51,24 @@ committed, so pulling the merged pull request causes no conflict.
 | ------ | ---------------------------------------------- |
 | Task   | `.superteam/.s/tasks/{work_id}/{task_id}.json` |
 
-The engine also keeps a dispatch record in `.superteam/.s/`, one for each work
-that was submitted. It tracks the works that were given to the engine, and it
-holds the work as the client submitted it (title, description, DOD, workflow),
-so that the engine can build the prompts of the workers, write the work file in
-the branch, and survive a restart. Until the pull request is merged, this record
-is where the engine finds the work.
-
 A task is a step on the way to a work. It can be done again, and its history is
 not kept, because a work is handed over clean.
+
+The engine also keeps a record for each work that was given to it. The record
+holds the work as the client assigned it (title, description, DOD, workflow), so
+that the engine can build the prompts of the workers and survive a restart. The
+record of a work that is rejected stays here: the engine loop creates it at the
+time it rejects the work, because a rejected work is never merged, and so never
+reaches `.p`.
+
+Only the engine writes the runtime files, from its handlers, one event at a
+time. So there is no race between two writes.
+
+## Process directory
+
+`.superteam/.r/workers/{pid}.pid` is one file for each worker process. The
+engine records the pid when it spawns the worker, and uses these files at the
+start to kill the workers that are left (see "Life cycle" in `engine.md`).
 
 ## Artifacts
 
@@ -88,26 +86,20 @@ The `id` is a hash (SHA-256, hex) of the `work_id`, the `task_id`, the
 the artifacts that a task creates at once. There is no counter to share, because
 the tasks run in parallel.
 
-## What the storage must give
+## Branches
 
-These come from the other documents. They are what the layout has to make easy.
-
-| Need                                     | Who needs it                     |
-| ---------------------------------------- | -------------------------------- |
-| Read one entity from its identity        | The API (query), the reactor     |
-| List the tasks of a work                 | The API, the derived status      |
-| List the tasks that a task depends on    | The derived status of a task     |
-| Know the `target` path of an entity      | The command builder              |
-| Know which entity a `target` path is for | The reactor, on `write:done`     |
-| Keep the runtime data out of git         | The git worktrees of the workers |
+The branches of a work (its own branch and the branches of its tasks) are
+deleted when the work ends, so that they do not pile up as garbage.
 
 ## Open questions
 
 These are not decided yet.
 
-1. **The dispatch record.** Its path and its fields.
-
+1. **The record of a work.** Its path and its fields.
 2. **The identity.** The format of `id` for a work and a task: a counter, a
-   random id, or a slug. The path comes from it, and a counter needs the same
-   care as the `order` of the event loop. The `id` of an artifact is decided
-   (see "Artifacts").
+   random id, or a slug. The path comes from it. The `id` of an artifact is
+   decided (see "Artifacts").
+3. **The tasks in the worktree of the work.** `engine.md` says that the engine
+   writes the work and the tasks in the worktree of the work when it assigns the
+   work. Where the tasks go there, and whether they reach git, is not decided:
+   the file of a task is in `.superteam/.s/`.

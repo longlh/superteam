@@ -12,7 +12,7 @@ because it worked well, but each file is a new file.
   the claim and DLQ folders, the event and the factory, the handlers, the loop,
   the life cycle, and the subscribers.
 - Out of scope: the engine, the HTTP API, the handlers themselves (what a
-  `work:submit` does), and the orchestration. The module does not know them.
+  `work:assign` does), and the orchestration. The module does not know them.
 
 ## 2. Decisions
 
