@@ -42,9 +42,9 @@ The data has two kinds, and each kind has one owner.
 | Runtime    | Engine | Local files of the root workspace: the progress of the tasks, the works as they were assigned, the pids of the workers | Not in git. Only the engine writes it.            |
 | Persistent | Worker | Git: the branch of the worker, on the remote, then the pull request                                                    | In git. The worker writes it in its own worktree. |
 
-The engine writes to git when a work is assigned (the work and the tasks, in the
-worktree of the work) and when a work is proposed (the pull request, with its
-description). See "Work flow".
+The engine does not write persistence data itself. The merger writes the work in
+the worktree of the work, and the engine opens the pull request, with its
+description. See "Work flow".
 
 ## Parts
 
@@ -74,7 +74,7 @@ flowchart TD
 | HTTP API       | The only door to the engine. It listens on localhost only, and it works only at the level of the work. It turns a request into an event, and answers a query. |
 | Engine loop    | The module of `engineloop.md`: a queue of events and a loop that gives them to the handlers, one at a time, in order.                                         |
 | Handlers       | One for each type of event. A handler does the next step of a work (see "Engine loop").                                                                       |
-| Worker manager | Prepares the worktree of a task, spawns the worker process, watches it, and kills it (see `spawn-worker.md`). It does the same for the merge agent.           |
+| Worker manager | Spawns the worker process of a task, watches it, and kills it (see `spawn-worker.md`). It does the same for the merger.                                       |
 | Runtime state  | The local files of the engine: the tasks and their progress, the works as they were assigned, the pids of the workers.                                        |
 
 The worker manager owns the whole life of a worker process: it starts it,
@@ -83,10 +83,12 @@ process. Everything that needs to act on a worker goes through the worker
 manager: a handler asks it, and a client cannot start or stop a worker. When a
 worker ends, the worker manager enqueues an event.
 
-The merge agent is a role, and it is spawned in a worktree like a worker. It is
-only not made abstract like the worker role. A worker role is concrete when it
-is put to use: a developer, a designer, a business analyst. The failure of the
-merge agent is handled like the failure of a worker.
+The merger is a role of the engine, and it is spawned like a worker. It is
+responsible for the whole unit of the work: it creates the worktree of the work
+and the worktrees of the tasks, writes the work, and does all the merges (see
+`architecture.md`). A role of the project is concrete when it is put to use: a
+developer, a designer, a business analyst. The failure of the merger is handled
+like the failure of a worker.
 
 The HTTP API works only at the level of the work. The tasks, the workers and the
 worktrees are the business of the engine, and a client has no command for them.
@@ -101,7 +103,7 @@ twice by two events at the same time.
 
 | Event          | Raised by      | What its handler does                                                                                                                                                                                        |
 | -------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `work:assign`  | HTTP API       | Finds the workflow, creates the task graph, creates the worktree of the work from the root branch and writes the work and the tasks in it, then starts the tasks that are ready.                             |
+| `work:assign`  | HTTP API       | Finds the workflow, creates the task graph, spawns the merger, which creates the worktree of the work from the root branch and writes the work in it, then starts the tasks that are ready.                  |
 | `worker:ended` | Worker manager | Records the result of the task: done, or failed with an `error`. Starts the tasks that are ready now. When all the tasks are done, asks the worker manager to merge the final tasks.                         |
 | `merger:ended` | Worker manager | Opens the pull request, and removes the worktree of the work.                                                                                                                                                |
 | `work:decide`  | HTTP API       | When approved, merges the pull request, pulls the root branch and deletes all the branches of the work. When rejected, closes the pull request, creates the record of the work and deletes all the branches. |
@@ -122,13 +124,14 @@ A handler follows the two rules of `engineloop.md`:
 
 1. **Assign.** A client assigns a work to the engine with one request. The
    engine records that the work was given to it, creates the tasks of the work
-   from the steps of its workflow, with no other request, and creates the
-   worktree of the work, based on the root branch.
+   from the steps of its workflow, with no other request, and spawns the merger,
+   which creates the worktree of the work, based on the root branch, and writes
+   the work in it, from its runtime record.
 2. **Run.** The engine runs the tasks by itself: a task starts when it has its
-   inputs. For each task it prepares a worktree and a branch, based on the
-   branch of the task it depends on, and spawns a worker. The worker works only
-   in its worktree, and its results are kept on its branch, which is on the
-   remote.
+   inputs. For each task the merger prepares a worktree and a branch, based on
+   the branch of the task it depends on, and the engine spawns a worker. The
+   worker works only in its worktree, and its results are kept on its branch,
+   which is on the remote.
 3. **Propose.** When all the tasks are done, the work is `PROPOSED`. The merge
    agent merges the branches of the final tasks into the worktree of the work.
    The engine pushes its branch, and opens a pull request. The description of
