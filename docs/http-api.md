@@ -70,8 +70,9 @@ processed, because the state can change between the request and the event.
 
 - `approve`: the engine merges the pull request into the root branch. This merge
   is the approval.
-- `reject`: the engine closes the pull request and keeps the branch. A rejected
-  work is final.
+- `reject`: the engine closes the pull request, deletes all the branches of the
+  work and creates a record of the work in the runtime storage. A rejected work
+  is final.
 
 The decision itself is not stored (see "Work flow" in `engine.md`): the result
 is in the pull request, and the git history keeps it.
@@ -96,6 +97,30 @@ Answer `200 OK`:
 
 The `status` and the `approvalStatus` are not stored: the engine derives them
 when it answers.
+
+## List the works
+
+```
+GET /works
+```
+
+Answer `200 OK`: the list of all the works. It puts together three sources:
+
+- The works that are running, in the runtime storage.
+- The works that are done, in the persistent storage. They were merged from
+  their work branch.
+- The works that were rejected, in the runtime storage. They are never merged,
+  so there is no work branch to read them from: the engine loop creates their
+  record at the time it rejects them.
+
+A work that is done is kept for good. All the branches of a work (its own branch
+and the branches of its tasks) are deleted when the work ends, so that they do
+not pile up as garbage. On another machine, only what the other machines have
+accumulated in git matters, and a rejected work, which is not in git, is not
+part of it.
+
+Each item has the fields of the state of one work (see "Query the state of a
+work").
 
 ## Errors
 
@@ -126,7 +151,9 @@ These are not decided yet.
 2. **The id of a work.** The API answers with the `id` before the work exists,
    so the API creates it. Its format is open (a counter, a random id, or a
    slug), and the path of the work in the storage depends on it.
-3. **A list of the works.** There is no query that lists the works yet.
+3. **The works that failed.** A work that failed is never merged either. Is a
+   record created for it in the runtime storage, as for a rejected work, and
+   does the list show it?
 4. **The tasks.** A query that shows the progress of the tasks of a work, as a
    read-only view. For now the client sees only the work.
 5. **A request that is sent twice.** Submitting twice creates two works. A key

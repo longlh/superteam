@@ -52,10 +52,10 @@ The changes are not merged into the root branch when the worker finishes. When
 the work is `PROPOSED`, the merge agent merges the branches of all the final
 tasks of the work, the tasks at the end of the dependency chain, into one branch
 of the work. There can be more than one such branch, so this merge is needed.
-The engine pushes the branch of the work and opens a pull request on GitHub, the
-only forge that is supported for now.
+The engine pushes the branch of the work and opens a pull request.
 
 The approver reviews the work in the pull request, and the decision goes through
 the API of the engine (see "Work flow" in `engine.md`). When the work is
 approved, the engine merges the pull request into the root branch. When it is
-rejected, the engine closes the pull request and keeps the branch.
+rejected, the engine closes the pull request. In both cases the engine deletes
+all the branches of the work: its own branch and the branches of its tasks.

@@ -29,6 +29,10 @@ the platform, and each part of it has a job:
 | Pull request              | The way a work is approved: the approver reviews it there. |
 | Merge of the pull request | The way a result is recorded, as rebase and squash.        |
 
+The engine reaches git and the forge through a git adapter, so that another
+forge can be added later. For now only GitHub is supported, and the adapter
+needs the `gh` command line.
+
 ## Data
 
 The data has two kinds, and each kind has one owner.
@@ -95,12 +99,12 @@ handlers one at a time, in order, for all the works. So two events never change
 the state at the same time, and a step such as the pull request cannot be done
 twice by two events at the same time.
 
-| Event          | Raised by      | What its handler does                                                                                                                                                                |
-| -------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `work:submit`  | HTTP API       | Finds the workflow, creates the task graph, creates the worktree of the work from the root branch and writes the work and the tasks in it, then starts the tasks that are ready.     |
-| `worker:ended` | Worker manager | Records the result of the task: done, or failed with an `error`. Starts the tasks that are ready now. When all the tasks are done, asks the worker manager to merge the final tasks. |
-| `merger:ended` | Worker manager | Opens the pull request, and removes the worktree of the work.                                                                                                                        |
-| `work:decide`  | HTTP API       | When approved, merges the pull request and pulls the root branch. When rejected, closes the pull request.                                                                            |
+| Event          | Raised by      | What its handler does                                                                                                                                                                                        |
+| -------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `work:submit`  | HTTP API       | Finds the workflow, creates the task graph, creates the worktree of the work from the root branch and writes the work and the tasks in it, then starts the tasks that are ready.                             |
+| `worker:ended` | Worker manager | Records the result of the task: done, or failed with an `error`. Starts the tasks that are ready now. When all the tasks are done, asks the worker manager to merge the final tasks.                         |
+| `merger:ended` | Worker manager | Opens the pull request, and removes the worktree of the work.                                                                                                                                                |
+| `work:decide`  | HTTP API       | When approved, merges the pull request, pulls the root branch and deletes all the branches of the work. When rejected, closes the pull request, creates the record of the work and deletes all the branches. |
 
 The names of the events are a proposal.
 
@@ -127,19 +131,22 @@ A handler follows the two rules of `engineloop.md`:
    remote.
 3. **Propose.** When all the tasks are done, the work is `PROPOSED`. The merge
    agent merges the branches of the final tasks into the worktree of the work.
-   The engine pushes its branch, and opens a pull request on GitHub. The
-   description of the pull request is a Markdown text that holds the DOD
-   checklists of the tasks. GitHub is the only forge that is supported for now.
+   The engine pushes its branch, and opens a pull request. The description of
+   the pull request is a Markdown text that holds the DOD checklists of the
+   tasks.
 4. **Decide.** The approver reviews the work in the pull request, and sends the
    decision to the API: approved or rejected. The decision is not stored: the
    merge of the pull request into the root branch is the approval, and the git
    history keeps it. So the work and the engine stay clean, and approving is one
    atomic action, with nothing else to update. If the work is rejected, the
-   engine closes the pull request and keeps the branch. A rejected work is
-   final: to try again, a new work is submitted.
+   engine closes the pull request, creates a record of the work in the runtime
+   storage, and deletes all the branches of the work. A rejected work is final:
+   to try again, a new work is submitted.
 5. **Merge.** When the work is approved, the engine merges the pull request into
    the root branch, as rebase and squash. This merge is the approval. The engine
-   then pulls the root branch, so the root workspace has the result.
+   then pulls the root branch, so the root workspace has the result, and deletes
+   all the branches of the work (its own branch and the branches of its tasks),
+   so that they do not pile up.
 
 A task is not run again. If its worker fails (the process fails, it is killed
 because it runs too long, or its result does not match the schema), the whole
@@ -170,7 +177,6 @@ status" in `data-struct.md`).
 
 ## Known issues
 
-- GitHub is the only forge that is supported.
 - One event is processed at a time, for all the works. A handler that works
   slowly makes all the works wait.
 

@@ -12,6 +12,9 @@ The platform that the engine builds on (see `engine.md`).
 - A remote branch keeps the results.
 - A pull request is the way a work is approved.
 - The merge of the pull request records the result.
+- The engine reaches git and the forge through a git adapter, so that another
+  forge can be added later. For now only GitHub is supported, and it needs the
+  `gh` command line.
 
 #### Engine
 
@@ -176,6 +179,7 @@ sequenceDiagram
     participant Factory as EventFactory
     participant L as Loop
     participant Git
+    participant Runtime as Runtime storage
 
     Approver->>API: approve or reject
     API->>Factory: create decision event
@@ -190,8 +194,14 @@ sequenceDiagram
         Git-->>L: ack
         L->>Git: pull root
         Git-->>L: ack
+        L->>Git: delete branches
+        Git-->>L: ack
     else rejected
         L->>Git: close PR
+        Git-->>L: ack
+        L->>Runtime: create record
+        Runtime-->>L: ack
+        L->>Git: delete branches
         Git-->>L: ack
     end
     destroy Event
