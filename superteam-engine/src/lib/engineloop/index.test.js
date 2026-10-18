@@ -12,7 +12,7 @@ const NOTIFICATIONS = ["event:done", "event:retry", "event:error"];
 // loop of Node so that the test never spins.
 async function setup(options = {}) {
   const baseDir = await mkdtemp(path.join(tmpdir(), "engineloop-i-"));
-  const root = path.join(baseDir, ".superteam", ".e");
+  const root = path.join(baseDir, ".superteam", ".r", "engineloop");
   const dir = (name) => path.join(root, name);
   const sleeps = [];
   const loop = createEngineLoop({

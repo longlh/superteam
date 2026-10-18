@@ -74,6 +74,20 @@ that is written back by an entity that refers to it, and the references between
 entities never form a circle. So it is rare that more than one actor writes the
 same entity.
 
+## Roles
+
+A role names a job. There are two kinds of role (see the principles in
+`architecture.md`):
+
+- **The roles of the engine:** the merger and the approver. The engine defines
+  them.
+- **The roles of the project:** such as the developer and the business analyst.
+  The project defines them.
+
+The fields `WORKFLOW_STEP.role`, `TASK.assignee` and `WORKFLOW.canApprove` hold
+the names of roles. A job of a role can be done by a person or by an AI. So the
+approver is a person or a bot.
+
 ## Derived status
 
 These statuses are not stored. They are derived from the fields of the entities.

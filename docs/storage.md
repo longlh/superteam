@@ -90,5 +90,3 @@ These are not decided yet.
 2. **The identity.** The format of `id` for a work and a task: a counter, a
    random id, or a slug. The path comes from it. The `id` of an artifact is
    decided (see "Artifacts").
-3. **The folder of the engine loop.** `engineloop.md` and its code still use
-   `.superteam/.e/`. They have to move to `.superteam/.r/engineloop/`.

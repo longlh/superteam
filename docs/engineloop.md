@@ -20,16 +20,16 @@ subscribers.
 The queue needs three places:
 
 - **Queue:** where the events wait. It is file-based: each event is one JSON
-  file. Location: `.superteam/.e/queue/{order}.json`, where `{order}` is padded
-  with zeros to 6 digits, such as `000001.json`.
+  file. Location: `.superteam/.r/engineloop/queue/{order}.json`, where `{order}`
+  is padded with zeros to 6 digits, such as `000001.json`.
 - **Claim:** a temporary folder. The loop claims an event by moving its file
-  from the queue to this folder. Location: `.superteam/.e/claim/{id}.json`. The
-  folder has at most one file at any time, because the loop processes one event
-  at a time.
+  from the queue to this folder. Location:
+  `.superteam/.r/engineloop/claim/{id}.json`. The folder has at most one file at
+  any time, because the loop processes one event at a time.
 - **Dead letter queue (DLQ):** a folder for the events that cannot be processed:
   the events that no handler can process, and the events whose retries have
   reached the maximum number of attempts. Location:
-  `.superteam/.e/dlq/{id}.json`.
+  `.superteam/.r/engineloop/dlq/{id}.json`.
 
 ## Event
 

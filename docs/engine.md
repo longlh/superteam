@@ -101,12 +101,12 @@ handlers one at a time, in order, for all the works. So two events never change
 the state at the same time, and a step such as the pull request cannot be done
 twice by two events at the same time.
 
-| Event          | Raised by      | What its handler does                                                                                                                                                                                        |
-| -------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `work:assign`  | HTTP API       | Finds the workflow, creates the task graph, spawns the merger, which creates the worktree of the work from the root branch and writes the work in it, then starts the tasks that are ready.                  |
-| `worker:ended` | Worker manager | Records the result of the task: done, or failed with an `error`. Starts the tasks that are ready now. When all the tasks are done, asks the worker manager to merge the final tasks.                         |
-| `merger:ended` | Worker manager | Opens the pull request, and removes the worktree of the work.                                                                                                                                                |
-| `work:decide`  | HTTP API       | When approved, merges the pull request, pulls the root branch and deletes all the branches of the work. When rejected, closes the pull request, creates the record of the work and deletes all the branches. |
+| Event          | Raised by      | What its handler does                                                                                                                                                                                                                                                                                          |
+| -------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `work:assign`  | HTTP API       | Finds the workflow, creates the work record and the task graph in the runtime, spawns the merger, which creates the worktree of the work from the root branch and writes the work in it, then starts the tasks that are ready: the merger creates the worktree of each task, and the engine spawns its worker. |
+| `worker:ended` | Worker manager | Records the result of the task: done, or failed with an `error`. Starts the tasks that are ready now, as `work:assign` does. When all the tasks are done, asks the merger to merge the final tasks.                                                                                                            |
+| `merger:ended` | Worker manager | The merger has merged the final tasks and is killed. Opens the pull request, and removes the worktree of the work.                                                                                                                                                                                             |
+| `work:decide`  | HTTP API       | When approved, merges the pull request, pulls the root branch and deletes all the branches of the work. When rejected, closes the pull request, creates the record of the work and deletes all the branches.                                                                                                   |
 
 The names of the events are a proposal.
 

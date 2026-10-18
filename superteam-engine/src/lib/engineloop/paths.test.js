@@ -5,12 +5,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { clearTmp, ensurePaths, getPaths } from "./paths.js";
 
-test("the folders are under {baseDir}/.superteam/.e", () => {
+test("the folders are under {baseDir}/.superteam/.r/engineloop", () => {
   assert.deepEqual(getPaths("/base"), {
-    queue: "/base/.superteam/.e/queue",
-    claim: "/base/.superteam/.e/claim",
-    dlq: "/base/.superteam/.e/dlq",
-    tmp: "/base/.superteam/.e/tmp",
+    queue: "/base/.superteam/.r/engineloop/queue",
+    claim: "/base/.superteam/.r/engineloop/claim",
+    dlq: "/base/.superteam/.r/engineloop/dlq",
+    tmp: "/base/.superteam/.r/engineloop/tmp",
   });
 });
 
@@ -19,7 +19,7 @@ test("ensurePaths creates the missing folders, and can run twice", async () => {
   const paths = getPaths(baseDir);
   await ensurePaths(paths);
   await ensurePaths(paths);
-  const root = path.join(baseDir, ".superteam", ".e");
+  const root = path.join(baseDir, ".superteam", ".r", "engineloop");
   assert.deepEqual((await readdir(root)).sort(), [
     "claim",
     "dlq",

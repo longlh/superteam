@@ -147,6 +147,7 @@ are below it.
 
 A role of the engine. The approver reviews a work in its pull request, and sends
 the decision to the engine: the work is approved or rejected (see `engine.md`).
+Like any job, it is done by a person or by a bot.
 
 ### Interface layer
 

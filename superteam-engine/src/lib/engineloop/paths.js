@@ -1,9 +1,9 @@
 import { mkdir, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 
-// The folders of the module, all under {baseDir}/.superteam/.e.
+// The folders of the module, all under {baseDir}/.superteam/.r/engineloop.
 export function getPaths(baseDir) {
-  const root = path.join(baseDir, ".superteam", ".e");
+  const root = path.join(baseDir, ".superteam", ".r", "engineloop");
   return {
     queue: path.join(root, "queue"),
     claim: path.join(root, "claim"),
