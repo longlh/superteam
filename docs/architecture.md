@@ -50,6 +50,21 @@ Two rules:
 The system is `superteam`. It takes a work and gives back the output of the
 work, with a team of agents. An actor is a human.
 
+```mermaid
+flowchart LR
+    human(["Human<br/>Does any job of the system"])
+    superteam["superteam<br/>Takes a work, runs it with a team of agents,<br/>and gives back the output"]
+    claude["Claude<br/>Runs the AI agents"]
+    forge["Forge<br/>Where the results are kept"]
+
+    human -->|Uses| superteam
+    superteam -->|Notifies| human
+    superteam -->|Uses| claude
+    superteam -->|Uses| forge
+```
+
+## Container
+
 `superteam` is made of four parts:
 
 - **superteam engine:** manages the works and the worktrees, on files and on a
@@ -86,71 +101,41 @@ flowchart LR
     engine -->|Uses| forge
 ```
 
-## Container
-
-A container is something that runs or keeps data. The containers of `superteam`
-are below.
-
-```mermaid
-C4Container
-    title Containers of superteam
-
-    Person(assigner, "Assigner", "Assigns works. A person or an AI agent")
-    Container(skill, "Skill", "Claude skill", "Packages the MCP tools into one command")
-    Person(approver, "Approver", "Approves or rejects works. A person or an AI agent")
-    Container(mcp, "MCP server", "MCP", "An interface of the actors, a client of the HTTP API")
-    ContainerDb(runtime, "Runtime data", "Files, .superteam/.r", "The works, the tasks and their progress, the pids")
-    Container(engine, "Engine", "Process, HTTP API", "Takes a work, runs its tasks, and manages the workers")
-    Person(worker, "Worker", "Does one task in its worktree. A person or an AI agent")
-    Person(merger, "Merger", "Writes the work in its worktree and does the merges of a work. A person or an AI agent")
-    Container(claude, "Claude", "claude process", "Runs the AI agents of the Worker and the Merger. Spawned by the Engine")
-    System_Ext(git, "Git", "Worktrees and branches on the machine")
-    System_Ext(forge, "Forge", "Remote branches and pull requests. GitHub for now")
-
-    Rel(assigner, skill, "Runs or loads")
-    Rel(approver, skill, "Runs or loads")
-    Rel(assigner, engine, "Calls the API", "HTTP")
-    Rel(approver, engine, "Calls the API", "HTTP")
-    Rel(skill, mcp, "Calls the tools")
-    Rel(mcp, engine, "Requests", "HTTP")
-    Rel(engine, runtime, "Reads and writes")
-    Rel(engine, worker, "Assigns the job")
-    Rel(engine, merger, "Assigns the job")
-    Rel(engine, claude, "Spawns")
-    Rel(worker, claude, "Runs on")
-    Rel(merger, claude, "Runs on")
-    Rel(engine, git, "Pushes, pulls and deletes the branches, creates and removes the worktrees")
-    Rel(engine, forge, "Opens and merges the pull request", "gh")
-    Rel(git, forge, "Syncs the branches with")
-    Rel(worker, git, "Commits to its branch")
-    Rel(merger, git, "Writes the work and merges")
-
-    UpdateRelStyle(engine, runtime, $offsetX="-45", $offsetY="-15")
-    UpdateRelStyle(engine, git, $offsetX="-200", $offsetY="30")
-    UpdateRelStyle(engine, forge, $offsetX="-30", $offsetY="150")
-    UpdateRelStyle(engine, claude, $offsetX="-20", $offsetY="20")
-    UpdateRelStyle(merger, claude, $offsetX="-60", $offsetY="-10")
-    UpdateRelStyle(worker, git, $offsetX="20", $offsetY="10")
-    UpdateRelStyle(git, forge, $offsetX="30", $offsetY="-10")
-    UpdateLayoutConfig($c4ShapeInRow="2", $c4BoundaryInRow="1")
-```
-
 ## Component
 
 Each container is broken down into components below. The inside of a component
 is in its own document.
 
-| Container    | Component     | Job                                                                                                                                                                    | Document                       |
-| ------------ | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| Skill        | Skill         | The bridge between a prompt and the MCP tools. An actor runs it as a slash command, or an AI agent loads it on its own. It always goes through the MCP server.         | None yet                       |
-| MCP server   | MCP server    | An interface through which actors call the engine. It is only a client of the HTTP API: no logic or state of its own. It does not work when the engine is not running. | None yet                       |
-| Engine       | HTTP API      | The only door to the engine, at the level of the work.                                                                                                                 | `http-api.md`                  |
-| Engine       | Engine loop   | Gives the events of the engine to the handlers, one at a time.                                                                                                         | `engineloop.md`                |
-| Engine       | Handlers      | Do the next step of a work, one for each type of event.                                                                                                                | `engine.md`                    |
-| Engine       | Git adapter   | The way the engine reaches git and the forge, so that another forge can be added later. Only GitHub is supported for now, through the `gh` command line.               | `engine.md`                    |
-| Engine       | Agent manager | Spawns, watches and kills the `claude` processes that run the AI jobs of the Worker and the Merger.                                                                    | `spawn-worker.md`              |
-| Claude       | Claude        | The `claude` processes that the engine spawns to run the AI agents of the Worker and the Merger. A result comes back to the engine, not through the MCP server.        | `spawn-worker.md`              |
-| Runtime data | Runtime data  | The files of the engine under `.superteam/.r`: the works, the tasks and their progress, the pids.                                                                      | `storage.md`, `data-struct.md` |
+### superteam engine
+
+| Component        | Job                                                                                                                                                                                                                            | Document                       |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------ |
+| HTTP API         | The only door to the engine, at the level of the work.                                                                                                                                                                         | `http-api.md`                  |
+| Engine loop      | Gives the events of the engine to the handlers, one at a time.                                                                                                                                                                 | `engineloop.md`                |
+| Handlers         | Do the next step of a work, one for each type of event.                                                                                                                                                                        | `engine.md`                    |
+| Git adapter      | The way the engine reaches git and the forge, so that another forge can be added later.<br>Only GitHub is supported for now, through the `gh` command line.                                                                    | `engine.md`                    |
+| Runtime data     | The files of the engine under `.superteam/.r`: the works, the tasks and their progress, the pids.                                                                                                                              | `storage.md`, `data-struct.md` |
+| Persistence data | The files under `.superteam/.p` that are kept in git: the works, the workflows and the artifacts.<br>The root branch does not create them directly.<br>They are created as the result of merging the pull request of the work. | `storage.md`                   |
+
+### superteam connect
+
+| Component  | Job                                                                                                                                                                          | Document |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| Skill      | The bridge between a prompt and the MCP tools.<br>An actor runs it as a slash command, or an AI agent loads it on its own.<br>It always goes through the MCP server.         | None yet |
+| MCP server | An interface through which actors call the engine.<br>It is only a client of the HTTP API: no logic or state of its own.<br>It does not work when the engine is not running. | None yet |
+
+### superteam agents
+
+| Component      | Job                                                                                                                                           | Document          |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| Agent manager  | Spawns, watches and kills the `claude` processes that run the AI jobs of the Worker and the Merger.                                           | `spawn-worker.md` |
+| Claude process | The `claude` processes that run the AI agents of the Worker and the Merger.<br>A result comes back to the engine, not through the MCP server. | `spawn-worker.md` |
+
+### superteam notifier
+
+| Component   | Job                                                    | Document |
+| ----------- | ------------------------------------------------------ | -------- |
+| Google Chat | Sends the notifications to people through Google Chat. | None yet |
 
 ## Code
 
