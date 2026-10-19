@@ -14,12 +14,12 @@ The behavior below was checked with `claude` 2.1.300 (see "Checked behavior").
 - The result is validated against the JSON schema, and it is in the
   `structured_output` field of the JSON output. This is how the worker returns
   its result to the engine.
-- **The tools of the role must include `StructuredOutput`.** If the role lists
-  its `tools` and `StructuredOutput` is not one of them, the schema is not
-  applied, and nothing reports it: `structured_output` is `null`, the result is
-  free text, and the exit code is 0 with `is_error` false. The engine must treat
-  a `null` `structured_output` as a result that does not match the schema. A
-  role with no `tools` line is not limited, and it works.
+- **The tools of the role include `StructuredOutput`.** The Seed Skill puts it
+  there (see `seed-skill.md`). If a role lists its `tools` without it, the
+  schema is not applied, and nothing reports it: `structured_output` is `null`,
+  the result is free text, and the exit code is 0 with `is_error` false. The
+  engine must treat a `null` `structured_output` as a result that does not match
+  the schema. A role with no `tools` line is not limited, and it works.
 - **The status and the cost** are in the same JSON output: `is_error`, `subtype`
   and `terminal_reason` for the status, `num_turns`, `total_cost_usd`, and
   `usage` and `modelUsage` for the tokens and the cost of each model.

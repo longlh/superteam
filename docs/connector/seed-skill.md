@@ -7,37 +7,17 @@ the roles of Claude. It writes nothing else.
 
 - A person runs it, after the data of the project changes. It is not a part of
   the normal run of the engine.
-- Two commands use AI to create the records: `/superteam:def-role` creates the
-  roles, and `/superteam:def-process` creates the workflows.
-- A role is a record with these fields:
-
-  | Field          | Description                                                                         |
-  | -------------- | ----------------------------------------------------------------------------------- |
-  | `id`           | The name of the role: lowercase letters, digits, `-` and `_` only.                  |
-  | `description`  | What the role is responsible for.                                                   |
-  | `kind`         | `bot` or `human`.                                                                   |
-  | `instructions` | The file with the business instructions of the role: how this kind of member works. |
-  | `tools`        | The tools the role may use.                                                         |
-  | `model`        | The model that is suggested for the role.                                           |
-
-- Each role becomes an agent of Claude, in `.claude/agents/{role}.md`: the
-  record (`description`, `tools`, `model`) is combined with its `instructions`
-  file. The record does not depend on the format of Claude, and the skill is the
-  adapter from the record to that format.
-- The `tools` of a role must include `StructuredOutput`, or the result of its
-  worker is not validated (see `claude-process.md`).
-
-## Code
-
-The script that makes the agent files reads the JSON files directly. It does not
-use the engine or the MCP server.
-
-## Open questions
-
-These are not decided yet.
-
-1. **The records of the roles.** The fields above come from the draft schema.
-   The persistence data in `storage.md` has no entity for a role yet.
-2. **The `.gitignore`.** Runtime data under `.superteam/.r/` is not kept in git
-   (see `architecture.md`). Which part adds it to the `.gitignore` of the
-   project, if the skill does not?
+- Two commands use AI to create the config files: `/superteam:def-role` creates
+  the roles of Claude, and `/superteam:def-process` creates the workflows of the
+  engine.
+- A role is an agent file of Claude, `.claude/agents/{role}.md`, that the skill
+  writes directly. There is no record of the role in the storage. The file has
+  the fields of the format of Claude: `name`, `description`, `tools` and `model`
+  in its header, and the instructions of the role in its body.
+- A role of Claude is an AI agent. Whether a work or a task is done by a person
+  or by an AI is decided by the workflow, not by the role.
+- It always puts `StructuredOutput` in the `tools` of the agent file, so that
+  the result of the worker is validated (see `claude-process.md`).
+- It adds `.superteam/.r/` to the `.gitignore` of the project, because the
+  runtime data is not kept in git (see `architecture.md`). A line is added only
+  if it is missing, so running the skill again changes nothing.
