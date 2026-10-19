@@ -32,12 +32,12 @@
 The documents follow the C4 model. Each level zooms into one part of the level
 above it, and answers one question.
 
-| Level        | Documents                                                                     | Question                                                                                 | Does not hold                   |
-| ------------ | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------- |
-| 1. Context   | `architecture.md`                                                             | Who uses the system, and what outside the system does it depend on                       | The parts inside the system     |
-| 2. Container | `architecture.md`                                                             | What runs or keeps data (a process, a store), what are the principles, who talks to whom | The inside of a container       |
-| 3. Component | `engine.md`, `storage.md`, `data-struct.md`, `http-api.md`, `spawn-worker.md` | What are the parts inside one container, and what is the contract between them           | The inside of a module          |
-| 4. Code      | `engineloop.md`, `eventloop.md`                                               | How does an independent module work inside                                               | How the other components use it |
+| Level        | Documents                    | Question                                                                                 | Does not hold                   |
+| ------------ | ---------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------- |
+| 1. Context   | `architecture.md`            | Who uses the system, and what outside the system does it depend on                       | The parts inside the system     |
+| 2. Container | `architecture.md`            | What runs or keeps data (a process, a store), what are the principles, who talks to whom | The inside of a container       |
+| 3. Component | See the table in "Component" | What are the parts inside one container, and what is the contract between them           | The inside of a module          |
+| 4. Code      | See the table in "Code"      | How does an independent module work inside                                               | How the other components use it |
 
 Two rules:
 
@@ -149,3 +149,19 @@ is in its own document.
 | Engine       | Agent manager | Spawns, watches and kills the `claude` processes that run the AI jobs of the Worker and the Merger.                                                                    | `spawn-worker.md`              |
 | Claude       | Claude        | The `claude` processes that the engine spawns to run the AI agents of the Worker and the Merger. A result comes back to the engine, not through the MCP server.        | `spawn-worker.md`              |
 | Runtime data | Runtime data  | The files of the engine under `.superteam/.r`: the works, the tasks and their progress, the pids.                                                                      | `storage.md`, `data-struct.md` |
+
+## Code
+
+The inside of each component is in its own document.
+
+| Container    | Component     | Document        |
+| ------------ | ------------- | --------------- |
+| Skill        | Skill         | None yet        |
+| MCP server   | MCP server    | None yet        |
+| Engine       | HTTP API      | None yet        |
+| Engine       | Engine loop   | `engineloop.md` |
+| Engine       | Handlers      | None yet        |
+| Engine       | Git adapter   | None yet        |
+| Engine       | Agent manager | None yet        |
+| Claude       | Claude        | None yet        |
+| Runtime data | Runtime data  | None yet        |

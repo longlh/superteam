@@ -10,28 +10,16 @@ does not use the module of `eventloop.md`, which processes a queue of file
 writes. The other components use it through its queue, its handlers and its
 subscribers.
 
-## Queue
+## Component
+
+### Queue
 
 - Every event goes into a single queue. This includes the events from different
   callers at the same time.
 - An event is accepted into the queue, and the caller does not wait for it to be
   processed.
 
-The queue needs three places:
-
-- **Queue:** where the events wait. It is file-based: each event is one JSON
-  file. Location: `.superteam/.r/engineloop/queue/{order}.json`, where `{order}`
-  is padded with zeros to 6 digits, such as `000001.json`.
-- **Claim:** a temporary folder. The loop claims an event by moving its file
-  from the queue to this folder. Location:
-  `.superteam/.r/engineloop/claim/{id}.json`. The folder has at most one file at
-  any time, because the loop processes one event at a time.
-- **Dead letter queue (DLQ):** a folder for the events that cannot be processed:
-  the events that no handler can process, and the events whose retries have
-  reached the maximum number of attempts. Location:
-  `.superteam/.r/engineloop/dlq/{id}.json`.
-
-## Event
+### Event
 
 An event is immutable: once it is created it is never modified. An event has
 these fields:
@@ -61,23 +49,7 @@ The `payload` has two fields:
 The loop checks only that `type` is a string and that `data` is an object. What
 is inside `data` is the business of the handler.
 
-The loop comes with a factory that creates an event from a payload:
-
-- `order`: the maximum `order` plus one. The factory keeps this maximum in a
-  counter: the counter is set at the start (see "Life cycle"), and the factory
-  adds one to it each time it creates an event. When the queue is empty the
-  maximum is 0, so the `order` of an event always starts from 1. The `order` `0`
-  is never used for a new event: it is reserved for the events that go back to
-  the head of the queue, which are the event that is recovered at the start and
-  the event of a retry.
-- `createdAt`: `now()`.
-- `id`: a hash of `createdAt` and `order`.
-
-The factory writes an event atomically. It writes the file of the event to the
-temporary folder first, and when the write is finished it moves the file into
-the queue, so the loop never reads an event that is half written.
-
-## Handler
+### Handler
 
 A handler processes the events of one type. The caller registers it with the
 type, before the loop starts. A type has one handler.
@@ -98,7 +70,73 @@ The loop processes one event at a time, so a handler follows two rules:
 
 A handler can enqueue events.
 
-## Loop
+### Subscriber
+
+The loop has subscribers. A subscriber can subscribe to a notification of the
+loop, and the loop calls its subscribers when the notification fires. The loop
+does not know who its subscribers are. These notifications are not the events of
+the queue.
+
+| Notification  | Fired when                                                                  |
+| ------------- | --------------------------------------------------------------------------- |
+| `event:done`  | The handler of an event has succeeded (step 4 of "Loop").                   |
+| `event:retry` | The handler has failed, and the event is enqueued again (step 4 of "Loop"). |
+| `event:error` | The event has failed for good, and it goes to the DLQ.                      |
+
+Every notification carries the event. For a failed event (`event:retry` and
+`event:error`) it is the event with the error of this attempt added to `errors`,
+and the notification also carries `error`, the reason as text. The `event:done`
+notification also carries `time`, the time the event was done.
+
+### Public API
+
+```js
+const loop = createEngineLoop({ baseDir, maxAttempts, pollIntervalMs });
+
+loop.handle(type, handler); // registers the handler of a type
+loop.enqueue(payload); // Promise<event>: creates the event and puts it in the queue
+loop.subscribe(name, handler); // returns a function that unsubscribes
+await loop.start(); // runs the start stage, then the loop, and resolves after shutdown
+loop.shutdown(); // sets isShuttingDown to true
+```
+
+## Code
+
+### Queue storage
+
+The queue needs three places:
+
+- **Queue:** where the events wait. It is file-based: each event is one JSON
+  file. Location: `.superteam/.r/engineloop/queue/{order}.json`, where `{order}`
+  is padded with zeros to 6 digits, such as `000001.json`.
+- **Claim:** a temporary folder. The loop claims an event by moving its file
+  from the queue to this folder. Location:
+  `.superteam/.r/engineloop/claim/{id}.json`. The folder has at most one file at
+  any time, because the loop processes one event at a time.
+- **Dead letter queue (DLQ):** a folder for the events that cannot be processed:
+  the events that no handler can process, and the events whose retries have
+  reached the maximum number of attempts. Location:
+  `.superteam/.r/engineloop/dlq/{id}.json`.
+
+### Event factory
+
+The loop comes with a factory that creates an event from a payload:
+
+- `order`: the maximum `order` plus one. The factory keeps this maximum in a
+  counter: the counter is set at the start (see "Life cycle"), and the factory
+  adds one to it each time it creates an event. When the queue is empty the
+  maximum is 0, so the `order` of an event always starts from 1. The `order` `0`
+  is never used for a new event: it is reserved for the events that go back to
+  the head of the queue, which are the event that is recovered at the start and
+  the event of a retry.
+- `createdAt`: `now()`.
+- `id`: a hash of `createdAt` and `order`.
+
+The factory writes an event atomically. It writes the file of the event to the
+temporary folder first, and when the write is finished it moves the file into
+the queue, so the loop never reads an event that is half written.
+
+### Loop
 
 The loop claims the events from the queue and processes them one at a time, in
 order, so there is no race condition between the events.
@@ -132,7 +170,7 @@ An event is never retried, and goes to the DLQ at once with `event:error`, when:
 - No handler is registered for its `type`.
 - The error of the handler has `retryable` set to `false`.
 
-## Life cycle
+### Life cycle
 
 The loop has three stages:
 
@@ -162,37 +200,7 @@ The loop has three stages:
 `enqueue()` needs the start stage to be done. Before that it is rejected, so the
 counter is always right.
 
-## Subscriber
-
-The loop has subscribers. A subscriber can subscribe to a notification of the
-loop, and the loop calls its subscribers when the notification fires. The loop
-does not know who its subscribers are. These notifications are not the events of
-the queue.
-
-| Notification  | Fired when                                                        |
-| ------------- | ----------------------------------------------------------------- |
-| `event:done`  | The handler of an event has succeeded (step 4 above).             |
-| `event:retry` | The handler has failed, and the event is enqueued again (step 4). |
-| `event:error` | The event has failed for good, and it goes to the DLQ.            |
-
-Every notification carries the event. For a failed event (`event:retry` and
-`event:error`) it is the event with the error of this attempt added to `errors`,
-and the notification also carries `error`, the reason as text. The `event:done`
-notification also carries `time`, the time the event was done.
-
-## Public API
-
-```js
-const loop = createEngineLoop({ baseDir, maxAttempts, pollIntervalMs });
-
-loop.handle(type, handler); // registers the handler of a type
-loop.enqueue(payload); // Promise<event>: creates the event and puts it in the queue
-loop.subscribe(name, handler); // returns a function that unsubscribes
-await loop.start(); // runs the start stage, then the loop, and resolves after shutdown
-loop.shutdown(); // sets isShuttingDown to true
-```
-
-## Known issues
+### Known issues
 
 The loop is made for an internal tool. These limits are known and accepted:
 
