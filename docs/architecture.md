@@ -48,8 +48,8 @@ Two rules:
 ## Context
 
 The system is `superteam`. It takes a work and gives back the output of the
-work, with a team of workers. An actor is a person or an AI agent, in one of two
-roles: the assigner and the approver.
+work, with a team of workers. An actor is a person or an AI agent, in one of
+four roles: the assigner, the approver, the worker and the merger.
 
 ```mermaid
 C4Context
@@ -59,17 +59,25 @@ C4Context
     Person(approver, "Approver", "Approves or rejects works. A person or an AI agent")
     System(superteam, "superteam", "Takes a work, runs it with a team of workers, and gives back the output")
     System_Ext(git, "Git", "Keeps the worktrees and the branches on the machine")
-    System_Ext(claude, "Claude", "Runs the AI workers, signed in with the account of the user")
+    Person(worker, "Worker", "Does one task in its worktree. A person or an AI agent")
+    Person(merger, "Merger", "Writes the work in its worktree and does the merges of a work. A person or an AI agent")
+    System_Ext(claude, "Claude", "Runs the AI agents, signed in with the account of the user")
     System_Ext(forge, "Forge", "Keeps the remote branches and the pull requests. GitHub for now")
 
     Rel(assigner, superteam, "Assigns works")
     Rel(approver, superteam, "Approves or rejects works")
+    Rel(superteam, worker, "Assigns the job")
+    Rel(superteam, merger, "Assigns the job")
     Rel(superteam, git, "Keeps the results in", "git")
-    Rel(superteam, claude, "Spawns the workers", "claude process")
+    Rel(superteam, claude, "Spawns the AI agents", "claude process")
     Rel(superteam, forge, "Opens and merges the pull requests", "gh")
     Rel(git, forge, "Syncs the branches with")
 
     UpdateRelStyle(superteam, git, $offsetX="-70", $offsetY="-30")
+    UpdateRelStyle(superteam, worker, $offsetX="-45", $offsetY="-20")
+    UpdateRelStyle(superteam, merger, $offsetX="30", $offsetY="-30")
+    UpdateRelStyle(superteam, claude, $offsetX="-95", $offsetY="85")
+    UpdateRelStyle(superteam, forge, $offsetX="60", $offsetY="95")
     UpdateLayoutConfig($c4ShapeInRow="2", $c4BoundaryInRow="1")
 ```
 
@@ -89,8 +97,8 @@ C4Container
     ContainerDb(runtime, "Runtime data", "Files, .superteam/.r", "The works, the tasks and their progress, the pids")
     Container(engine, "Engine", "Process, HTTP API", "Takes a work, runs its tasks, and manages the workers")
     Container_Boundary(claude, "Claude: spawned by the Engine to run the AI jobs") {
-        Person(worker, "Worker", "Does one task in its worktree. A person or an AI agent")
-        Person(merger, "Merger", "Writes the work in its worktree and does the merges of a work. A person or an AI agent")
+        Person(worker, "Worker", "Does one task in its worktree. An AI agent")
+        Person(merger, "Merger", "Writes the work in its worktree and does the merges of a work. An AI agent")
     }
     System_Ext(git, "Git", "Worktrees and branches on the machine")
     System_Ext(forge, "Forge", "Remote branches and pull requests. GitHub for now")
