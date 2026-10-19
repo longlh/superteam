@@ -145,9 +145,7 @@ worker manager enqueues them (see "Engine loop" in `engine.md`).
 
 These are not decided yet.
 
-1. **The paths and the bodies.** Everything above is a proposal. The sequence
-   diagram of `architecture.md` names the field `payload.name` for the workflow,
-   and this document names it `workflow`.
+1. **The paths and the bodies.** Everything above is a proposal.
 2. **The id of a work.** The API answers with the `id` before the work exists,
    so the API creates it. Its format is open (a counter, a random id, or a
    slug), and the path of the work in the storage depends on it.

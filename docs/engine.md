@@ -86,7 +86,7 @@ worker ends, the worker manager enqueues an event.
 The merger is a role of the engine, and it is spawned like a worker. It is
 responsible for the whole unit of the work: it creates the worktree of the work
 and the worktrees of the tasks, writes the work, and does all the merges (see
-`architecture.md`). A role of the project is concrete when it is put to use: a
+`spawn-worker.md`). A role of the project is concrete when it is put to use: a
 developer, a designer, a business analyst. The failure of the merger is handled
 like the failure of a worker.
 
@@ -113,8 +113,8 @@ The names of the events are a proposal.
 A handler follows the two rules of `engineloop.md`:
 
 - **It does not wait for a long job.** It starts the job and returns. A worker,
-  or the merge agent, enqueues an event when it ends, and that event is
-  processed in its turn.
+  or the merger, enqueues an event when it ends, and that event is processed in
+  its turn.
 - **It can be done again.** An event is given at least once: if the engine stops
   in the middle of a handler, the event is processed again at the next start.
   Before a step the handler checks that the step is not done yet, so a step is
@@ -132,11 +132,10 @@ A handler follows the two rules of `engineloop.md`:
    the branch of the task it depends on, and the engine spawns a worker. The
    worker works only in its worktree, and its results are kept on its branch,
    which is on the remote.
-3. **Propose.** When all the tasks are done, the work is `PROPOSED`. The merge
-   agent merges the branches of the final tasks into the worktree of the work.
-   The engine pushes its branch, and opens a pull request. The description of
-   the pull request is a Markdown text that holds the DOD checklists of the
-   tasks.
+3. **Propose.** When all the tasks are done, the work is `PROPOSED`. The merger
+   merges the branches of the final tasks into the worktree of the work. The
+   engine pushes its branch, and opens a pull request. The description of the
+   pull request is a Markdown text that holds the DOD checklists of the tasks.
 4. **Decide.** The approver reviews the work in the pull request, and sends the
    decision to the API: approved or rejected. The decision is not stored: the
    merge of the pull request into the root branch is the approval, and the git
@@ -158,6 +157,80 @@ save the cost, and the tasks that have not started never start. A failed work is
 final, like a rejected one: to try again, a new work is assigned. A failed task
 is recorded as `completed` with an `error`, so it is `FAILED` (see "Derived
 status" in `data-struct.md`).
+
+## Sequence
+
+### Create and run a work
+
+```mermaid
+sequenceDiagram
+    actor Client
+    participant API as HTTP API
+    participant Loop as Engine loop
+    participant Handler
+    participant WM as Worker manager
+    participant Merger
+    participant Worker
+    participant Git
+    participant Runtime as Runtime state
+
+    Client->>API: assign a work
+    API->>Loop: enqueue work:assign
+    API-->>Client: 202 Accepted
+    Loop->>Handler: give work:assign
+    Handler->>Runtime: create work record and task graph
+    Handler->>WM: spawn merger
+    WM->>Merger: spawn
+    Merger->>Git: create worktree of the work, from root
+    Merger->>Git: write the work, commit
+    Merger-->>Handler: ack
+    loop for each task that is ready
+        Merger->>Git: create worktree of the task, from its dependency
+        Handler->>WM: spawn worker
+        WM->>Worker: spawn
+        Worker->>Git: write results, commit
+        Worker-->>WM: ended
+        WM->>Loop: enqueue worker:ended
+        WM->>Worker: kill
+        Loop->>Handler: give worker:ended
+        Handler->>Runtime: record the result
+        Handler->>Git: remove worktree of the task
+    end
+    Handler->>Merger: merge final tasks
+    Merger->>Git: merge into the worktree of the work
+    Merger-->>WM: ended
+    WM->>Loop: enqueue merger:ended
+    WM->>Merger: kill
+    Loop->>Handler: give merger:ended
+    Handler->>Git: push, create pull request
+    Handler->>Git: remove worktree of the work
+```
+
+### Approve or reject a work
+
+```mermaid
+sequenceDiagram
+    actor Approver
+    participant API as HTTP API
+    participant Loop as Engine loop
+    participant Handler
+    participant Git
+    participant Runtime as Runtime state
+
+    Approver->>API: approve or reject
+    API->>Loop: enqueue work:decide
+    API-->>Approver: 202 Accepted
+    Loop->>Handler: give work:decide
+    alt approved
+        Handler->>Git: merge pull request
+        Handler->>Git: pull root
+        Handler->>Git: delete branches
+    else rejected
+        Handler->>Git: close pull request
+        Handler->>Runtime: create record of the work
+        Handler->>Git: delete branches
+    end
+```
 
 ## Life cycle
 

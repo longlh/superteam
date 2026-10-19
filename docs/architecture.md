@@ -1,5 +1,22 @@
 # Architecture
 
+## Document levels
+
+The documents are in four levels. Each level answers one question.
+
+| Level           | Documents                                                                     | Question                                                                    | Does not hold                           |
+| --------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------- | --------------------------------------- |
+| 1. Architecture | `architecture.md`                                                             | What parts does the system have, what are the principles, who talks to whom | The detailed flows, event names, fields |
+| 2. Component    | `engine.md`, `storage.md`, `data-struct.md`, `http-api.md`, `spawn-worker.md` | What does each part do, and what is its contract with the other parts       | The inside of a module                  |
+| 3. Module       | `engineloop.md`, `eventloop.md`                                               | How does an independent module work inside                                  | How the other components use it         |
+| 4. Plan         | `*_plan.md`                                                                   | In what order is it built                                                   | Design decisions                        |
+
+Two rules:
+
+- A level does not repeat the details of the level below it. It points to the
+  document of that level.
+- A level does not contradict the level above it.
+
 ## Principles
 
 1. **Data has two kinds.**
@@ -34,35 +51,14 @@ The platform that the engine builds on (see `engine.md`).
 - A remote branch keeps the results.
 - A pull request is the way a work is approved.
 - The merge of the pull request records the result.
-- The engine reaches git and the forge through a git adapter, so that another
-  forge can be added later. For now only GitHub is supported, and it needs the
-  `gh` command line.
 
 #### Worktree
 
 A worktree is the environment where a job is done (see the principles). It has a
-branch of its own, where the result of the job is kept. There are two kinds of
-worktree, one for each unit of the work: the work and the task.
-
-|                    | Worktree of a work                                                                                                                                                                    | Worktree of a task                                                                                                                                                                           |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Unit               | One for each work.                                                                                                                                                                    | One for each task.                                                                                                                                                                           |
-| Based on           | The root branch.                                                                                                                                                                      | The branch of the task it depends on. A task with no dependency is based on the root branch. A task with more than one dependency is based on one of them, and the merger merges the others. |
-| Branch             | `works/{work_id}`                                                                                                                                                                     | `tasks/{work_id}/{task_id}`                                                                                                                                                                  |
-| Folder             | `.superteam/.r/worktrees/works/{work_id}`                                                                                                                                             | `.superteam/.r/worktrees/tasks/{work_id}/{task_id}`                                                                                                                                          |
-| Created            | When the work is assigned.                                                                                                                                                            | When the task starts.                                                                                                                                                                        |
-| Created by         | The merger.                                                                                                                                                                           | The merger.                                                                                                                                                                                  |
-| Managed by         | The merger. All the merges are done by this role: the merge of the tasks, and the last merge.                                                                                         | The merger creates it, and the job of the task is done in it.                                                                                                                                |
-| What is done in it | The merger writes the work, from its runtime record, and commits it on the branch. It merges the branches of the final tasks. The engine then pushes the branch for the pull request. | The job of the task, by a worker, a person or an AI.                                                                                                                                         |
-| Removed            | After the pull request is opened.                                                                                                                                                     | When the task ends.                                                                                                                                                                          |
-
-The folders of the worktrees are runtime data, so they are under
-`.superteam/.r`. The folder of a task is not inside the folder of its work: a
-folder inside a worktree would show up there as an untracked file.
-
-The branch of a worktree is kept after the worktree is removed, because it is
-merged later. All the branches of a work, its own and the branches of its tasks,
-are deleted when the work ends.
+branch of its own, where the result of the job is kept. There are two kinds, one
+for each unit of the work: the worktree of a work and the worktree of a task.
+The merger creates them, and their folders are runtime data, under
+`.superteam/.r` (see `spawn-worker.md`).
 
 #### Engine
 
@@ -71,19 +67,17 @@ the workflow logic and the runtime state: the tasks, their progress, and the
 workers. The results are kept in git.
 
 - It has no UI and runs on its own, without the MCP server.
-- It exposes an HTTP API and listens on localhost only. It is not exposed
-  outside the machine.
-- The API works only at the level of the work. The tasks, the workers and the
-  worktrees are the business of the engine.
-- Its main clients are the AI sessions running on the same machine.
-- An engine loop gives the events of the engine to the handlers, one at a time,
-  and a handler can be done again without doing a step twice (see
-  `engineloop.md`).
+- It exposes an HTTP API, and its main clients are the AI sessions running on
+  the same machine. The API works only at the level of the work (see
+  `http-api.md`).
+- The tasks, the workers and the worktrees are the business of the engine.
+- An engine loop gives the events of the engine to the handlers, one at a time
+  (see `engineloop.md`).
 - There is only one engine instance, in the root workspace. A workspace is a
   working directory.
 - The git worktrees created for workers have no engine.
 - It keeps its runtime state in local files, in `.superteam/.r`, and these are
-  not in git.
+  not in git (see `storage.md`).
 
 ### Worker layer
 
@@ -101,7 +95,8 @@ Defines a job by its capabilities and its responsibilities.
 
 #### Worker process
 
-A Claude process that runs one task: the way an AI does a task.
+A Claude process that runs one task: the way an AI does a task (see
+`spawn-worker.md`).
 
 - It is spawned and killed by the engine.
 - It loads the requirements of the task, the context and the role, then runs the
@@ -109,39 +104,18 @@ A Claude process that runs one task: the way an AI does a task.
 - It works only in the worktree of its task, and its result is kept on the
   branch of the task. So a person can take over the task from the same worktree
   and branch, and the reverse.
-- It returns its result to the engine as structured output defined by a JSON
-  schema. It does not go through the MCP server.
-- It can read the runtime data of the root branch in two ways, and the
-  architecture keeps both open: it reads the path in the root workspace
-  directly, or it calls a read API of the engine, which reads in the root.
-- What code can do is not left to the worker. The architecture has two ways to
-  give it that help, and keeps both open:
-  - A standalone script that the worker runs, such as the creation of an
-    artifact. It needs no engine: it works on the files and on git in the
-    worktree.
-  - A stateless API of the engine, which only computes for the worker. It keeps
-    no state, and the worker calls it over HTTP. There is no use case for it
-    yet.
+- It returns its result to the engine as structured output. It does not go
+  through the MCP server.
+- It can read the runtime data of the root branch (see `storage.md`).
 
-#### Merge agent
+#### Merger
 
-The merger: a role of the engine that does the git merges (see "Spawn worker").
-Like any job, it is done in a worktree, and the engine spawns it like a worker.
+A role of the engine that does the git merges. Like any job, it is done in a
+worktree, and the engine spawns it like a worker.
 
 The merger is one level below the root, and it is responsible for the whole unit
 of the work: the worktree of the work is its own, and the worktrees of the tasks
-are below it.
-
-- It creates the worktree of each task, based on the branch of the task it
-  depends on. When the task depends on more than one task, it merges the
-  branches of the other dependencies into the new branch, before the worker
-  runs.
-- It creates the worktree of the work, based on the root branch, and manages it.
-  All the merges of the work are its job: the merge of the tasks, and the last
-  merge. When the work is `PROPOSED`, it merges the branches of all the final
-  tasks of the work into the branch of the work.
-- The engine, not the merger, then pushes the branch of the work and opens the
-  pull request.
+are below it. All the merges of the work are its job (see `spawn-worker.md`).
 
 #### Approver
 
@@ -151,9 +125,11 @@ Like any job, it is done by a person or by a bot.
 
 ### Interface layer
 
+An actor is whoever uses the system through this layer: a user or an AI agent.
+
 #### MCP server
 
-The interface through which agents call the engine.
+The interface through which actors call the engine.
 
 - It is separate from the engine.
 - It is only a client of the engine's HTTP API: it holds no logic or state of
@@ -162,8 +138,8 @@ The interface through which agents call the engine.
 
 #### Skill
 
-The bridge between a prompt and the API: it makes it easier for users and AI
-agents to interact with the MCP server.
+The bridge between a prompt and the API: it makes it easier for actors to
+interact with the MCP server.
 
 - It packages the steps of calling the MCP tools into one command for users, and
   guides agents to use the tools in the right order.
@@ -173,111 +149,39 @@ agents to interact with the MCP server.
 
 ## Usage flow
 
+### Who talks to whom
+
 ```mermaid
 flowchart LR
-    User --> I1[Interface layer]
-    I1 --> E1[Engine]
-    E1 -->|spawn| W[Worker]
-    W --> E2[Engine]
-    E2 --> I2[Interface layer]
-    I2 --> User2[User]
+    Actor --> Skill --> MCP[MCP server]
+    MCP --> API
+    subgraph Engine
+        API[HTTP API]
+    end
+    Engine -->|spawn| Merger
+    Engine -->|spawn| Worker
+    Merger -->|worktrees, merges| Git
+    Worker -->|worktree, branch| Git
+    Engine -->|pull request, merge| Git
 ```
 
-## Sequence
+### The life of a work
 
-### Create and run a work
+The states are the derived statuses of a work (see "Derived status" in
+`data-struct.md`).
 
 ```mermaid
-sequenceDiagram
-    actor User
-    participant API as HTTP API
-    participant Factory as EventFactory
-    participant L as Loop
-    participant Workflow
-    participant Git
-
-    User->>API: create a work request
-    API->>Factory: create request event
-    create participant Event
-    Factory->>Event: create
-    Factory-->>API: ack
-    API-->>User: ack
-    L->>Event: claim
-    Event-->>L: event
-    L->>Workflow: find
-    Workflow-->>L: workflow
-    L->>L: create task graph
-    create participant Merger
-    L->>Merger: spawn
-    create participant WorkWorktree
-    Merger->>WorkWorktree: create from root
-    Merger->>WorkWorktree: write work
-    WorkWorktree-->>Merger: ack
-    Merger-->>L: ack
-    destroy Event
-    L-xEvent: delete
-    loop for each task
-        create participant TaskWorktree
-        Merger->>TaskWorktree: create from dependency
-        create participant Worker
-        L->>Worker: spawn
-        Worker->>Worker: do task
-        Worker->>TaskWorktree: write results
-        TaskWorktree-->>Worker: ack
-        Worker->>Git: commit
-        Git-->>Worker: ack
-        Worker-->>L: ack
-        destroy Worker
-        L-xWorker: kill
-        destroy TaskWorktree
-        L-xTaskWorktree: remove
-    end
-    L->>Merger: merge final tasks
-    Merger->>WorkWorktree: merge
-    WorkWorktree-->>Merger: ack
-    Merger-->>L: ack
-    destroy Merger
-    L-xMerger: kill
-    L->>Git: create PR
-    Git-->>L: ack
-    destroy WorkWorktree
-    L-xWorkWorktree: remove
+stateDiagram-v2
+    [*] --> OPEN: assigned
+    OPEN --> IN_PROGRESS: tasks created
+    IN_PROGRESS --> DONE: all tasks done
+    IN_PROGRESS --> FAILED: a task fails
+    DONE --> PROPOSED: pull request opened
+    PROPOSED --> APPROVED: pull request merged
+    PROPOSED --> REJECTED: pull request closed
+    FAILED --> [*]
+    APPROVED --> [*]
+    REJECTED --> [*]
 ```
 
-### Approve or reject a work
-
-```mermaid
-sequenceDiagram
-    actor Approver
-    participant API as HTTP API
-    participant Factory as EventFactory
-    participant L as Loop
-    participant Git
-    participant Runtime as Runtime storage
-
-    Approver->>API: approve or reject
-    API->>Factory: create decision event
-    create participant Event
-    Factory->>Event: create
-    Factory-->>API: ack
-    API-->>Approver: ack
-    L->>Event: claim
-    Event-->>L: event
-    alt approved
-        L->>Git: merge PR
-        Git-->>L: ack
-        L->>Git: pull root
-        Git-->>L: ack
-        L->>Git: delete branches
-        Git-->>L: ack
-    else rejected
-        L->>Git: close PR
-        Git-->>L: ack
-        L->>Runtime: create record
-        Runtime-->>L: ack
-        L->>Git: delete branches
-        Git-->>L: ack
-    end
-    destroy Event
-    L-xEvent: delete
-```
+The detailed flows are in "Sequence" of `engine.md`.

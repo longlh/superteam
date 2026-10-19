@@ -59,7 +59,7 @@ versioned.
 | `.superteam/.r/works/{id}.json`                | The record of a work.                                                                       |
 | `.superteam/.r/tasks/{work_id}/{task_id}.json` | A task, and its progress.                                                                   |
 | `.superteam/.r/workers/{pid}.pid`              | The pid of a worker process, one file for each worker.                                      |
-| `.superteam/.r/worktrees/`                     | The folders of the worktrees (see "Worktree" in `architecture.md`).                         |
+| `.superteam/.r/worktrees/`                     | The folders of the worktrees (see "Worktrees" in `spawn-worker.md`).                        |
 | `.superteam/.r/engineloop/`                    | The queue, the claim, the DLQ and the tmp folders of the engine loop (see `engineloop.md`). |
 
 - **The record of a work** holds the work as the client assigned it (title,
