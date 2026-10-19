@@ -5,7 +5,7 @@ project's own workflow.
 
 - Chat in Vietnamese; write all plugin files in English.
 - User is learning: explain step by step, only create files when asked.
-- Design docs (`docs/`): NEVER edit or write one before the user explicitly
+- Changes: NEVER edit or write a file of the project before the user explicitly
   approves the exact text. This is a hard rule, not a preference.
   - Step 1: show the exact text to write and where it goes. Step 2: end the
     turn. Step 3: edit only if the user's next message clearly says yes to that
