@@ -2,14 +2,18 @@
 
 ## Document levels
 
-The documents are in four levels. Each level answers one question.
+The documents follow the C4 model. Each level zooms into one part of the level
+above it, and answers one question.
 
-| Level           | Documents                                                                     | Question                                                                    | Does not hold                           |
-| --------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------- | --------------------------------------- |
-| 1. Architecture | `architecture.md`                                                             | What parts does the system have, what are the principles, who talks to whom | The detailed flows, event names, fields |
-| 2. Component    | `engine.md`, `storage.md`, `data-struct.md`, `http-api.md`, `spawn-worker.md` | What does each part do, and what is its contract with the other parts       | The inside of a module                  |
-| 3. Module       | `engineloop.md`, `eventloop.md`                                               | How does an independent module work inside                                  | How the other components use it         |
-| 4. Plan         | `*_plan.md`                                                                   | In what order is it built                                                   | Design decisions                        |
+| Level        | Documents                                                                     | Question                                                                                 | Does not hold                   |
+| ------------ | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------- |
+| 1. Context   | `architecture.md`                                                             | Who uses the system, and what outside the system does it depend on                       | The parts inside the system     |
+| 2. Container | `architecture.md`                                                             | What runs or keeps data (a process, a store), what are the principles, who talks to whom | The inside of a container       |
+| 3. Component | `engine.md`, `storage.md`, `data-struct.md`, `http-api.md`, `spawn-worker.md` | What are the parts inside one container, and what is the contract between them           | The inside of a module          |
+| 4. Code      | `engineloop.md`, `eventloop.md`                                               | How does an independent module work inside                                               | How the other components use it |
+
+The plans, `*_plan.md`, are not a level. They say in what order the system is
+built, and they hold no design decisions.
 
 Two rules:
 
@@ -45,83 +49,43 @@ Two rules:
 
 #### Git
 
-The platform that the engine builds on (see `engine.md`).
-
-- A worktree is an environment of its own for each job.
-- A remote branch keeps the results.
-- A pull request is the way a work is approved.
-- The merge of the pull request records the result.
+The platform that the engine builds on. It holds the worktrees, the branches,
+the pull requests and the merges (see `engine.md`).
 
 #### Worktree
 
-A worktree is the environment where a job is done (see the principles). It has a
-branch of its own, where the result of the job is kept. There are two kinds, one
-for each unit of the work: the worktree of a work and the worktree of a task.
-The merger creates them, and their folders are runtime data, under
-`.superteam/.r` (see `spawn-worker.md`).
+The environment where a job is done, with a branch of its own for the result
+(see `spawn-worker.md`).
 
 #### Engine
 
 The team lead: it takes a work, and gives back the output of the work. It owns
-the workflow logic and the runtime state: the tasks, their progress, and the
-workers. The results are kept in git.
+the workflow logic and the runtime state, and it exposes an HTTP API to its
+clients (see `engine.md`, `http-api.md`, `engineloop.md`, `storage.md`).
 
 - It has no UI and runs on its own, without the MCP server.
-- It exposes an HTTP API, and its main clients are the AI sessions running on
-  the same machine. The API works only at the level of the work (see
-  `http-api.md`).
-- The tasks, the workers and the worktrees are the business of the engine.
-- An engine loop gives the events of the engine to the handlers, one at a time
-  (see `engineloop.md`).
-- There is only one engine instance, in the root workspace. A workspace is a
-  working directory.
-- The git worktrees created for workers have no engine.
-- It keeps its runtime state in local files, in `.superteam/.r`, and these are
-  not in git (see `storage.md`).
 
 ### Worker layer
 
 #### Role
 
-Defines a job by its capabilities and its responsibilities.
-
-- It does the work that the engine coordinates.
-- A job can be done by a person or by an AI, and the two are interchangeable.
-- There are two kinds of role:
-  - **The roles of the engine:** the merger and the approver.
-  - **The roles of the project:** the project defines them, such as the
-    developer, the designer and the business analyst. A role is concrete when it
-    is put to use.
+Defines a job by its capabilities and its responsibilities. There are roles of
+the engine and roles of the project (see the principles).
 
 #### Worker process
 
-A Claude process that runs one task: the way an AI does a task (see
-`spawn-worker.md`).
-
-- It is spawned and killed by the engine.
-- It loads the requirements of the task, the context and the role, then runs the
-  task.
-- It works only in the worktree of its task, and its result is kept on the
-  branch of the task. So a person can take over the task from the same worktree
-  and branch, and the reverse.
-- It returns its result to the engine as structured output. It does not go
-  through the MCP server.
-- It can read the runtime data of the root branch (see `storage.md`).
+A Claude process that runs one task: the way an AI does a task. It is spawned
+and killed by the engine, and it returns its result to the engine, not through
+the MCP server (see `spawn-worker.md`).
 
 #### Merger
 
-A role of the engine that does the git merges. Like any job, it is done in a
-worktree, and the engine spawns it like a worker.
-
-The merger is one level below the root, and it is responsible for the whole unit
-of the work: the worktree of the work is its own, and the worktrees of the tasks
-are below it. All the merges of the work are its job (see `spawn-worker.md`).
+A role of the engine that does the git merges of a work (see `spawn-worker.md`).
 
 #### Approver
 
-A role of the engine. The approver reviews a work in its pull request, and sends
-the decision to the engine: the work is approved or rejected (see `engine.md`).
-Like any job, it is done by a person or by a bot.
+A role of the engine that reviews a work in its pull request and decides whether
+it is approved or rejected (see `engine.md`).
 
 ### Interface layer
 
@@ -133,19 +97,15 @@ The interface through which actors call the engine.
 
 - It is separate from the engine.
 - It is only a client of the engine's HTTP API: it holds no logic or state of
-  its own.
+  its own (see `http-api.md`).
 - It does not work normally when the engine is not running.
 
 #### Skill
 
 The bridge between a prompt and the API: it makes it easier for actors to
-interact with the MCP server.
-
-- It packages the steps of calling the MCP tools into one command for users, and
-  guides agents to use the tools in the right order.
-- It is a Claude skill, so it can be used in two ways: a user runs it as a slash
-  command, or an agent loads it on its own when its meaning matches the task.
-- It always goes through the MCP server. It never calls the engine directly.
+interact with the MCP server. A user runs it as a slash command, or an agent
+loads it on its own. It always goes through the MCP server, and never calls the
+engine directly.
 
 ## Usage flow
 
@@ -164,8 +124,3 @@ flowchart LR
     Worker -->|worktree, branch| Git
     Engine -->|pull request, merge| Git
 ```
-
-### The life of a work
-
-The life of a work, from assigned to its final result, is in "Life of a work" of
-`data-struct.md`. The detailed flows are in "Sequence" of `engine.md`.
