@@ -213,5 +213,3 @@ These are not decided yet.
    shutdown, and `enqueue()` is rejected before the start stage is done. The
    engine needs a way to know that the start stage is done, to open the API at
    the right time.
-2. **The module of `eventloop.md`.** The engine does not use it. Is it kept as
-   an independent module, or removed?

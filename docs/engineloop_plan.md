@@ -2,10 +2,6 @@
 
 The plan to implement the module described in `engineloop.md`.
 
-The module is new. It is written from scratch, and it does not import or change
-the module of `eventloop.md`: the two are independent. The structure is the same
-because it worked well, but each file is a new file.
-
 ## 1. Scope
 
 - In scope: the engine loop module, as `engineloop.md` describes it: the queue,

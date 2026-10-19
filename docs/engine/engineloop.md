@@ -5,10 +5,8 @@ event is a request or a fact about a work: a work is assigned, a worker has
 ended, a work is approved. The loop does not know what an event means. It gives
 each event to the handler of its type.
 
-It is an independent module: it does not depend on any other component, and it
-does not use the module of `eventloop.md`, which processes a queue of file
-writes. The other components use it through its queue, its handlers and its
-subscribers.
+It is an independent module: it does not depend on any other component. The
+other components use it through its queue, its handlers and its subscribers.
 
 ## Component
 

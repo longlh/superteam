@@ -24,6 +24,11 @@ The behavior below was checked with `claude` 2.1.300 (see "Checked behavior").
   and `terminal_reason` for the status, `num_turns`, `total_cost_usd`, and
   `usage` and `modelUsage` for the tokens and the cost of each model.
   `--max-budget-usd` puts a limit on the cost of one run.
+- **The plan of the account** decides what a run costs. The process uses the
+  account that is signed in, in the config folder of `claude`. With an API
+  account, a run costs money, and the cost is `total_cost_usd` of the JSON
+  output. With a subscription account, a run uses up the usage limit of the
+  plan.
 - The process inherits the environment and signs in with the user's own account,
   so it needs no API key.
 - The session of the process starts the MCP servers of the project, and of the
@@ -49,11 +54,3 @@ Each run was a one-line task on `haiku`, in a new project with a few test roles.
 | Is the schema applied with `--agent`?                   | Only if the tools of the role allow it. With `tools: Read` it is not applied (`structured_output` is `null`). With no `tools` line, or with `tools: Read, StructuredOutput`, it is applied. |
 | Does the session load the project and the plugin again? | Yes. A server in the `.mcp.json` of the project, and a server in a plugin loaded with `--plugin-dir`, are both started by the session, with the environment of the engine.                  |
 | What does a run cost?                                   | From 0.0004 to 0.005 USD, in 1 to 3 turns and 1 to 4 seconds. The cost is `total_cost_usd` of the JSON output.                                                                              |
-
-## Open questions
-
-These are not decided yet.
-
-1. **The limit of the account.** `total_cost_usd` is an estimate at list price
-   (`costBasis` is `list` in `modelUsage`). Whether the run counts against the
-   usage limit of the account is not checked.
