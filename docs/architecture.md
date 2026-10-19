@@ -51,6 +51,9 @@ The system is `superteam`. It takes a work and gives back the output of the
 work, with a team of workers. An actor is a person or an AI agent, in one of
 four roles: the assigner, the approver, the worker and the merger.
 
+Note: at present, the worker and the merger are not supported as a person. Only
+an AI agent is supported.
+
 ```mermaid
 C4Context
     title System context of superteam
