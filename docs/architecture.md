@@ -65,7 +65,7 @@ flowchart LR
 
 ## Container
 
-`superteam` is made of four parts:
+`superteam` is made of five parts:
 
 - **Engine:** manages the works and the worktrees, on files and on a git forge.
   It talks with the other parts through an HTTP API and pub/sub.
@@ -74,6 +74,8 @@ flowchart LR
   talks with the engine through the HTTP API and pub/sub.
 - **Notifier:** sends the notifications to people. It talks with the engine
   through the HTTP API and pub/sub.
+- **Storage:** keeps the data of the system: the runtime data and the
+  persistence data.
 
 ```mermaid
 flowchart LR
@@ -84,22 +86,28 @@ flowchart LR
         engine["Engine<br/>Manages the works<br/>and keeps their results"]
         agents["Agents<br/>Manages the AI agents that<br/>do the work in place of people"]
         notifier["Notifier<br/>Sends the notifications to people"]
+        storage["Storage<br/>Keeps the runtime data<br/>and the persistence data"]
     end
 
     claude["Claude<br/>Runs the AI agents"]
+    git["Git<br/>Keeps the worktrees and<br/>the branches on the machine"]
     forge["Forge<br/>Where the results are kept"]
 
     human -->|Does the jobs| connect
     connect -->|Requests| engine
     connect -->|Configures| claude
-    connect -->|Configures| engine
+    connect -->|Configures| storage
     agents -->|Requests| engine
     engine -->|Informs| agents
     notifier -->|Requests| engine
     engine -->|Informs| notifier
+    engine -->|Keeps data in| storage
+    storage -->|Syncs with| git
+    git -->|Syncs with| forge
     notifier -->|Notifies| human
     agents -->|Uses| claude
     engine -->|Uses| forge
+    engine -->|Uses| git
 ```
 
 ## Component
@@ -109,14 +117,13 @@ is in its own document.
 
 ### Engine
 
-| Component        | Job                                                                                                                                                                                                                            | Document                       |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------ |
-| HTTP API         | The only door to the engine, at the level of the work.                                                                                                                                                                         | `http-api.md`                  |
-| Engine loop      | Gives the events of the engine to the handlers, one at a time.                                                                                                                                                                 | `engineloop.md`                |
-| Handlers         | Do the next step of a work, one for each type of event.                                                                                                                                                                        | `engine.md`                    |
-| Git adapter      | The way the engine reaches git and the forge, so that another forge can be added later.<br>Only GitHub is supported for now, through the `gh` command line.                                                                    | `engine.md`                    |
-| Runtime data     | The files of the engine under `.superteam/.r`: the works, the tasks and their progress, the pids.                                                                                                                              | `storage.md`, `data-struct.md` |
-| Persistence data | The files under `.superteam/.p` that are kept in git: the works, the workflows and the artifacts.<br>The root branch does not create them directly.<br>They are created as the result of merging the pull request of the work. | `storage.md`                   |
+| Component   | Job                                                                                                                                                         | Document        |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| HTTP API    | The only door to the engine, at the level of the work.                                                                                                      | `http-api.md`   |
+| Pub/Sub     | The way the engine informs the other parts about its events, such as the Agents and the Notifier.                                                           | None yet        |
+| Engine loop | Gives the events of the engine to the handlers, one at a time.                                                                                              | `engineloop.md` |
+| Handlers    | Do the next step of a work, one for each type of event.                                                                                                     | `engine.md`     |
+| Git adapter | The way the engine reaches git and the forge, so that another forge can be added later.<br>Only GitHub is supported for now, through the `gh` command line. | `engine.md`     |
 
 ### Connector
 
@@ -139,6 +146,13 @@ is in its own document.
 | ----------- | ------------------------------------------------------ | -------- |
 | Google Chat | Sends the notifications to people through Google Chat. | None yet |
 
+### Storage
+
+| Component        | Job                                                                                                                                                                                                                            | Document                       |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------ |
+| Runtime data     | The files of the engine under `.superteam/.r`: the works, the tasks and their progress, the pids.                                                                                                                              | `storage.md`, `data-struct.md` |
+| Persistence data | The files under `.superteam/.p` that are kept in git: the works, the workflows and the artifacts.<br>The root branch does not create them directly.<br>They are created as the result of merging the pull request of the work. | `storage.md`                   |
+
 ## Code
 
 The inside of each component is in its own document.
@@ -146,14 +160,15 @@ The inside of each component is in its own document.
 | Container | Component        | Document        |
 | --------- | ---------------- | --------------- |
 | Engine    | HTTP API         | None yet        |
+| Engine    | Pub/Sub          | None yet        |
 | Engine    | Engine loop      | `engineloop.md` |
 | Engine    | Handlers         | None yet        |
 | Engine    | Git adapter      | None yet        |
-| Engine    | Runtime data     | None yet        |
-| Engine    | Persistence data | None yet        |
 | Connector | Seed Skill       | None yet        |
 | Connector | Operation Skill  | None yet        |
 | Connector | MCP server       | None yet        |
 | Agents    | Agent manager    | None yet        |
 | Agents    | Claude process   | None yet        |
 | Notifier  | Google Chat      | None yet        |
+| Storage   | Runtime data     | None yet        |
+| Storage   | Persistence data | None yet        |
