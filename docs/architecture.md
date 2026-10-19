@@ -48,40 +48,42 @@ Two rules:
 ## Context
 
 The system is `superteam`. It takes a work and gives back the output of the
-work, with a team of workers. An actor is a person or an AI agent, in one of
-four roles: the assigner, the approver, the worker and the merger.
+work, with a team of agents. An actor is a human.
 
-Note: at present, the worker and the merger are not supported as a person. Only
-an AI agent is supported.
+`superteam` is made of four parts:
+
+- **superteam engine:** manages the works and the worktrees, on files and on a
+  git forge. It talks with the other parts through an HTTP API and pub/sub.
+- **superteam connect:** lets people use the system through their AI tools.
+- **superteam agents:** manages the AI agents that do the work in place of
+  people. It talks with the engine through the HTTP API and pub/sub.
+- **superteam notifier:** sends the notifications to people. It talks with the
+  engine through the HTTP API and pub/sub.
 
 ```mermaid
-C4Context
-    title System context of superteam
+flowchart LR
+    human(["Human<br/>Does any job of the system,<br/>and receives the notifications"])
 
-    Person(assigner, "Assigner", "Assigns works. A person or an AI agent")
-    Person(approver, "Approver", "Approves or rejects works. A person or an AI agent")
-    System(superteam, "superteam", "Takes a work, runs it with a team of workers, and gives back the output")
-    System_Ext(git, "Git", "Keeps the worktrees and the branches on the machine")
-    Person(worker, "Worker", "Does one task in its worktree. A person or an AI agent")
-    Person(merger, "Merger", "Writes the work in its worktree and does the merges of a work. A person or an AI agent")
-    System_Ext(claude, "Claude", "Runs the AI agents, signed in with the account of the user")
-    System_Ext(forge, "Forge", "Keeps the remote branches and the pull requests. GitHub for now")
+    subgraph superteam["superteam"]
+        connect["superteam connect<br/>Lets people use the system<br/>through their AI tools"]
+        engine["superteam engine<br/>Manages the works<br/>and keeps their results"]
+        agents["superteam agents<br/>Manages the AI agents that<br/>do the work in place of people"]
+        notifier["superteam notifier<br/>Sends the notifications to people"]
+    end
 
-    Rel(assigner, superteam, "Assigns works")
-    Rel(approver, superteam, "Approves or rejects works")
-    Rel(superteam, worker, "Assigns the job")
-    Rel(superteam, merger, "Assigns the job")
-    Rel(superteam, git, "Keeps the results in", "git")
-    Rel(superteam, claude, "Spawns the AI agents", "claude process")
-    Rel(superteam, forge, "Opens and merges the pull requests", "gh")
-    Rel(git, forge, "Syncs the branches with")
+    claude["Claude<br/>Runs the AI agents"]
+    forge["Forge<br/>Where the results are kept"]
 
-    UpdateRelStyle(superteam, git, $offsetX="-70", $offsetY="-30")
-    UpdateRelStyle(superteam, worker, $offsetX="-45", $offsetY="-20")
-    UpdateRelStyle(superteam, merger, $offsetX="30", $offsetY="-30")
-    UpdateRelStyle(superteam, claude, $offsetX="-95", $offsetY="85")
-    UpdateRelStyle(superteam, forge, $offsetX="60", $offsetY="95")
-    UpdateLayoutConfig($c4ShapeInRow="2", $c4BoundaryInRow="1")
+    human -->|Does the jobs| connect
+    human -->|Configures| agents
+    connect -->|Requests| engine
+    agents -->|Requests| engine
+    engine -->|Informs| agents
+    notifier -->|Requests| engine
+    engine -->|Informs| notifier
+    notifier -->|Notifies| human
+    agents -->|Uses| claude
+    engine -->|Uses| forge
 ```
 
 ## Container
