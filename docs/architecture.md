@@ -77,7 +77,7 @@ C4Container
     Person(assigner, "Assigner", "Assigns works. A person or an AI agent")
     Container(skill, "Skill", "Claude skill", "Packages the MCP tools into one command")
     Person(approver, "Approver", "Approves or rejects works. A person or an AI agent")
-    Container(mcp, "MCP server", "MCP", "The interface of the actors, a client of the HTTP API")
+    Container(mcp, "MCP server", "MCP", "An interface of the actors, a client of the HTTP API")
     ContainerDb(runtime, "Runtime data", "Files, .superteam/.r", "The works, the tasks and their progress, the pids")
     Container(engine, "Engine", "Process, HTTP API", "Takes a work, runs its tasks, and manages the workers")
     Container_Boundary(claude, "Claude: spawned by the Engine to run the AI jobs") {
@@ -88,6 +88,8 @@ C4Container
 
     Rel(assigner, skill, "Runs or loads")
     Rel(approver, skill, "Runs or loads")
+    Rel(assigner, engine, "Calls the API", "HTTP")
+    Rel(approver, engine, "Calls the API", "HTTP")
     Rel(skill, mcp, "Calls the tools")
     Rel(mcp, engine, "Requests", "HTTP")
     Rel(engine, runtime, "Reads and writes")
@@ -109,13 +111,14 @@ C4Container
 Each container is broken down into components below. The inside of a component
 is in its own document.
 
-| Container    | Component      | Job                                                                                                                                                                     | Document                       |
-| ------------ | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| Skill        | Skill          | The bridge between a prompt and the MCP tools. A user runs it as a slash command, or an agent loads it. It always goes through the MCP server.                          | None yet                       |
-| MCP server   | MCP server     | The interface through which actors call the engine. It is only a client of the HTTP API: no logic or state of its own. It does not work when the engine is not running. | None yet                       |
-| Engine       | HTTP API       | The only door to the engine, at the level of the work.                                                                                                                  | `http-api.md`                  |
-| Engine       | Engine loop    | Gives the events of the engine to the handlers, one at a time.                                                                                                          | `engineloop.md`                |
-| Engine       | Handlers       | Do the next step of a work, one for each type of event.                                                                                                                 | `engine.md`                    |
-| Engine       | Worker manager | Spawns, watches and kills the `claude` processes that run the AI jobs of the Worker and the Merger.                                                                     | `spawn-worker.md`              |
-| Claude       | Claude         | The `claude` processes that the engine spawns to run the AI jobs of the Worker and the Merger. A result comes back to the engine, not through the MCP server.           | `spawn-worker.md`              |
-| Runtime data | Runtime data   | The files of the engine under `.superteam/.r`: the works, the tasks and their progress, the pids.                                                                       | `storage.md`, `data-struct.md` |
+| Container    | Component         | Job                                                                                                                                                                    | Document                       |
+| ------------ | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| Skill        | Skill             | The bridge between a prompt and the MCP tools. A user runs it as a slash command, or an agent loads it. It always goes through the MCP server.                         | None yet                       |
+| MCP server   | MCP server        | An interface through which actors call the engine. It is only a client of the HTTP API: no logic or state of its own. It does not work when the engine is not running. | None yet                       |
+| Engine       | HTTP API          | The only door to the engine, at the level of the work.                                                                                                                 | `http-api.md`                  |
+| Engine       | Engine loop       | Gives the events of the engine to the handlers, one at a time.                                                                                                         | `engineloop.md`                |
+| Engine       | Handlers          | Do the next step of a work, one for each type of event.                                                                                                                | `engine.md`                    |
+| Engine       | Worker manager    | Spawns, watches and kills the `claude` processes that run the AI jobs of the Worker and the Merger.                                                                    | `spawn-worker.md`              |
+| Claude       | Worker (AI Agent) | Does one task in its worktree. A result comes back to the engine, not through the MCP server.                                                                          | `spawn-worker.md`              |
+| Claude       | Merger (AI Agent) | Creates the worktrees of a work and does all its merges.                                                                                                               | `spawn-worker.md`              |
+| Runtime data | Runtime data      | The files of the engine under `.superteam/.r`: the works, the tasks and their progress, the pids.                                                                      | `storage.md`, `data-struct.md` |
