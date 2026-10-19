@@ -12,14 +12,35 @@ above it, and answers one question.
 | 3. Component | `engine.md`, `storage.md`, `data-struct.md`, `http-api.md`, `spawn-worker.md` | What are the parts inside one container, and what is the contract between them           | The inside of a module          |
 | 4. Code      | `engineloop.md`, `eventloop.md`                                               | How does an independent module work inside                                               | How the other components use it |
 
-The plans, `*_plan.md`, are not a level. They say in what order the system is
-built, and they hold no design decisions.
-
 Two rules:
 
 - A level does not repeat the details of the level below it. It points to the
   document of that level.
 - A level does not contradict the level above it.
+
+## Context
+
+The system is `superteam`. It takes a work and gives back the output of the
+work, with a team of workers. An actor is a user or an AI agent.
+
+```mermaid
+C4Context
+    title System context of superteam
+
+    Person(user, "User", "Assigns works, and approves or rejects them")
+    Person(agent, "AI agent", "A Claude session that uses the system")
+    System(superteam, "superteam", "Takes a work, runs it with a team of workers, and gives back the output")
+    System_Ext(git, "Git and GitHub", "Keeps the worktrees, the branches, the pull requests and the merges")
+    System_Ext(claude, "Claude", "Runs the AI workers, signed in with the account of the user")
+
+    Rel(user, superteam, "Uses")
+    Rel(agent, superteam, "Uses")
+    Rel(superteam, git, "Keeps the results in", "git, gh")
+    Rel(superteam, claude, "Spawns the workers", "claude process")
+
+    UpdateRelStyle(superteam, git, $offsetX="-70", $offsetY="-30")
+    UpdateLayoutConfig($c4ShapeInRow="2", $c4BoundaryInRow="1")
+```
 
 ## Principles
 
