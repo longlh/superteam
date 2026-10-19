@@ -56,7 +56,7 @@ flowchart TD
   api["HTTP API<br/>the work level"]
   loop["Engine loop<br/>one event at a time"]
   handlers["Handlers<br/>one for each type of event"]
-  workers["Worker manager<br/>spawns, watches, kills"]
+  workers["Agent manager<br/>spawns, watches, kills"]
   runtime[("Runtime state<br/>local files")]
   git[("Git<br/>worktrees, branches, pull requests")]
 
@@ -70,19 +70,19 @@ flowchart TD
   workers -.->|enqueue: ended| loop
 ```
 
-| Part           | Job                                                                                                                                                           |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| HTTP API       | The only door to the engine. It listens on localhost only, and it works only at the level of the work. It turns a request into an event, and answers a query. |
-| Engine loop    | The module of `engineloop.md`: a queue of events and a loop that gives them to the handlers, one at a time, in order.                                         |
-| Handlers       | One for each type of event. A handler does the next step of a work (see "Engine loop").                                                                       |
-| Worker manager | Spawns the worker process of a task, watches it, and kills it (see `spawn-worker.md`). It does the same for the merger.                                       |
-| Runtime state  | The local files of the engine: the tasks and their progress, the works as they were assigned, the pids of the workers.                                        |
+| Part          | Job                                                                                                                                                           |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| HTTP API      | The only door to the engine. It listens on localhost only, and it works only at the level of the work. It turns a request into an event, and answers a query. |
+| Engine loop   | The module of `engineloop.md`: a queue of events and a loop that gives them to the handlers, one at a time, in order.                                         |
+| Handlers      | One for each type of event. A handler does the next step of a work (see "Engine loop").                                                                       |
+| Agent manager | Spawns the worker process of a task, watches it, and kills it (see `spawn-worker.md`). It does the same for the merger.                                       |
+| Runtime state | The local files of the engine: the tasks and their progress, the works as they were assigned, the pids of the workers.                                        |
 
-The worker manager owns the whole life of a worker process: it starts it,
-decides when its run has ended, and kills it. No other part touches a worker
-process. Everything that needs to act on a worker goes through the worker
-manager: a handler asks it, and a client cannot start or stop a worker. When a
-worker ends, the worker manager enqueues an event.
+The agent manager owns the whole life of a worker process: it starts it, decides
+when its run has ended, and kills it. No other part touches a worker process.
+Everything that needs to act on a worker goes through the agent manager: a
+handler asks it, and a client cannot start or stop a worker. When a worker ends,
+the agent manager enqueues an event.
 
 The merger is a role of the engine, and it is spawned like a worker. It is
 responsible for the whole unit of the work: it creates the worktree of the work
@@ -102,12 +102,12 @@ handlers one at a time, in order, for all the works. So two events never change
 the state at the same time, and a step such as the pull request cannot be done
 twice by two events at the same time.
 
-| Event          | Raised by      | What its handler does                                                                                                                                                                                                                                                                                          |
-| -------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `work:assign`  | HTTP API       | Finds the workflow, creates the work record and the task graph in the runtime, spawns the merger, which creates the worktree of the work from the root branch and writes the work in it, then starts the tasks that are ready: the merger creates the worktree of each task, and the engine spawns its worker. |
-| `worker:ended` | Worker manager | Records the result of the task: done, or failed with an `error`. Starts the tasks that are ready now, as `work:assign` does. When all the tasks are done, asks the merger to merge the final tasks.                                                                                                            |
-| `merger:ended` | Worker manager | The merger has merged the final tasks and is killed. Opens the pull request, and removes the worktree of the work.                                                                                                                                                                                             |
-| `work:decide`  | HTTP API       | When approved, merges the pull request, pulls the root branch and deletes all the branches of the work. When rejected, closes the pull request, creates the record of the work and deletes all the branches.                                                                                                   |
+| Event          | Raised by     | What its handler does                                                                                                                                                                                                                                                                                          |
+| -------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `work:assign`  | HTTP API      | Finds the workflow, creates the work record and the task graph in the runtime, spawns the merger, which creates the worktree of the work from the root branch and writes the work in it, then starts the tasks that are ready: the merger creates the worktree of each task, and the engine spawns its worker. |
+| `worker:ended` | Agent manager | Records the result of the task: done, or failed with an `error`. Starts the tasks that are ready now, as `work:assign` does. When all the tasks are done, asks the merger to merge the final tasks.                                                                                                            |
+| `merger:ended` | Agent manager | The merger has merged the final tasks and is killed. Opens the pull request, and removes the worktree of the work.                                                                                                                                                                                             |
+| `work:decide`  | HTTP API      | When approved, merges the pull request, pulls the root branch and deletes all the branches of the work. When rejected, closes the pull request, creates the record of the work and deletes all the branches.                                                                                                   |
 
 The names of the events are a proposal.
 
@@ -153,7 +153,7 @@ A handler follows the two rules of `engineloop.md`:
 
 A task is not run again. If its worker fails (the process fails, it is killed
 because it runs too long, or its result does not match the schema), the whole
-work fails. The worker manager kills the other workers of the work at once, to
+work fails. The agent manager kills the other workers of the work at once, to
 save the cost, and the tasks that have not started never start. A failed work is
 final, like a rejected one: to try again, a new work is assigned. A failed task
 is recorded as `completed` with an `error`, so it is `FAILED` (see "Derived
@@ -169,7 +169,7 @@ sequenceDiagram
     participant API as HTTP API
     participant Loop as Engine loop
     participant Handler
-    participant WM as Worker manager
+    participant WM as Agent manager
     participant Merger
     participant Worker
     participant Git

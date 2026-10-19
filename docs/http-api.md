@@ -138,8 +138,8 @@ work").
 | `POST /works`               | `work:assign` |
 | `POST /works/{id}/decision` | `work:decide` |
 
-The events `worker:ended` and `merger:ended` do not come from the API: the
-worker manager enqueues them (see "Engine loop" in `engine.md`).
+The events `worker:ended` and `merger:ended` do not come from the API: the agent
+manager enqueues them (see "Engine loop" in `engine.md`).
 
 ## Open questions
 
