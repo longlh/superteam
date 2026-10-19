@@ -67,31 +67,32 @@ flowchart LR
 
 `superteam` is made of four parts:
 
-- **superteam engine:** manages the works and the worktrees, on files and on a
-  git forge. It talks with the other parts through an HTTP API and pub/sub.
-- **superteam connect:** lets people use the system through their AI tools.
-- **superteam agents:** manages the AI agents that do the work in place of
-  people. It talks with the engine through the HTTP API and pub/sub.
-- **superteam notifier:** sends the notifications to people. It talks with the
-  engine through the HTTP API and pub/sub.
+- **Engine:** manages the works and the worktrees, on files and on a git forge.
+  It talks with the other parts through an HTTP API and pub/sub.
+- **Connector:** lets people use the system through their AI tools.
+- **Agents:** manages the AI agents that do the work in place of people. It
+  talks with the engine through the HTTP API and pub/sub.
+- **Notifier:** sends the notifications to people. It talks with the engine
+  through the HTTP API and pub/sub.
 
 ```mermaid
 flowchart LR
     human(["Human<br/>Does any job of the system,<br/>and receives the notifications"])
 
     subgraph superteam["superteam"]
-        connect["superteam connect<br/>Lets people use the system<br/>through their AI tools"]
-        engine["superteam engine<br/>Manages the works<br/>and keeps their results"]
-        agents["superteam agents<br/>Manages the AI agents that<br/>do the work in place of people"]
-        notifier["superteam notifier<br/>Sends the notifications to people"]
+        connect["Connector<br/>Lets people use the system<br/>through their AI tools"]
+        engine["Engine<br/>Manages the works<br/>and keeps their results"]
+        agents["Agents<br/>Manages the AI agents that<br/>do the work in place of people"]
+        notifier["Notifier<br/>Sends the notifications to people"]
     end
 
     claude["Claude<br/>Runs the AI agents"]
     forge["Forge<br/>Where the results are kept"]
 
     human -->|Does the jobs| connect
-    human -->|Configures| agents
     connect -->|Requests| engine
+    connect -->|Configures| claude
+    connect -->|Configures| engine
     agents -->|Requests| engine
     engine -->|Informs| agents
     notifier -->|Requests| engine
@@ -106,7 +107,7 @@ flowchart LR
 Each container is broken down into components below. The inside of a component
 is in its own document.
 
-### superteam engine
+### Engine
 
 | Component        | Job                                                                                                                                                                                                                            | Document                       |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------ |
@@ -117,21 +118,22 @@ is in its own document.
 | Runtime data     | The files of the engine under `.superteam/.r`: the works, the tasks and their progress, the pids.                                                                                                                              | `storage.md`, `data-struct.md` |
 | Persistence data | The files under `.superteam/.p` that are kept in git: the works, the workflows and the artifacts.<br>The root branch does not create them directly.<br>They are created as the result of merging the pull request of the work. | `storage.md`                   |
 
-### superteam connect
+### Connector
 
-| Component  | Job                                                                                                                                                                          | Document |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| Skill      | The bridge between a prompt and the MCP tools.<br>An actor runs it as a slash command, or an AI agent loads it on its own.<br>It always goes through the MCP server.         | None yet |
-| MCP server | An interface through which actors call the engine.<br>It is only a client of the HTTP API: no logic or state of its own.<br>It does not work when the engine is not running. | None yet |
+| Component       | Job                                                                                                                                                                          | Document |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| Seed Skill      | Only creates the config files: the workflows of the engine and the roles of Claude.                                                                                          | None yet |
+| Operation Skill | The bridge between a prompt and the MCP tools.<br>An actor runs it as a slash command, or an AI agent loads it on its own.<br>It always goes through the MCP server.         | None yet |
+| MCP server      | An interface through which actors call the engine.<br>It is only a client of the HTTP API: no logic or state of its own.<br>It does not work when the engine is not running. | None yet |
 
-### superteam agents
+### Agents
 
 | Component      | Job                                                                                                                                           | Document          |
 | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
 | Agent manager  | Spawns, watches and kills the `claude` processes that run the AI jobs of the Worker and the Merger.                                           | `spawn-worker.md` |
 | Claude process | The `claude` processes that run the AI agents of the Worker and the Merger.<br>A result comes back to the engine, not through the MCP server. | `spawn-worker.md` |
 
-### superteam notifier
+### Notifier
 
 | Component   | Job                                                    | Document |
 | ----------- | ------------------------------------------------------ | -------- |
@@ -141,14 +143,17 @@ is in its own document.
 
 The inside of each component is in its own document.
 
-| Container    | Component     | Document        |
-| ------------ | ------------- | --------------- |
-| Skill        | Skill         | None yet        |
-| MCP server   | MCP server    | None yet        |
-| Engine       | HTTP API      | None yet        |
-| Engine       | Engine loop   | `engineloop.md` |
-| Engine       | Handlers      | None yet        |
-| Engine       | Git adapter   | None yet        |
-| Engine       | Agent manager | None yet        |
-| Claude       | Claude        | None yet        |
-| Runtime data | Runtime data  | None yet        |
+| Container | Component        | Document        |
+| --------- | ---------------- | --------------- |
+| Engine    | HTTP API         | None yet        |
+| Engine    | Engine loop      | `engineloop.md` |
+| Engine    | Handlers         | None yet        |
+| Engine    | Git adapter      | None yet        |
+| Engine    | Runtime data     | None yet        |
+| Engine    | Persistence data | None yet        |
+| Connector | Seed Skill       | None yet        |
+| Connector | Operation Skill  | None yet        |
+| Connector | MCP server       | None yet        |
+| Agents    | Agent manager    | None yet        |
+| Agents    | Claude process   | None yet        |
+| Notifier  | Google Chat      | None yet        |
