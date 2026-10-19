@@ -9,8 +9,9 @@
      `.superteam/.p`.
    - **Runtime:** the data that does not need to be kept in git. It is stored in
      `.superteam/.r`.
-2. **The root branch does not create persistence data directly.** Persistence
-   data is created as the result of merging a pull request.
+2. **The engine does not create persistence data directly.** It changes
+   persistence data indirectly, by merging a pull request in the approve
+   activity.
 3. **Persistence data has a purpose.** It is kept so that people can work across
    devices, synced through git, and so that the history of the work is kept. The
    unit of the history is the work.
@@ -55,20 +56,24 @@ flowchart LR
     human(["Human<br/>Does any job of the system"])
     superteam["superteam<br/>Takes a work, runs it with a team of agents,<br/>and gives back the output"]
     claude["Claude<br/>Runs the AI agents"]
+    git["Git<br/>Where the results are kept<br/>on the machine"]
     forge["Forge<br/>Where the results are kept"]
 
     human -->|Uses| superteam
     superteam -->|Notifies| human
     superteam -->|Uses| claude
     superteam -->|Uses| forge
+    superteam -->|Uses| git
+    git <-->|Syncs with| forge
 ```
 
 ## Container
 
 `superteam` is made of five parts:
 
-- **Engine:** manages the works and the worktrees, on files and on a git forge.
-  It talks with the other parts through an HTTP API and pub/sub.
+- **Engine:** manages the works and the worktrees. It keeps its data in the
+  Storage, and uses Git and the forge. It talks with the other parts through an
+  HTTP API and pub/sub.
 - **Connector:** lets people use the system through their AI tools.
 - **Agents:** manages the AI agents that do the work in place of people. It
   talks with the engine through the HTTP API and pub/sub.
@@ -102,8 +107,8 @@ flowchart LR
     notifier -->|Requests| engine
     engine -->|Informs| notifier
     engine -->|Keeps data in| storage
-    storage -->|Syncs with| git
-    git -->|Syncs with| forge
+    storage <-->|Syncs with| git
+    git <-->|Syncs with| forge
     notifier -->|Notifies| human
     agents -->|Uses| claude
     engine -->|Uses| forge
@@ -148,10 +153,10 @@ is in its own document.
 
 ### Storage
 
-| Component        | Job                                                                                                                                                                                                                            | Document                       |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------ |
-| Runtime data     | The files of the engine under `.superteam/.r`: the works, the tasks and their progress, the pids.                                                                                                                              | `storage.md`, `data-struct.md` |
-| Persistence data | The files under `.superteam/.p` that are kept in git: the works, the workflows and the artifacts.<br>The root branch does not create them directly.<br>They are created as the result of merging the pull request of the work. | `storage.md`                   |
+| Component        | Job                                                                                               | Document                       |
+| ---------------- | ------------------------------------------------------------------------------------------------- | ------------------------------ |
+| Runtime data     | The files of the engine under `.superteam/.r`: the works, the tasks and their progress, the pids. | `storage.md`, `data-struct.md` |
+| Persistence data | The files under `.superteam/.p` that are kept in git: the works, the workflows and the artifacts. | `storage.md`                   |
 
 ## Code
 
