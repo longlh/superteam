@@ -16,5 +16,8 @@ project's own workflow.
   - Never ask for approval and edit in the same turn.
   - When the user has decided something, do exactly that. Do not reopen it with
     new options.
+- When you rewrite, trim or move text in a file, make sure no information is
+  lost. Before you remove a piece of text, check that it is still said somewhere
+  else. If it is not, keep it or move it to the right place.
 - After writing or editing a Markdown file, run `npx prettier --write <file>` on
   it.

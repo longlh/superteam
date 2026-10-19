@@ -115,5 +115,3 @@ is in its own document.
 | Worker process | Worker process | Runs one task in its worktree. It returns its result to the engine, not through the MCP server.                                                                         | `spawn-worker.md`              |
 | Merger         | Merger         | Creates the worktrees of a work and does all its merges.                                                                                                                | `spawn-worker.md`              |
 | Runtime data   | Runtime data   | The files of the engine under `.superteam/.r`: the works, the tasks and their progress, the pids.                                                                       | `storage.md`, `data-struct.md` |
-
-- The engine has no UI and runs on its own, without the MCP server.

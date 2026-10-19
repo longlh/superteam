@@ -15,7 +15,8 @@ Everything else is done by git. The documents of the parts it uses:
 - `spawn-worker.md`: how a worker is spawned to run a task.
 
 The engine is one process, in the root workspace. There is only one engine
-instance for a workspace. The git worktrees created for the jobs have no engine.
+instance for a workspace. It has no UI and runs on its own, without the MCP
+server. The git worktrees created for the jobs have no engine.
 
 ## Git as the platform
 
