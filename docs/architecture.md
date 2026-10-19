@@ -167,21 +167,5 @@ flowchart LR
 
 ### The life of a work
 
-The states are the derived statuses of a work (see "Derived status" in
-`data-struct.md`).
-
-```mermaid
-stateDiagram-v2
-    [*] --> OPEN: assigned
-    OPEN --> IN_PROGRESS: tasks created
-    IN_PROGRESS --> DONE: all tasks done
-    IN_PROGRESS --> FAILED: a task fails
-    DONE --> PROPOSED: pull request opened
-    PROPOSED --> APPROVED: pull request merged
-    PROPOSED --> REJECTED: pull request closed
-    FAILED --> [*]
-    APPROVED --> [*]
-    REJECTED --> [*]
-```
-
-The detailed flows are in "Sequence" of `engine.md`.
+The life of a work, from assigned to its final result, is in "Life of a work" of
+`data-struct.md`. The detailed flows are in "Sequence" of `engine.md`.

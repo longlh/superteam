@@ -134,3 +134,23 @@ status stays `DRAFT`.
 `pr` is the pull request of the work, and `pr.state` is its state in git:
 `open`, `merged`, or `closed` without a merge. A work that is not proposed has
 no pull request.
+
+### Life of a work
+
+The work status and the approval status are two separate statuses. Put in order,
+they make the whole life of a work, from the moment it is assigned to its final
+result.
+
+```mermaid
+stateDiagram-v2
+    [*] --> OPEN: assigned
+    OPEN --> IN_PROGRESS: tasks created
+    IN_PROGRESS --> DONE: all tasks done
+    IN_PROGRESS --> FAILED: a task fails
+    DONE --> PROPOSED: pull request opened
+    PROPOSED --> APPROVED: pull request merged
+    PROPOSED --> REJECTED: pull request closed
+    FAILED --> [*]
+    APPROVED --> [*]
+    REJECTED --> [*]
+```
