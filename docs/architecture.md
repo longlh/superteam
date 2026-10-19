@@ -53,13 +53,16 @@ C4Context
     Person(assigner, "Assigner", "Assigns works. A person or an AI agent")
     Person(approver, "Approver", "Approves or rejects works. A person or an AI agent")
     System(superteam, "superteam", "Takes a work, runs it with a team of workers, and gives back the output")
-    System_Ext(git, "Git and GitHub", "Keeps the worktrees, the branches, the pull requests and the merges")
+    System_Ext(git, "Git", "Keeps the worktrees and the branches on the machine")
     System_Ext(claude, "Claude", "Runs the AI workers, signed in with the account of the user")
+    System_Ext(forge, "Forge", "Keeps the remote branches and the pull requests. GitHub for now")
 
     Rel(assigner, superteam, "Assigns works")
     Rel(approver, superteam, "Approves or rejects works")
-    Rel(superteam, git, "Keeps the results in", "git, gh")
+    Rel(superteam, git, "Keeps the results in", "git")
     Rel(superteam, claude, "Spawns the workers", "claude process")
+    Rel(superteam, forge, "Opens and merges the pull requests", "gh")
+    Rel(git, forge, "Syncs the branches with")
 
     UpdateRelStyle(superteam, git, $offsetX="-70", $offsetY="-30")
     UpdateLayoutConfig($c4ShapeInRow="2", $c4BoundaryInRow="1")
@@ -84,7 +87,8 @@ C4Container
         Person(worker, "Worker", "Does one task in its worktree. A person or an AI agent")
         Person(merger, "Merger", "Creates the worktrees and does the merges of a work. A person or an AI agent")
     }
-    System_Ext(git, "Git and GitHub", "Worktrees, branches, pull requests and merges")
+    System_Ext(git, "Git", "Worktrees and branches on the machine")
+    System_Ext(forge, "Forge", "Remote branches and pull requests. GitHub for now")
 
     Rel(assigner, skill, "Runs or loads")
     Rel(approver, skill, "Runs or loads")
@@ -95,14 +99,20 @@ C4Container
     Rel(engine, runtime, "Reads and writes")
     Rel(engine, worker, "Assigns the job")
     Rel(engine, merger, "Assigns the job")
-    Rel(engine, git, "Pull request and merge")
+    Rel(engine, git, "Pushes, pulls and deletes the branches")
+    Rel(engine, forge, "Opens and merges the pull request", "gh")
+    Rel(git, forge, "Syncs the branches with")
     Rel(worker, git, "Commits to its branch")
     Rel(merger, git, "Worktrees and merges")
 
     UpdateRelStyle(engine, runtime, $offsetX="-45", $offsetY="-15")
-    UpdateRelStyle(engine, git, $offsetX="-20", $offsetY="30")
+    UpdateRelStyle(engine, git, $offsetX="-40", $offsetY="30")
+    UpdateRelStyle(engine, forge, $offsetX="50", $offsetY="-5")
+    UpdateRelStyle(git, forge, $offsetX="-5", $offsetY="-45")
+    UpdateRelStyle(engine, worker, $offsetX="-45", $offsetY="55")
+    UpdateRelStyle(engine, merger, $offsetX="30", $offsetY="95")
     UpdateRelStyle(worker, git, $offsetX="-30", $offsetY="-30")
-    UpdateRelStyle(merger, git, $offsetX="-20", $offsetY="-45")
+    UpdateRelStyle(merger, git, $offsetX="-5", $offsetY="-70")
     UpdateLayoutConfig($c4ShapeInRow="2", $c4BoundaryInRow="1")
 ```
 
@@ -118,6 +128,7 @@ is in its own document.
 | Engine       | HTTP API          | The only door to the engine, at the level of the work.                                                                                                                 | `http-api.md`                  |
 | Engine       | Engine loop       | Gives the events of the engine to the handlers, one at a time.                                                                                                         | `engineloop.md`                |
 | Engine       | Handlers          | Do the next step of a work, one for each type of event.                                                                                                                | `engine.md`                    |
+| Engine       | Git adapter       | The way the engine reaches git and the forge, so that another forge can be added later. Only GitHub is supported for now, through the `gh` command line.               | `engine.md`                    |
 | Engine       | Worker manager    | Spawns, watches and kills the `claude` processes that run the AI jobs of the Worker and the Merger.                                                                    | `spawn-worker.md`              |
 | Claude       | Worker (AI Agent) | Does one task in its worktree. A result comes back to the engine, not through the MCP server.                                                                          | `spawn-worker.md`              |
 | Claude       | Merger (AI Agent) | Creates the worktrees of a work and does all its merges.                                                                                                               | `spawn-worker.md`              |
