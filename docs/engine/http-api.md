@@ -18,7 +18,9 @@ There are two kinds of request:
 
 The paths and the bodies below are a proposal.
 
-## Assign a work
+## Component
+
+### Assign a work
 
 ```
 POST /works
@@ -48,7 +50,7 @@ The API checks that the body is valid and that the workflow exists. Then it
 creates the event `work:assign`. The work is in the status `OPEN` until the
 engine has created its tasks.
 
-## Approve or reject a work
+### Approve or reject a work
 
 ```
 POST /works/{id}/decision
@@ -77,7 +79,7 @@ processed, because the state can change between the request and the event.
 The decision itself is not stored (see "Work flow" in `engine.md`): the result
 is in the pull request, and the git history keeps it.
 
-## Query the state of a work
+### Query the state of a work
 
 ```
 GET /works/{id}
@@ -85,20 +87,20 @@ GET /works/{id}
 
 Answer `200 OK`:
 
-| Field            | Type   | Description                                                                           |
-| ---------------- | ------ | ------------------------------------------------------------------------------------- |
-| `id`             | string | The id of the work.                                                                   |
-| `title`          | string | The title of the work.                                                                |
-| `workflow`       | string | The name of its workflow.                                                             |
-| `status`         | string | `OPEN`, `IN_PROGRESS`, `DONE` or `FAILED` (see "Derived status" in `data-struct.md`). |
-| `approvalStatus` | string | `DRAFT`, `PROPOSED`, `APPROVED` or `REJECTED`. Derived from the pull request.         |
-| `pullRequest`    | string | The URL of the pull request, once the work is proposed. Otherwise absent.             |
-| `error`          | string | Why the work failed, when its status is `FAILED`. Otherwise absent.                   |
+| Field            | Type   | Description                                                                       |
+| ---------------- | ------ | --------------------------------------------------------------------------------- |
+| `id`             | string | The id of the work.                                                               |
+| `title`          | string | The title of the work.                                                            |
+| `workflow`       | string | The name of its workflow.                                                         |
+| `status`         | string | `OPEN`, `IN_PROGRESS`, `DONE` or `FAILED` (see "Derived status" in `storage.md`). |
+| `approvalStatus` | string | `DRAFT`, `PROPOSED`, `APPROVED` or `REJECTED`. Derived from the pull request.     |
+| `pullRequest`    | string | The URL of the pull request, once the work is proposed. Otherwise absent.         |
+| `error`          | string | Why the work failed, when its status is `FAILED`. Otherwise absent.               |
 
 The `status` and the `approvalStatus` are not stored: the engine derives them
 when it answers.
 
-## List the works
+### List the works
 
 ```
 GET /works
@@ -122,7 +124,7 @@ part of it.
 Each item has the fields of the state of one work (see "Query the state of a
 work").
 
-## Errors
+### Errors
 
 | Status | When                                                                                                 |
 | ------ | ---------------------------------------------------------------------------------------------------- |
@@ -131,7 +133,7 @@ work").
 | `409`  | The request does not fit the state of the work, such as a decision on a work that is not `PROPOSED`. |
 | `503`  | The engine is starting, and the engine loop is not ready.                                            |
 
-## How a request becomes an event
+### How a request becomes an event
 
 | Request                     | Event         |
 | --------------------------- | ------------- |
@@ -139,7 +141,7 @@ work").
 | `POST /works/{id}/decision` | `work:decide` |
 
 The events `worker:ended` and `merger:ended` do not come from the API: the agent
-manager enqueues them (see "Engine loop" in `engine.md`).
+manager enqueues them (see `handlers.md`).
 
 ## Open questions
 
