@@ -33,12 +33,11 @@
 The documents follow the C4 model. Each level zooms into one part of the level
 above it, and answers one question.
 
-| Level        | Documents                    | Question                                                                                 | Does not hold                   |
-| ------------ | ---------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------- |
-| 1. Context   | `architecture.md`            | Who uses the system, and what outside the system does it depend on                       | The parts inside the system     |
-| 2. Container | `architecture.md`            | What runs or keeps data (a process, a store), what are the principles, who talks to whom | The inside of a container       |
-| 3. Component | See the table in "Component" | What are the parts inside one container, and what is the contract between them           | The inside of a module          |
-| 4. Code      | See the table in "Code"      | How does an independent module work inside                                               | How the other components use it |
+| Level                 | Documents                            | Question                                                                                                  | Does not hold                      |
+| --------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| 1. Context            | `architecture.md`                    | Who uses the system, and what outside the system does it depend on                                        | The parts inside the system        |
+| 2. Container          | `architecture.md`                    | What runs or keeps data (a process, a store), what are the principles, who talks to whom                  | The inside of a container          |
+| 3. Component, 4. Code | See the tree in "Component and Code" | What are the parts inside one container, what is the contract between them, and how does each work inside | The inside of the other components |
 
 Two rules:
 
@@ -115,65 +114,38 @@ flowchart LR
     engine -->|Uses| git
 ```
 
-## Component
+## Component and Code
 
-Each container is broken down into components below. The inside of a component
-is in its own document.
+Each container has one document, and each of its components has one document.
+Each document holds both levels:
 
-### Engine
+- Component: its contract with the other components.
+- Code: how it works inside.
 
-| Component   | Job                                                                                                                                                         | Document        |
-| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
-| HTTP API    | The only door to the engine, at the level of the work.                                                                                                      | `http-api.md`   |
-| Pub/Sub     | The way the engine informs the other parts about its events, such as the Agents and the Notifier.                                                           | None yet        |
-| Engine loop | Gives the events of the engine to the handlers, one at a time.                                                                                              | `engineloop.md` |
-| Handlers    | Do the next step of a work, one for each type of event.                                                                                                     | `engine.md`     |
-| Git adapter | The way the engine reaches git and the forge, so that another forge can be added later.<br>Only GitHub is supported for now, through the `gh` command line. | `engine.md`     |
-
-### Connector
-
-| Component       | Job                                                                                                                                                                          | Document |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| Seed Skill      | Only creates the config files: the workflows of the engine and the roles of Claude.                                                                                          | None yet |
-| Operation Skill | The bridge between a prompt and the MCP tools.<br>An actor runs it as a slash command, or an AI agent loads it on its own.<br>It always goes through the MCP server.         | None yet |
-| MCP server      | An interface through which actors call the engine.<br>It is only a client of the HTTP API: no logic or state of its own.<br>It does not work when the engine is not running. | None yet |
-
-### Agents
-
-| Component      | Job                                                                                                                                           | Document          |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
-| Agent manager  | Spawns, watches and kills the `claude` processes that run the AI jobs of the Worker and the Merger.                                           | `spawn-worker.md` |
-| Claude process | The `claude` processes that run the AI agents of the Worker and the Merger.<br>A result comes back to the engine, not through the MCP server. | `spawn-worker.md` |
-
-### Notifier
-
-| Component   | Job                                                    | Document |
-| ----------- | ------------------------------------------------------ | -------- |
-| Google Chat | Sends the notifications to people through Google Chat. | None yet |
-
-### Storage
-
-| Component        | Job                                                                                               | Document                       |
-| ---------------- | ------------------------------------------------------------------------------------------------- | ------------------------------ |
-| Runtime data     | The files of the engine under `.superteam/.r`: the works, the tasks and their progress, the pids. | `storage.md`, `data-struct.md` |
-| Persistence data | The files under `.superteam/.p` that are kept in git: the works, the workflows and the artifacts. | `storage.md`                   |
-
-## Code
-
-The inside of each component is in its own document.
-
-| Container | Component        | Document        |
-| --------- | ---------------- | --------------- |
-| Engine    | HTTP API         | None yet        |
-| Engine    | Pub/Sub          | None yet        |
-| Engine    | Engine loop      | `engineloop.md` |
-| Engine    | Handlers         | None yet        |
-| Engine    | Git adapter      | None yet        |
-| Connector | Seed Skill       | None yet        |
-| Connector | Operation Skill  | None yet        |
-| Connector | MCP server       | None yet        |
-| Agents    | Agent manager    | None yet        |
-| Agents    | Claude process   | None yet        |
-| Notifier  | Google Chat      | None yet        |
-| Storage   | Runtime data     | None yet        |
-| Storage   | Persistence data | None yet        |
+```
+docs/
+├── architecture.md          The context, the containers and the principles
+├── engine/
+│   ├── engine.md            Manages the works and the worktrees
+│   ├── http-api.md          The only door to the engine, at the level of the work
+│   ├── pubsub.md            How the engine informs the other parts about its events
+│   ├── engineloop.md        Gives the events of the engine to the handlers, one at a time
+│   ├── handlers.md          Do the next step of a work, one for each type of event
+│   └── git-adapter.md       How the engine reaches git and the forge, through `gh` for now
+├── connector/
+│   ├── connector.md         Lets people use the system through their AI tools
+│   ├── seed-skill.md        Only creates the config files: the workflows and the roles of Claude
+│   ├── operation-skill.md   The bridge between a prompt and the MCP tools
+│   └── mcp-server.md        An interface through which actors call the engine
+├── agents/
+│   ├── agents.md            Manages the AI agents that do the work in place of people
+│   ├── agent-manager.md     Spawns, watches and kills the `claude` processes
+│   └── claude-process.md    The `claude` processes that run the AI agents
+├── notifier/
+│   ├── notifier.md          Sends the notifications to people
+│   └── google-chat.md       Sends the notifications through Google Chat
+└── storage/
+    ├── storage.md           Keeps the runtime data and the persistence data
+    ├── runtime-data.md      The files under `.superteam/.r`
+    └── persistence-data.md  The files under `.superteam/.p`, kept in git
+```
