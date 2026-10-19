@@ -1,15 +1,13 @@
 # Google Chat
 
 Sends the notifications to people through Google Chat. For now it is the only
-notifier.
+channel that the Notifier dispatches to (see `notifier.md`).
 
 ## Component
 
 - It posts a message to the webhook of a Google Chat space.
-- It decides by itself which events it acts on. It receives the events of the
-  topics it follows, and it builds its own message, reading the records it
-  needs. For example, it posts when a task has just started and is given to a
-  person.
+- It receives the message from the Notifier, and posts it. It does not choose
+  the events, and it does not build the message.
 - The URL of the webhook is a secret. The data keeps only the name of the
   environment variable that holds it, and never its value, because the data is
   versioned in git.
