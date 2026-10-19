@@ -56,8 +56,8 @@ flowchart LR
     human(["Human<br/>Does any job of the system"])
     superteam["superteam<br/>Takes a work, runs it with a team of agents,<br/>and gives back the output"]
     claude["Claude<br/>Runs the AI agents"]
-    git["Git<br/>Where the results are kept<br/>on the machine"]
-    forge["Forge<br/>Where the results are kept"]
+    git["Git<br/>Stores the results on the machine"]
+    forge["Forge<br/>Stores the results on a server,<br/>and approves them with pull requests"]
 
     human -->|Uses| superteam
     superteam -->|Notifies| human
@@ -95,8 +95,8 @@ flowchart LR
     end
 
     claude["Claude<br/>Runs the AI agents"]
-    git["Git<br/>Keeps the worktrees and<br/>the branches on the machine"]
-    forge["Forge<br/>Where the results are kept"]
+    git["Git<br/>Stores the worktrees and<br/>the branches on the machine"]
+    forge["Forge<br/>Stores the branches on a server,<br/>and approves the works with pull requests"]
 
     human -->|Does the jobs| connect
     connect -->|Requests| engine
