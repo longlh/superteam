@@ -79,33 +79,37 @@ How the files relate. An arrow means "uses". `index.js` creates every part and
 passes it to the parts that need it, so its arrows are left out. `event.js` and
 `paths.js` are at the bottom: they use no other file.
 
-```mermaid
-flowchart TD
-  caller([Caller]) -->|handle, enqueue, subscribe, start, shutdown| control
-  signals([SIGINT, SIGTERM]) -->|shutdown| control
+```plantuml
+@startuml
+rectangle Caller as caller
+rectangle "SIGINT, SIGTERM" as signals
 
-  control["control.js<br/>life cycle, signals, enqueue()"]
-  loop["loop.js<br/>iterate(), recover()"]
-  queue["queue.js<br/>the queue folders"]
-  factory["factory.js<br/>create events"]
-  handlers["handlers.js<br/>type to handler"]
-  subscribers["subscribers.js<br/>notifications"]
-  event["event.js<br/>shape, parse, validate, hash"]
-  paths["paths.js<br/>folders, mkdir -p"]
+rectangle "control.js\nlife cycle, signals, enqueue()" as control
+rectangle "loop.js\niterate(), recover()" as loop
+rectangle "queue.js\nthe queue folders" as queue
+rectangle "factory.js\ncreate events" as factory
+rectangle "handlers.js\ntype to handler" as handlers
+rectangle "subscribers.js\nnotifications" as subscribers
+rectangle "event.js\nshape, parse, validate, hash" as event
+rectangle "paths.js\nfolders, mkdir -p" as paths
 
-  control --> loop
-  control --> queue
-  control --> handlers
-  control --> factory
-  control --> paths
-  loop --> queue
-  loop --> factory
-  loop --> handlers
-  loop --> subscribers
-  loop --> event
-  queue --> event
-  factory --> event
-  caller -.->|subscribe| subscribers
+caller --> control : handle, enqueue,\nsubscribe, start, shutdown
+signals --> control : shutdown
+
+control --> loop
+control --> queue
+control --> handlers
+control --> factory
+control --> paths
+loop --> queue
+loop --> factory
+loop --> handlers
+loop --> subscribers
+loop --> event
+queue --> event
+factory --> event
+caller ..> subscribers : subscribe
+@enduml
 ```
 
 ## 5. Public API

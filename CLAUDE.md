@@ -22,8 +22,12 @@ project's own workflow.
 - After writing or editing a Markdown file, run `npx prettier --write <file>` on
   it.
 - Diagrams are text (diagram as text), written in a fenced code block in the
-  Markdown file. Use Mermaid or PlantUML.
-  - Mermaid: the code block is marked `mermaid`.
+  Markdown file. Use PlantUML, and use Mermaid only when PlantUML does not fit.
+  An old Mermaid diagram is converted only when its file is edited for another
+  reason, so there is no extra review.
+  - Mermaid: the code block is marked `mermaid`. The AI checks it with
+    `npx @mermaid-js/mermaid-cli`, which downloads the package (and Chromium) to
+    the cache of npx on the first run.
   - PlantUML: the code block is marked `plantuml`, and it starts with
     `@startuml` and ends with `@enduml`. An extension is needed to preview it in
     Markdown.
@@ -35,3 +39,10 @@ project's own workflow.
     @enduml
     ```
     ````
+
+  - Setup for PlantUML:
+    - For a person: install the VS Code extension
+      `myml.vscode-markdown-plantuml-preview`, to preview the diagram in
+      Markdown.
+    - For the AI: install it with `brew install plantuml` (it brings OpenJDK and
+      Graphviz), so that the AI can check and render a diagram by itself.
