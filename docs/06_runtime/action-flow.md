@@ -62,7 +62,7 @@ the runtime files, and the job runner with the Claude process.
 actor Client
 participant "HTTP API" as API
 participant "Engine loop" as EL
-participant Handler
+participant "Handlers" as Handler
 participant "Job runner" as Runner
 participant Git
 participant "Runtime files" as Runtime
@@ -118,7 +118,7 @@ and the runtime files.
 actor Approver
 participant "HTTP API" as API
 participant "Engine loop" as EL
-participant Handler
+participant "Handlers" as Handler
 participant Git
 participant "Runtime files" as Runtime
 

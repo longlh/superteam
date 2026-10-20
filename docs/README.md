@@ -2,11 +2,12 @@
 
 The documents follow arc42, which gives the 12 chapters. The chapter of the
 building blocks follows the C4 model. A chapter that has no content yet is an
-empty folder with a `.gitkeep`.
+empty folder with a `.gitkeep`. The folder `draft/` holds the legacy documents:
+they are not part of the structure, and they are not migrated.
 
 | Chapter              | Folder                  | Holds                                                          |
 | -------------------- | ----------------------- | -------------------------------------------------------------- |
-| 1. Introduction      | `01_introduction/`      | The use cases: what the actors want from the system            |
+| 1. Introduction      | `01_introduction/`      | What the system must do: the requirements and the use cases    |
 | 2. Constraints       | `02_constraints/`       | Not written yet                                                |
 | 3. Context           | `03_context/`           | Who uses the system, and what outside it the system depends on |
 | 4. Solution strategy | `04_solution-strategy/` | The principles of the design                                   |
@@ -14,10 +15,10 @@ empty folder with a `.gitkeep`.
 | 6. Runtime           | `06_runtime/`           | What happens over time: the action flow and the data flow      |
 | 7. Deployment        | `07_deployment/`        | Not written yet                                                |
 | 8. Concepts          | `08_concepts/`          | The data contract that the containers follow                   |
-| 9. Decisions         | `09_decisions/`         | Not written yet                                                |
+| 9. Decisions         | `09_decisions/`         | The decisions of the architecture, one ADR for each            |
 | 10. Quality          | `10_quality/`           | Not written yet                                                |
 | 11. Risks and debts  | `11_risks-and-debts/`   | The known issues and the open questions                        |
-| 12. Glossary         | `12_glossary/`          | Not written yet                                                |
+| 12. Glossary         | `12_glossary/`          | The terms of the system, and the terms of the documents        |
 
 Every chapter is a folder, and its main document has the name of the chapter
 without the number, such as `03_context/context.md`.
@@ -55,6 +56,7 @@ container.
 docs/
 ├── README.md
 ├── 01_introduction/
+│   ├── introduction.md          The actors and the requirements of the system
 │   └── use-cases.md             What the actors want from the system
 ├── 02_constraints/
 ├── 03_context/
@@ -83,7 +85,7 @@ docs/
 │       ├── notifier.md          Sends the notifications to people
 │       └── google-chat.md       Sends the notifications through Google Chat
 ├── 06_runtime/
-│   ├── runtime.md               The rules of the flows
+│   ├── runtime.md               The method and the rules of the flows
 │   ├── action-flow.md           The order of the actions of the parts, for each scenario
 │   └── data-flow.md             Where the data is created and read, and how it moves
 ├── 07_deployment/
@@ -93,8 +95,11 @@ docs/
 │       ├── runtime-data.md      The files under `.superteam/.r`
 │       └── persistence-data.md  The files under `.superteam/.p`, kept in git
 ├── 09_decisions/
+│   ├── decisions.md             The index of the decisions
+│   └── 0001-... .md             One architecture decision record (ADR) for each
 ├── 10_quality/
 ├── 11_risks-and-debts/
 │   └── risks-and-debts.md       The known issues and the open questions
 └── 12_glossary/
+    └── glossary.md              The terms of the system, and of the documents
 ```
