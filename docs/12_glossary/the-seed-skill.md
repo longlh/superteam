@@ -1,4 +1,4 @@
-# Seed Skill
+# The Seed Skill
 
 The Seed Skill creates the config files of a project: the workflows and the
 roles of Claude.

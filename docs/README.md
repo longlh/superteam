@@ -28,12 +28,16 @@ The rules of the glossary:
 
 - A term is one file, named with the singular of the term in lower case, such as
   `agent.md`. A term that has a plural form is described in the same file.
-- A container is a proper name, so its file starts with `the-`, such as
-  `the-engine.md`. The four containers are `the-agents.md`, `the-connector.md`,
-  `the-engine.md` and `the-notifier.md`.
+- The name of a specific part of the system is a proper name, so its file starts
+  with `the-`. The parts are the four containers (`the-agents.md`,
+  `the-connector.md`, `the-engine.md`, `the-notifier.md`), the components that
+  are named in the building blocks (`the-agent-manager.md`,
+  `the-engine-loop.md`, `the-seed-skill.md`) and the orchestrator
+  (`the-orchestrator.md`). A concept is not a proper name, such as
+  `claude-process.md`, `handler.md` or `job-runner.md`.
 - A reference to a term holds the full path, such as
-  `12_glossary/seed-skill.md`, because a term can have the name of a document,
-  such as `seed-skill.md`.
+  `12_glossary/action-flow.md`, because a term can have the name of a document,
+  such as `action-flow.md`.
 
 ## Levels of the structure
 

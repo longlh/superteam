@@ -1,4 +1,4 @@
-# Agent manager
+# The agent manager
 
 The agent manager is spawns, watches and kills the `claude` processes.
 

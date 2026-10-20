@@ -1,4 +1,4 @@
-# Engine loop
+# The engine loop
 
 The engine loop processes the events of the engine one at a time, in order.
 

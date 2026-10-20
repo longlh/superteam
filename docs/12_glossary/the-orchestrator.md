@@ -1,4 +1,4 @@
-# Orchestrator
+# The orchestrator
 
 The orchestrator is the part above the containers. It creates them and connects
 them.
