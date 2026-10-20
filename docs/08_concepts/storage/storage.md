@@ -142,19 +142,26 @@ ones. `failed_tasks` is the tasks that are `FAILED`.
 
 #### Work approval status
 
-The approval status of a work is derived from its tasks and from its pull
-request. The decision of the approver is not stored: the merge of the pull
-request into the root branch is the approval, and the git history keeps it. A
-failed work is never proposed, so it has no pull request, and its approval
-status stays `DRAFT`.
+The approval status of a work is derived from its pull request only. The
+decision of the approver is not stored: the merge of the pull request into the
+root branch is the approval, and the git history keeps it.
 
-| Approval status | Formula                                                                                                         |
-| --------------- | --------------------------------------------------------------------------------------------------------------- |
-| `DRAFT`         | `tasks.length === 0 \|\| tasks.length > completed_tasks.length \|\| failed_tasks.length > 0`                    |
-| `PROPOSED`      | `tasks.length > 0 && tasks.length === completed_tasks.length && failed_tasks.length == 0 && pr.state == "open"` |
-| `APPROVED`      | `pr.state == "merged"`                                                                                          |
-| `REJECTED`      | `pr.state == "closed"`, which means closed without a merge                                                      |
+| Approval status | Formula                                                    |
+| --------------- | ---------------------------------------------------------- |
+| `DRAFT`         | The work has no pull request                               |
+| `PROPOSED`      | `pr.state == "open"`                                       |
+| `APPROVED`      | `pr.state == "merged"`                                     |
+| `REJECTED`      | `pr.state == "closed"`, which means closed without a merge |
 
 `pr` is the pull request of the work, and `pr.state` is its state in git:
-`open`, `merged`, or `closed` without a merge. A work that is not proposed has
-no pull request.
+`open`, `merged`, or `closed` without a merge.
+
+The engine opens the pull request only when all the tasks are done and none has
+failed. So a work that has a pull request is `DONE`, and its status is not
+derived from the tasks, which are runtime data and exist only on the machine
+that ran the work. A failed work is never proposed, so it has no pull request,
+and its approval status stays `DRAFT`.
+
+A work whose file is in `.superteam/.p/works/` on the root branch reached it
+only by the merge of its pull request, so it is `DONE` and `APPROVED`. If a work
+has a record in `.superteam/.r/works/` and a file in git, the file in git wins.
