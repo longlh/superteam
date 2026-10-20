@@ -1,9 +1,10 @@
-# Storage
+# Data contract
 
-Where the data is kept, and the entities that it holds. The engine that uses the
-storage is in `engine.md`.
+The agreement on where the data is kept, and on the entities that it holds. It
+is not a container: the containers follow it when they read or write data, and
+the runtime files are inside the container that owns them.
 
-The storage is file-based, under `{baseDir}/.superteam/`, where `baseDir` is the
+The data is file-based, under `{baseDir}/.superteam/`, where `baseDir` is the
 root workspace, the place where the engine runs. The data has two kinds (see the
 principles in `architecture.md`), and each kind has one folder:
 
@@ -43,7 +44,7 @@ erDiagram
 
     WORK {
         string *id PK
-        string workflow FK
+        string *workflow FK
         string *title
         string description
         string[] dod
@@ -54,7 +55,7 @@ erDiagram
 
     TASK {
         string *id PK
-        string work FK
+        string *work FK
         string *title
         string description
         string[] dod
@@ -98,8 +99,8 @@ same entity.
 A role names a job. There are two kinds of role (see the principles in
 `architecture.md`):
 
-- **The roles of the engine:** the merger and the approver. The engine defines
-  them.
+- **The roles of the engine:** the assigner, the approver and the merger. The
+  engine defines them.
 - **The roles of the project:** such as the developer and the business analyst.
   The project defines them.
 
@@ -133,7 +134,8 @@ reason. So a task that depends on a failed task stays `PENDING`.
 | `DONE`        | `tasks.length > 0 && tasks.length === completed_tasks.length && failed_tasks.length == 0` |
 | `FAILED`      | `failed_tasks.length > 0`                                                                 |
 
-`failed_tasks` is the tasks that are `FAILED`.
+`completed_tasks` is the tasks that are `completed`, which includes the failed
+ones. `failed_tasks` is the tasks that are `FAILED`.
 
 #### Work approval status
 
@@ -154,31 +156,12 @@ status stays `DRAFT`.
 `open`, `merged`, or `closed` without a merge. A work that is not proposed has
 no pull request.
 
-#### Life of a work
-
-The work status and the approval status are two separate statuses. Put in order,
-they make the whole life of a work, from the moment it is assigned to its final
-result.
-
-```mermaid
-stateDiagram-v2
-    [*] --> OPEN: assigned
-    OPEN --> IN_PROGRESS: tasks created
-    IN_PROGRESS --> DONE: all tasks done
-    IN_PROGRESS --> FAILED: a task fails
-    DONE --> PROPOSED: pull request opened
-    PROPOSED --> APPROVED: pull request merged
-    PROPOSED --> REJECTED: pull request closed
-    FAILED --> [*]
-    APPROVED --> [*]
-    REJECTED --> [*]
-```
-
 ## Open questions
 
 These are not decided yet.
 
-1. **The record of a work.** Its fields. The path above is a proposal.
+1. **The record of a work.** Its fields. Its path in `runtime-data.md` is a
+   proposal.
 2. **The identity.** The format of `id` for a work and a task: a counter, a
    random id, or a slug. The path comes from it. The `id` of an artifact is
-   decided (see "Artifacts").
+   decided (see "The id of an artifact" in `persistence-data.md`).

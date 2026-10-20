@@ -1,7 +1,7 @@
 # Pub/Sub
 
-The way the engine informs the other parts about its events, such as the Agents
-and the Notifier.
+The way the engine publishes its events, to whoever subscribes. The engine does
+not know who the subscribers are.
 
 ## Component
 
@@ -11,14 +11,15 @@ and the Notifier.
 - The notifications are `event:done`, `event:retry` and `event:error`. Each one
   carries the event, so a subscriber reads what happened from the `payload` of
   the event, such as its `type`.
-- A part subscribes with a config file, a subscription. Every subscription whose
-  topic matches an event receives it, and nothing is returned to the engine.
+- A subscription is a config file. The part that it names does not know it.
+  Every subscription whose topic matches an event receives it, and nothing is
+  returned to the engine.
 - A subscription has these fields:
 
   | Field   | Description                                                                                                  |
   | ------- | ------------------------------------------------------------------------------------------------------------ |
   | `topic` | The events that the part receives.                                                                           |
-  | `addon` | The name of the part that receives the events, such as `googlechat`.                                         |
+  | `addon` | The name of the part that receives the events, such as `notifier`.                                           |
   | `env`   | The names that the part expects, mapped to the names of environment variables, such as `webhook` to the URL. |
 
 - The part filters by itself: it decides which of the events it acts on.
@@ -38,4 +39,4 @@ These are not decided yet.
    `_task:update`. The events of the engine have a `type` such as `work:assign`.
    What a `topic` matches is not decided.
 3. **The name `addon`.** It comes from the draft schema, where the receiver was
-   an addon of the plugin. Here the receiver is a part, such as the Notifier.
+   an addon of the plugin. Here the receiver is a part, such as a notifier.

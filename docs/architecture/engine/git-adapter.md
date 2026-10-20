@@ -1,0 +1,48 @@
+# Git adapter
+
+The way the engine reaches git and the forge.
+
+## Component
+
+The engine does not keep a store for the results or for the approvals. Git is
+the platform, and each part of it has a job:
+
+| Git                       | Job                                                        |
+| ------------------------- | ---------------------------------------------------------- |
+| Worktree                  | An environment of its own for each job.                    |
+| Remote branch             | Where the results are kept.                                |
+| Pull request              | The way a work is approved: the approver reviews it there. |
+| Merge of the pull request | The way a result is recorded, as rebase and squash.        |
+
+The engine reaches git and the forge through a git adapter, so that another
+forge can be added later. For now only GitHub is supported, and the adapter
+needs the `gh` command line.
+
+### Branches
+
+The branches of a work (its own branch and the branches of its tasks) are
+deleted when the work ends, so that they do not pile up as garbage.
+
+## Code
+
+### Worktrees
+
+A worktree is the environment where a job is done. There are two kinds, one for
+each unit of the work. The engine creates both.
+
+|          | Worktree of a work                                                      | Worktree of a task                                                                                                                                         |
+| -------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Based on | The root branch.                                                        | The branch of the task it depends on. A task with no dependency is based on the root branch. A task with more than one dependency is based on one of them. |
+| Branch   | `works/{work_id}`                                                       | `tasks/{work_id}/{task_id}`                                                                                                                                |
+| Folder   | `.superteam/.r/worktrees/works/{work_id}`                               | `.superteam/.r/worktrees/tasks/{work_id}/{task_id}`                                                                                                        |
+| Created  | When the work is assigned.                                              | When the task starts.                                                                                                                                      |
+| Removed  | After the pull request is opened.                                       | When the task ends.                                                                                                                                        |
+| Used for | The merger writes the work, and merges the branches of the final tasks. | The job of the task, by a worker, a person or an AI.                                                                                                       |
+
+The folders of the worktrees are runtime data, so they are under
+`.superteam/.r`. The folder of a task is not inside the folder of its work: a
+folder inside a worktree would show up there as an untracked file.
+
+The branch of a worktree is kept after the worktree is removed, because it is
+merged later. All the branches of a work, its own and the branches of its tasks,
+are deleted when the work ends.

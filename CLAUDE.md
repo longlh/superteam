@@ -21,3 +21,17 @@ project's own workflow.
   else. If it is not, keep it or move it to the right place.
 - After writing or editing a Markdown file, run `npx prettier --write <file>` on
   it.
+- Diagrams are text (diagram as text), written in a fenced code block in the
+  Markdown file. Use Mermaid or PlantUML.
+  - Mermaid: the code block is marked `mermaid`.
+  - PlantUML: the code block is marked `plantuml`, and it starts with
+    `@startuml` and ends with `@enduml`. An extension is needed to preview it in
+    Markdown.
+
+    ````
+    ```plantuml
+    @startuml
+    Bob -> Alice : hello
+    @enduml
+    ```
+    ````

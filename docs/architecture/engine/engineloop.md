@@ -5,8 +5,8 @@ event is a request or a fact about a work: a work is assigned, a worker has
 ended, a work is approved. The loop does not know what an event means. It gives
 each event to the handler of its type.
 
-It is an independent module: it does not depend on any other component. The
-other components use it through its queue, its handlers and its subscribers.
+It is an independent module: it does not depend on any other component. It has
+three interfaces: its queue, its handlers and its subscribers.
 
 ## Component
 
@@ -102,7 +102,7 @@ loop.shutdown(); // sets isShuttingDown to true
 
 ### Queue storage
 
-The queue needs three places:
+The queue needs four places:
 
 - **Queue:** where the events wait. It is file-based: each event is one JSON
   file. Location: `.superteam/.r/engineloop/queue/{order}.json`, where `{order}`
@@ -115,6 +115,9 @@ The queue needs three places:
   the events that no handler can process, and the events whose retries have
   reached the maximum number of attempts. Location:
   `.superteam/.r/engineloop/dlq/{id}.json`.
+- **Tmp:** a temporary folder where the factory writes an event before it moves
+  the file into the queue (see "Event factory"). Location:
+  `.superteam/.r/engineloop/tmp/`.
 
 ### Event factory
 
@@ -187,13 +190,13 @@ The loop has three stages:
       is processed again. A claim that is not valid (broken JSON, or a wrong
       structure) goes to the DLQ, and `event:error` is fired.
 2. **Loop:** the loop runs `loop()` again and again (see "Loop").
-3. **Shutdown:** the loop stops gracefully. When it receives a signal such as
-   `SIGINT` or `SIGTERM`, it sets the global flag `isShuttingDown` to `true`.
-   Before the loop starts a new iteration, it checks this flag. If it is `true`,
-   no new iteration starts, so the iteration in progress is finished and then
-   the loop stops. A second signal is a force quit: the process exits at once,
-   and the claim that is left is recovered at the next start. `start()` can be
-   called only once.
+3. **Shutdown:** the loop stops gracefully. When `shutdown()` is called, for
+   example on a signal such as `SIGINT` or `SIGTERM`, it sets the global flag
+   `isShuttingDown` to `true`. Before the loop starts a new iteration, it checks
+   this flag. If it is `true`, no new iteration starts, so the iteration in
+   progress is finished and then the loop stops. A second signal is a force
+   quit: the process exits at once, and the claim that is left is recovered at
+   the next start. `start()` can be called only once.
 
 `enqueue()` needs the start stage to be done. Before that it is rejected, so the
 counter is always right.

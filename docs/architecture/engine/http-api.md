@@ -1,11 +1,11 @@
 # HTTP API
 
-The HTTP API is the only door to the engine (see `engine.md`). A client is an AI
-session or the MCP server, and the API listens on localhost only.
+The HTTP API is the only door to the engine for the requests (see `engine.md`).
+A client is anything that sends a request, and the API does not know which one
+it is. The API listens on localhost only.
 
-The API works only at the level of the work. The tasks, the workers and the
-worktrees are the business of the engine, and the client has no request for
-them.
+The API works only at the level of the work. The tasks and the worktrees are the
+business of the engine, and the client has no request for them.
 
 There are two kinds of request:
 
@@ -27,8 +27,8 @@ POST /works
 ```
 
 The client gives a work to the engine. The engine creates the tasks of the work
-from the steps of its workflow, and runs them by itself (see "Work flow" in
-`engine.md`). There is no other request.
+from the steps of its workflow, and runs them by itself (see "Assign and run a
+work" in `action-flow.md`). There is no other request.
 
 Body:
 
@@ -76,8 +76,8 @@ processed, because the state can change between the request and the event.
   work and creates a record of the work in the runtime storage. A rejected work
   is final.
 
-The decision itself is not stored (see "Work flow" in `engine.md`): the result
-is in the pull request, and the git history keeps it.
+The decision itself is not stored (see "Decide a work" in `action-flow.md`): the
+result is in the pull request, and the git history keeps it.
 
 ### Query the state of a work
 
@@ -111,15 +111,14 @@ Answer `200 OK`: the list of all the works. It puts together three sources:
 - The works that are running, in the runtime storage.
 - The works that are done, in the persistent storage. They were merged from
   their work branch.
-- The works that were rejected, in the runtime storage. They are never merged,
-  so there is no work branch to read them from: the engine loop creates their
-  record at the time it rejects them.
+- The works that were rejected or that failed, in the runtime storage. They are
+  never merged, so there is no work branch to read them from: the engine creates
+  the record of a rejected work at the time it rejects it, and keeps the record
+  of a failed work.
 
-A work that is done is kept for good. All the branches of a work (its own branch
-and the branches of its tasks) are deleted when the work ends, so that they do
-not pile up as garbage. On another machine, only what the other machines have
-accumulated in git matters, and a rejected work, which is not in git, is not
-part of it.
+A work that is done is kept for good, in git. On another machine, the list shows
+only the works that reached git, so a rejected or failed work, which is not in
+git, is not in the list there.
 
 Each item has the fields of the state of one work (see "Query the state of a
 work").
@@ -140,8 +139,8 @@ work").
 | `POST /works`               | `work:assign` |
 | `POST /works/{id}/decision` | `work:decide` |
 
-The events `worker:ended` and `merger:ended` do not come from the API: the agent
-manager enqueues them (see `handlers.md`).
+The events `worker:ended` and `merger:ended` do not come from the API: the
+engine enqueues them when a job ends (see `handlers.md`).
 
 ## Open questions
 
@@ -151,10 +150,7 @@ These are not decided yet.
 2. **The id of a work.** The API answers with the `id` before the work exists,
    so the API creates it. Its format is open (a counter, a random id, or a
    slug), and the path of the work in the storage depends on it.
-3. **The works that failed.** A work that failed is never merged either. Is a
-   record created for it in the runtime storage, as for a rejected work, and
-   does the list show it?
-4. **The tasks.** A query that shows the progress of the tasks of a work, as a
+3. **The tasks.** A query that shows the progress of the tasks of a work, as a
    read-only view. For now the client sees only the work.
-5. **A request that is sent twice.** Assigning twice creates two works. A key
+4. **A request that is sent twice.** Assigning twice creates two works. A key
    that the client chooses could make the request safe to send again.

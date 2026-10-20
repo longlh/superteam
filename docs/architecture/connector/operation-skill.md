@@ -20,6 +20,6 @@ These are not decided yet.
 1. **The level of the API.** `query-data` works by entity, but the HTTP API
    works only at the level of the work (see `http-api.md`). The skills must be
    made to fit it: assign a work, decide on it, and get its state.
-2. **`finish`.** It supposes that a person does a task, and for now only an AI
-   agent does a task (see `architecture.md`). The decision on a work is already
-   a request of the API.
+2. **`finish`.** It supposes that a person does a task, and for now the engine
+   runs every task with its job runner, which runs AI agents (see `engine.md`
+   and `agents.md`). The decision on a work is already a request of the API.

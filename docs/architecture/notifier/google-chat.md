@@ -6,8 +6,8 @@ channel that the Notifier dispatches to (see `notifier.md`).
 ## Component
 
 - It posts a message to the webhook of a Google Chat space.
-- It receives the message from the Notifier, and posts it. It does not choose
-  the events, and it does not build the message.
+- It receives a message, and posts it. It does not choose the events, and it
+  does not build the message.
 - The URL of the webhook is a secret. The data keeps only the name of the
   environment variable that holds it, and never its value, because the data is
   versioned in git.
