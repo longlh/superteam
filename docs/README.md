@@ -27,10 +27,13 @@ exception: it has one file for each term.
 The rules of the glossary:
 
 - A term is one file, named with the singular of the term in lower case, such as
-  `agent.md`. A term that has a plural form, or a name that is close to it, is
-  described in the same file.
-- A reference to a term holds the full path, such as `12_glossary/engine.md`,
-  because a term can have the name of a document, such as `engine.md`.
+  `agent.md`. A term that has a plural form is described in the same file.
+- A container is a proper name, so its file starts with `the-`, such as
+  `the-engine.md`. The four containers are `the-agents.md`, `the-connector.md`,
+  `the-engine.md` and `the-notifier.md`.
+- A reference to a term holds the full path, such as
+  `12_glossary/seed-skill.md`, because a term can have the name of a document,
+  such as `seed-skill.md`.
 
 ## Levels of the structure
 
