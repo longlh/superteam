@@ -26,23 +26,24 @@ The documents of its components: `agent-manager.md` for the processes, and
 
 ```plantuml
 @startuml
-rectangle "Whoever gives the jobs" as caller
+!include <C4/C4_Component>
 
-rectangle "Agents" as agents {
-  rectangle "Agent manager\nspawns, watches, kills" as manager
-  rectangle "Claude process\nruns one AI agent" as process
+System_Ext(caller, "Whoever gives the jobs", "")
+SystemDb_Ext(git, "Git", "Worktrees")
+System_Ext(claude, "Claude", "")
+
+Container_Boundary(agents, "Agents") {
+  Component(manager, "Agent manager", "", "Spawns, watches, kills")
+  Component(process, "Claude process", "", "Runs one AI agent")
+  ComponentDb(pids, "Pid files", "", ".superteam/.r/agents")
 }
 
-database "Pid files\n.superteam/.r/agents" as pids
-database "Git\nworktrees" as git
-rectangle "Claude" as claude
-
-caller --> manager : run, stopWork,\nstopAll, recover
-manager ..> caller : onEnded
-manager --> process : spawns
-manager --> pids : writes the pids
-process --> git : works in
-process --> claude : uses
+Rel(caller, manager, "run, stopWork, stopAll, recover")
+Rel(manager, caller, "onEnded", "async")
+Rel(manager, process, "Spawns")
+Rel(manager, pids, "Writes the pids")
+Rel(process, git, "Works in")
+Rel(process, claude, "Uses")
 @enduml
 ```
 

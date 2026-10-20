@@ -24,30 +24,32 @@ runtime files are inside the container that owns them, and follow the contract.
 
 ```plantuml
 @startuml
-left to right direction
-actor "Human\nDoes any job of the system,\nand receives the notifications" as human
+!include <C4/C4_Container>
+LAYOUT_LEFT_RIGHT()
 
-rectangle "superteam" as superteam {
-  rectangle "Connector\nLets people use the system\nthrough their AI tools" as connect
-  rectangle "Engine\nManages the works\nand the worktrees" as engine
-  rectangle "Agents\nManages the AI agents that\ndo the work in place of people" as agents
-  rectangle "Notifier\nSends the notifications to people" as notifier
+Person(human, "Human", "Does any job of the system, and receives the notifications")
+
+System_Boundary(superteam, "superteam") {
+  Container(connect, "Connector", "", "Lets people use the system through their AI tools")
+  Container(engine, "Engine", "", "Manages the works and the worktrees")
+  Container(agents, "Agents", "", "Manages the AI agents that do the work in place of people")
+  Container(notifier, "Notifier", "", "Sends the notifications to people")
 }
 
-rectangle "Claude\nRuns the AI agents" as claude
-rectangle "Git\nStores the worktrees and\nthe branches on the machine" as git
-rectangle "Forge\nStores the branches on a server,\nand approves the works with pull requests" as forge
+System_Ext(claude, "Claude", "Runs the AI agents")
+System_Ext(git, "Git", "Stores the worktrees and the branches on the machine")
+System_Ext(forge, "Forge", "Stores the branches on a server, and approves the works with pull requests")
 
-human --> connect : Does the jobs
-connect --> engine : Requests
-connect --> claude : Configures
-connect --> git : Configures
-notifier --> engine : Requests
-agents --> git : Uses
-git <--> forge : Syncs with
-notifier --> human : Notifies
-agents --> claude : Uses
-engine --> forge : Uses
-engine --> git : Uses
+Rel(human, connect, "Does the jobs")
+Rel(connect, engine, "Requests")
+Rel(connect, claude, "Configures")
+Rel(connect, git, "Configures")
+Rel(notifier, engine, "Requests")
+Rel(agents, git, "Uses")
+BiRel(git, forge, "Syncs with")
+Rel(notifier, human, "Notifies")
+Rel(agents, claude, "Uses")
+Rel(engine, forge, "Uses")
+Rel(engine, git, "Uses")
 @enduml
 ```

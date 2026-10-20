@@ -5,18 +5,20 @@ work, with a team of agents. An actor is a human.
 
 ```plantuml
 @startuml
-left to right direction
-actor "Human\nDoes any job of the system" as human
-rectangle "superteam\nTakes a work, runs it with a team of agents,\nand gives back the output" as superteam
-rectangle "Claude\nRuns the AI agents" as claude
-rectangle "Git\nStores the results on the machine" as git
-rectangle "Forge\nStores the results on a server,\nand approves them with pull requests" as forge
+!include <C4/C4_Context>
+LAYOUT_LEFT_RIGHT()
 
-human --> superteam : Uses
-superteam --> human : Notifies
-superteam --> claude : Uses
-superteam --> forge : Uses
-superteam --> git : Uses
-git <--> forge : Syncs with
+Person(human, "Human", "Does any job of the system")
+System(superteam, "superteam", "Takes a work, runs it with a team of agents, and gives back the output")
+System_Ext(claude, "Claude", "Runs the AI agents")
+System_Ext(git, "Git", "Stores the results on the machine")
+System_Ext(forge, "Forge", "Stores the results on a server, and approves them with pull requests")
+
+Rel(human, superteam, "Uses")
+Rel(superteam, human, "Notifies")
+Rel(superteam, claude, "Uses")
+Rel(superteam, forge, "Uses")
+Rel(superteam, git, "Uses")
+BiRel(git, forge, "Syncs with")
 @enduml
 ```

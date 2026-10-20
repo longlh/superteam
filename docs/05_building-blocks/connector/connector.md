@@ -11,22 +11,23 @@ has no flow of its own.
 
 ```plantuml
 @startuml
-actor "Person or AI agent" as person
+!include <C4/C4_Component>
 
-rectangle "Connector" as connector {
-  rectangle "Seed Skill\ncreates the config files" as seed
-  rectangle "Operation Skill\nbridge between a prompt\nand the MCP tools" as operation
-  rectangle "MCP server\none tool for each request of the API" as mcp
+Person(person, "Person or AI agent", "")
+SystemDb_Ext(config, "Config files", "Workflows, roles of Claude, .gitignore")
+System_Ext(api, "HTTP API of the engine", "")
+
+Container_Boundary(connector, "Connector") {
+  Component(seed, "Seed Skill", "", "Creates the config files")
+  Component(operation, "Operation Skill", "", "Bridge between a prompt and the MCP tools")
+  Component(mcp, "MCP server", "", "One tool for each request of the API")
 }
 
-database "Config files\nworkflows, roles of Claude, .gitignore" as config
-rectangle "HTTP API of the engine" as api
-
-person --> seed : runs
-person --> operation : runs
-person --> mcp : calls
-seed --> config : writes
-operation --> mcp : calls
-mcp --> api : requests
+Rel(person, seed, "Runs")
+Rel(person, operation, "Runs")
+Rel(person, mcp, "Calls")
+Rel(seed, config, "Writes")
+Rel(operation, mcp, "Calls")
+Rel(mcp, api, "Requests")
 @enduml
 ```

@@ -42,27 +42,31 @@ runs, and what it has to do. The names and the fields are a proposal.
 
 ```plantuml
 @startuml
-actor Client as client
-rectangle "Subscribers" as subscribers
-rectangle "Job runner" as runner
+!include <C4/C4_Component>
 
-rectangle "HTTP API\nthe work level" as api
-rectangle "Engine loop\none event at a time" as loop
-rectangle "Handlers\none for each type of event" as handlers
-rectangle "Pub/Sub\npublishes the events" as pubsub
-database "Runtime files\nfollowing the data contract" as runtime
-database "Git\nworktrees, branches, pull requests" as git
+System_Ext(client, "Client", "Sends the requests")
+System_Ext(subscribers, "Subscribers", "Receive the events")
+System_Ext(runner, "Job runner", "Runs the jobs")
+SystemDb_Ext(git, "Git", "Worktrees, branches, pull requests")
 
-client --> api : request
-api --> loop : enqueue
-api --> runtime : query
-loop --> handlers : gives the event
-loop ..> pubsub : notifies
-pubsub ..> subscribers : events
-handlers --> runtime : read, write
-handlers --> git : worktree, merge,\npull request
-handlers --> runner : run, stop
-runner ..> loop : onEnded: enqueue
+Container_Boundary(engine, "Engine") {
+  Component(api, "HTTP API", "", "The work level")
+  Component(loop, "Engine loop", "", "One event at a time")
+  Component(handlers, "Handlers", "", "One for each type of event")
+  Component(pubsub, "Pub/Sub", "", "Publishes the events")
+  ComponentDb(runtime, "Runtime files", "", "Following the data contract")
+}
+
+Rel(client, api, "Request")
+Rel(api, loop, "Enqueue")
+Rel(api, runtime, "Query")
+Rel(loop, handlers, "Gives the event")
+Rel(loop, pubsub, "Notifies", "async")
+Rel(pubsub, subscribers, "Events", "async")
+Rel(handlers, runtime, "Read, write")
+Rel(handlers, git, "Worktree, merge, pull request")
+Rel(handlers, runner, "Run, stop")
+Rel(runner, loop, "onEnded: enqueue", "async")
 @enduml
 ```
 

@@ -11,20 +11,21 @@ on the topics that it knows, and it does not know where they come from.
 
 ```plantuml
 @startuml
-rectangle "Whoever subscribes it\nto the topics" as source
+!include <C4/C4_Component>
 
-rectangle "Notifier" as notifier {
-  rectangle "Notifier\nbuilds the message" as core
-  rectangle "Google Chat\nposts the message to the webhook" as gchat
+System_Ext(source, "Whoever subscribes it to the topics", "")
+System_Ext(api, "HTTP API of the engine", "")
+System_Ext(space, "Google Chat space", "")
+
+Container_Boundary(notifier, "Notifier") {
+  Component(core, "Notifier", "", "Builds the message")
+  Component(gchat, "Google Chat", "", "Posts the message to the webhook")
 }
 
-rectangle "HTTP API of the engine" as api
-rectangle "Google Chat space" as space
-
-source ..> core : topics
-core --> api : asks for more\ninformation
-core --> gchat : message
-gchat --> space : webhook
+Rel(source, core, "Topics", "async")
+Rel(core, api, "Asks for more information")
+Rel(core, gchat, "Message")
+Rel(gchat, space, "Webhook")
 @enduml
 ```
 
