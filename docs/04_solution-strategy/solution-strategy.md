@@ -18,12 +18,12 @@ The principles that the design follows.
    unit of the history is the work.
 4. **There are two kinds of job.**
    - **The jobs of the engine:** the jobs that the engine itself understands, so
-     the engine defines their interface. They are the assigner, the approver and
-     the merger.
+     the engine defines their interface. They are the assigner, the approver,
+     the task merger and the work merger.
    - **The jobs of the project:** the engine knows them only in general, as the
      worker role. The project defines them in detail, such as the developer and
      the business analyst.
-5. **Worktrees are used only by the worker and the merger.** Each of them does
+5. **Worktrees are used only by the worker and the mergers.** Each of them does
    its job in a git worktree, and its result is kept in a git branch. The engine
    also writes the work in the worktree of the work, when it prepares it.
 6. **A job can be done by a person or by an AI.** The two are interchangeable:

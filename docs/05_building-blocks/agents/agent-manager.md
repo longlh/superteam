@@ -1,7 +1,7 @@
 # Agent manager
 
 It spawns the process of an agent, watches it, and kills it. The agent is the
-worker of a task, or the merger (see `agents.md`).
+worker of a task, the task merger or the work merger (see `agents.md`).
 
 ## Component
 

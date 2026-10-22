@@ -34,14 +34,14 @@ work" in `orchestrator.md`).
 A worktree is the environment where a job is done. There are two kinds, one for
 each unit of the work. The engine creates both.
 
-|          | Worktree of a work                                                                 | Worktree of a task                                                                                                                                         |
-| -------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Based on | The root branch.                                                                   | The branch of the task it depends on. A task with no dependency is based on the root branch. A task with more than one dependency is based on one of them. |
-| Branch   | `works/{work_id}`                                                                  | `tasks/{work_id}/{task_id}`                                                                                                                                |
-| Folder   | `.superteam/.r/worktrees/works/{work_id}`                                          | `.superteam/.r/worktrees/tasks/{work_id}/{task_id}`                                                                                                        |
-| Created  | When the work is assigned.                                                         | When the task starts.                                                                                                                                      |
-| Removed  | After the pull request is opened, or when the work fails.                          | When the task ends.                                                                                                                                        |
-| Used for | The engine writes the work, and the merger merges the branches of the final tasks. | The job of the task, by a worker, a person or an AI.                                                                                                       |
+|          | Worktree of a work                                                                      | Worktree of a task                                                                                                                                         |
+| -------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Based on | The root branch.                                                                        | The branch of the task it depends on. A task with no dependency is based on the root branch. A task with more than one dependency is based on one of them. |
+| Branch   | `works/{work_id}`                                                                       | `tasks/{work_id}/{task_id}`                                                                                                                                |
+| Folder   | `.superteam/.r/worktrees/works/{work_id}`                                               | `.superteam/.r/worktrees/tasks/{work_id}/{task_id}`                                                                                                        |
+| Created  | When the work is assigned.                                                              | When the task starts.                                                                                                                                      |
+| Removed  | After the pull request is opened, or when the work fails.                               | When the task ends.                                                                                                                                        |
+| Used for | The engine writes the work, and the work merger merges the branches of the final tasks. | The job of the task, by a worker, a person or an AI.                                                                                                       |
 
 The folders of the worktrees are runtime data, so they are under
 `.superteam/.r`. The folder of a task is not inside the folder of its work: a

@@ -77,23 +77,25 @@ work" in `action-flow.md`). There is no other request.
 
 Body:
 
-| Field         | Type     | Description                                                          |
-| ------------- | -------- | -------------------------------------------------------------------- |
-| `workflow`    | string   | The name of the workflow that the work follows.                      |
-| `title`       | string   | The title of the work.                                               |
-| `description` | string   | What the work is. Optional.                                          |
-| `dod`         | string[] | The DOD of the work, to customize the one of the workflow. Optional. |
+| Field         | Type     | Description                                                                                                          |
+| ------------- | -------- | -------------------------------------------------------------------------------------------------------------------- |
+| `id`          | string   | The id of the work, as a slug (see "Identity" in `storage.md`). Optional: when it is absent, the engine creates one. |
+| `workflow`    | string   | The name of the workflow that the work follows.                                                                      |
+| `title`       | string   | The title of the work.                                                                                               |
+| `description` | string   | What the work is. Optional.                                                                                          |
+| `dod`         | string[] | The DOD of the work, to customize the one of the workflow. Optional.                                                 |
 
 Answer `202 Accepted`:
 
-| Field     | Type   | Description                                          |
-| --------- | ------ | ---------------------------------------------------- |
-| `id`      | string | The id of the new work. The client uses it to query. |
-| `eventId` | string | The id of the event that was created.                |
+| Field     | Type   | Description                                                                        |
+| --------- | ------ | ---------------------------------------------------------------------------------- |
+| `id`      | string | The id of the work, the one of the body or a new one. The client uses it to query. |
+| `eventId` | string | The id of the event that was created.                                              |
 
-The engine checks that the body is valid and that the workflow exists. Then it
-creates the event `work:assign`. The work is in the status `OPEN` until the
-engine has created its tasks.
+The engine checks that the body is valid, that the workflow exists, and that the
+id is not used yet. Then it creates the event `work:assign`. So a work that is
+sent twice with the same id is created once, and the request is safe to send
+again. The work is in the status `OPEN` until the engine has created its tasks.
 
 #### Approve or reject a work
 
@@ -193,12 +195,12 @@ work").
 The engine refuses a request that it cannot take, and the API turns the reason
 into a status:
 
-| Status | When                                                                                                                                                             |
-| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `400`  | The body is not valid.                                                                                                                                           |
-| `404`  | The work or the workflow does not exist.                                                                                                                         |
-| `409`  | The request does not fit the state of the work, such as a decision on a work that is not `PROPOSED`, or an archive of a work that is not `FAILED` or `REJECTED`. |
-| `503`  | The engine is starting, and the engine loop is not ready.                                                                                                        |
+| Status | When                                                                                                                                                                                         |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `400`  | The body is not valid.                                                                                                                                                                       |
+| `404`  | The work or the workflow does not exist.                                                                                                                                                     |
+| `409`  | The request does not fit the state of the work, such as an id that is already used, a decision on a work that is not `PROPOSED`, or an archive of a work that is not `FAILED` or `REJECTED`. |
+| `503`  | The engine is starting, and the engine loop is not ready.                                                                                                                                    |
 
 #### How a request becomes a call
 
@@ -210,9 +212,9 @@ into a status:
 | `GET /works/{id}`           | `engine.getWork`       | None           |
 | `GET /works`                | `engine.listWorks`     | None           |
 
-The events `worker:ended` and `merger:ended` do not come from the API: the
-engine enqueues them when the orchestrator calls `engine.jobEnded(result)` (see
-`handlers.md`).
+The events `worker:ended`, `task-merger:ended` and `work-merger:ended` do not
+come from the API: the engine enqueues them when the orchestrator calls
+`engine.jobEnded(result)` (see `handlers.md`).
 
 ## Code
 

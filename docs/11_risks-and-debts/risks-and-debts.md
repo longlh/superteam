@@ -55,20 +55,13 @@ These are not decided yet.
    shutdown, and `enqueue()` is rejected before the start stage is done. The
    engine needs to give a way to know that the start stage is done, so that the
    orchestrator opens the API at the right time.
-2. **The jobs.** The names of the functions of the engine, and the fields of a
-   job and of its result, are a proposal. A `merger:ended` event has to say
-   which job of the merger has ended.
+2. **The names.** The names of the functions of the engine are a proposal.
 
 ### HTTP API (`orchestrator.md`)
 
 1. **The paths and the bodies.** Everything above is a proposal.
-2. **The id of a work.** The API answers with the `id` before the work exists,
-   so `assign` of the engine creates it. Its format is open (a counter, a random
-   id, or a slug), and the path of the work in the storage depends on it.
-3. **The tasks.** A query that shows the progress of the tasks of a work, as a
+2. **The tasks.** A query that shows the progress of the tasks of a work, as a
    read-only view. For now the client sees only the work.
-4. **A request that is sent twice.** Assigning twice creates two works. A key
-   that the client chooses could make the request safe to send again.
 
 ### Orchestrator (`orchestrator.md`)
 
@@ -93,9 +86,3 @@ These are not decided yet.
 
 1. **The artifacts and the tasks.** An artifact in git refers to a task, but the
    tasks are runtime data, and are not kept.
-
-### Data contract (`storage.md`)
-
-1. **The identity.** The format of `id` for a work and a task: a counter, a
-   random id, or a slug. The path comes from it. The `id` of an artifact is
-   decided (see "The id of an artifact" in `persistence-data.md`).

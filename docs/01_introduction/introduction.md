@@ -17,14 +17,15 @@ and each one points to the document where its design is.
 ## Requirements
 
 1. **Assign a work.** A client gives a work with a workflow, a title, and
-   optionally a description and a DOD. The system answers at once with the `id`
-   of the work (see `orchestrator.md`).
+   optionally an id, a description and a DOD. The system answers at once with
+   the `id` of the work (see `orchestrator.md`).
 2. **Run the work by itself.** The system creates the tasks of the work from the
    steps of its workflow, with no other request. A task starts when it has its
    inputs (see `engine.md` and `storage.md`).
 3. **Keep the results in git.** The results of the tasks are kept in git
-   branches, and the work is proposed as a pull request. Its description holds
-   the DOD checklists of the tasks (see `git-adapter.md`).
+   branches, and the work is proposed as a pull request. Its description holds a
+   summary of the work, and the DOD checklists of the work and of its tasks (see
+   `git-adapter.md`).
 4. **Decide on a work.** The approver approves or rejects a work that is
    proposed. The merge of the pull request into the root branch is the approval,
    and the decision itself is not stored (see `0001-approval-is-the-merge.md`).

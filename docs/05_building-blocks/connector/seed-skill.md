@@ -10,6 +10,9 @@ the roles of Claude. It writes nothing else.
 - Two commands use AI to create the config files: `/superteam:def-role` creates
   the roles of Claude, and `/superteam:def-process` creates the workflows of the
   engine.
+- The name of a workflow and the name of each of its steps are slugs (see
+  "Identity" in `storage.md`), because the name of a step is the id of its task,
+  and it is in the name of a branch.
 - A role is an agent file of Claude, `.claude/agents/{role}.md`, that the skill
   writes directly. There is no record of the role in the data. The file has the
   fields of the format of Claude: `name`, `description`, `tools` and `model` in
@@ -18,8 +21,9 @@ the roles of Claude. It writes nothing else.
   or by an AI is decided by the workflow, not by the role.
 - It always puts `StructuredOutput` in the `tools` of the agent file, so that
   the result of the worker is validated (see `claude-process.md`).
-- It does not create the agent file of the merger. The merger is a role of the
-  engine, and its agent file comes with the plugin (see `agents.md`).
+- It does not create the agent files of the task merger and of the work merger.
+  They are roles of the engine, and their agent files come with the plugin (see
+  `agents.md`).
 - It adds `.superteam/.r/` and `.superteam/.env` to the `.gitignore` of the
   project, because the runtime data and the values of the environment variables
   are not kept in git (see `solution-strategy.md` and `constraints.md`). A line

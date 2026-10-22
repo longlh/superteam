@@ -38,7 +38,7 @@ Each use case is realized by one or more scenarios of
 - **Goal:** a work is done, and its result is in the root branch.
 - **Precondition:** the project is set up (UC1).
 - **Main scenario:**
-  1. The person assigns a work with a workflow, a title, and optionally a
+  1. The person assigns a work with a workflow, a title, and optionally an id, a
      description and a DOD. The system answers with the `id` of the work.
   2. The system does the tasks of the work by itself.
   3. The person follows the work: gets its state, or the list of the works. The
@@ -51,7 +51,8 @@ Each use case is realized by one or more scenarios of
 - **Extensions:**
   - The body of the request is not valid: the system refuses it.
   - The workflow does not exist: the system refuses it.
-  - Assigning the same work twice creates two works.
+  - The id of the work is already used: the system refuses it. So assigning the
+    same work twice with the same id creates one work.
   - A task fails: the whole work fails, and the tasks that have not started
     never start. The work is final.
   - The approver rejects the work: the pull request is closed, and the work is

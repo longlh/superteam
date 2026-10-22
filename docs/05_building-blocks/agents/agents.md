@@ -1,7 +1,8 @@
 # Agents
 
-Manages the AI agents that do the jobs of a work, as the worker of a task or as
-the merger. The root branch is the branch of the root workspace.
+Manages the AI agents that do the jobs of a work, as the worker of a task, as
+the task merger or as the work merger. The root branch is the branch of the root
+workspace.
 
 The documents of its components: `agent-manager.md` for the processes, and
 `claude-process.md` for the `claude` command.
@@ -9,8 +10,8 @@ The documents of its components: `agent-manager.md` for the processes, and
 ## Component
 
 - It runs the agents of the jobs that it is given. A job has a role, the worker
-  of a task or the merger, and the worktree where it runs. It does not know who
-  gives it the jobs.
+  of a task, the task merger or the work merger, and the folder where it runs.
+  It does not know who gives it the jobs.
 - Its functions:
 
   | Function            | What it does                                                                                                                                                                  |
@@ -49,19 +50,22 @@ Rel(process, claude, "Uses")
 
 ## Code
 
-### The merger
+### The mergers
 
-The merger is run for the unit of the work. It merges the branches of the
-dependencies of a task into the new branch when the task has more than one, and
-merges the branches of the final tasks. It does all the merges of the work.
+The mergers do all the merges of a work. There are two roles:
 
-A conflict can happen only when it merges the dependencies of a task. The merger
-resolves the conflict itself, so the worker starts on a clean worktree.
+- **The task merger** merges the branches of the dependencies of a task into the
+  new branch, when the task has more than one. A conflict can happen only here.
+  The task merger resolves the conflict itself, so the worker starts on a clean
+  worktree.
+- **The work merger** merges the branches of the final tasks into the branch of
+  the work (see "Merging the final tasks"). Then it checks the work against its
+  DOD, and fills the DOD checklist of the work.
 
-The merger is a role of the engine, not of the project. Its agent file comes
-with the plugin, and the Seed Skill does not create it (see `seed-skill.md`).
+The mergers are roles of the engine, not of the project. Their agent files come
+with the plugin, and the Seed Skill does not create them (see `seed-skill.md`).
 
-The failure of the merger is handled like the failure of a worker.
+The failure of a merger is handled like the failure of a worker.
 
 ### The worker
 
@@ -78,7 +82,7 @@ task are given, see `git-adapter.md`):
 ### Merging the final tasks
 
 The changes are not merged into the root branch when the worker finishes. When
-all the tasks of a work are done, the merger merges the branches of all the
+all the tasks of a work are done, the work merger merges the branches of all the
 final tasks of the work, the tasks at the end of the dependency chain, into the
 branch of the work, in the worktree of the work. There can be more than one such
 branch, so this merge is needed. Opening the pull request, and the approval, are

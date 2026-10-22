@@ -24,25 +24,47 @@ receives its notifications. It does not call another container.
 
 ### Functions
 
-| Function                     | What it does                                                                                                                                           |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `assign(body)`               | Checks the body and that the workflow exists, enqueues `work:assign`, and returns the `id` of the work and the `eventId`.                              |
-| `decide(id, decision)`       | Checks that the work is `PROPOSED`, enqueues `work:decide`, and returns the `eventId`.                                                                 |
-| `archive(id)`                | Checks that the work is `FAILED` or `REJECTED`, enqueues `work:archive`, and returns the `eventId`.                                                    |
-| `getWork(id)`                | Returns the state of a work, from the runtime state and from git, without the loop.                                                                    |
-| `listWorks()`                | Returns the list of the works, without the loop.                                                                                                       |
-| `jobEnded(result)`           | Enqueues `worker:ended` or `merger:ended`, with the result of the job.                                                                                 |
-| `reconcile(jobs)`            | At the start, takes the jobs that were killed: it fails their tasks, and publishes `job:run` again for a job that it waits for and that was never run. |
-| `subscribe(topic, callback)` | Calls the callback for each notification of the topic (see `pubsub.md`), and returns a function that unsubscribes.                                     |
-| `start()`, `shutdown()`      | Starts the engine loop, and stops it gracefully (see "Life cycle" in `engineloop.md`).                                                                 |
+| Function                     | What it does                                                                                                                                                              |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `assign(body)`               | Checks the body, that the workflow exists and that the id is not used yet, enqueues `work:assign`, and returns the `id` of the work, given or created, and the `eventId`. |
+| `decide(id, decision)`       | Checks that the work is `PROPOSED`, enqueues `work:decide`, and returns the `eventId`.                                                                                    |
+| `archive(id)`                | Checks that the work is `FAILED` or `REJECTED`, enqueues `work:archive`, and returns the `eventId`.                                                                       |
+| `getWork(id)`                | Returns the state of a work, from the runtime state and from git, without the loop.                                                                                       |
+| `listWorks()`                | Returns the list of the works, without the loop.                                                                                                                          |
+| `jobEnded(result)`           | Enqueues `worker:ended`, `task-merger:ended` or `work-merger:ended`, from the kind in the id of the job, with the result of the job.                                      |
+| `reconcile(jobs)`            | At the start, takes the jobs that were killed: it fails their tasks, and publishes `job:run` again for a job that it waits for and that was never run.                    |
+| `subscribe(topic, callback)` | Calls the callback for each notification of the topic (see `pubsub.md`), and returns a function that unsubscribes.                                                        |
+| `start()`, `shutdown()`      | Starts the engine loop, and stops it gracefully (see "Life cycle" in `engineloop.md`).                                                                                    |
 
 A function that refuses a request says why: the body is not valid, the work or
 the workflow does not exist, the request does not fit the state of the work, or
 the engine is starting.
 
-A job has an id, a role (the worker of a task, or the merger), the worktree
-where it runs, and what it has to do. The names of the functions, and the fields
-of a job and of its result, are a proposal.
+A job is one run of an AI agent for a work. It has these fields:
+
+| Field         | What it holds                                                                                                                                                                                                                                                                                                                                                     |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`          | `{workId}/{taskId}/{kind}` for a job of a task, where the kind is `worker` or `task-merger`, and `{workId}/work-merger` for the job of the work. It is the same each time that the job is published, so a job that already runs is not run again. The ids of a work and of a task are slugs, so the engine reads the work and the task of a job back from its id. |
+| `role`        | The role of the agent: the `assignee` of the task for a worker, or `task-merger` or `work-merger`.                                                                                                                                                                                                                                                                |
+| `workdir`     | The folder where the agent runs: the worktree of the task, or the worktree of the work. Its branch comes with it.                                                                                                                                                                                                                                                 |
+| `schema`      | The JSON schema of the result, from the entity TASK or WORK.                                                                                                                                                                                                                                                                                                      |
+| `instruction` | `{ target, targetIds, prompt }`. `target` is `task` for a worker, with the id of its task in `targetIds`; `merge` for a task merger, with the tasks to merge; and `work` for the work merger, with the id of the work. The engine makes the `prompt`.                                                                                                             |
+
+The names of the functions are a proposal.
+
+The result of a job is the result of its agent, `{ summary, data }`, or the
+error that ended it:
+
+| Job                  | `summary`                                                                                                          | `data`                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| The worker of a task | What the worker did, in its own words. The engine writes it in the task.                                           | An object TASK (see `storage.md`), with the `dodChecklist` that the worker fills.      |
+| The task merger      | What the task merger merged, and the conflicts that it resolved. The engine writes it in the task, for its worker. | An object TASK. Nothing of it is written.                                              |
+| The work merger      | What the work merger merged, and the conflicts that it resolved. The engine puts it in the pull request.           | An object WORK (see `storage.md`), with the `dodChecklist` that the work merger fills. |
+
+The engine merges into the task or the work only the fields that the job may
+write: `dodChecklist`. The other fields belong to the engine, and the engine
+keeps them. The schema that is given to the agent comes from the entity of
+`data`, TASK or WORK.
 
 ### Parts
 

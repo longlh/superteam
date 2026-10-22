@@ -48,17 +48,20 @@ the Agents with the Claude process.
    inputs, which means that its status is `IN_PROGRESS` (see "Derived status" in
    `storage.md`). For each task the engine creates a worktree and a branch,
    based on the branch of the task it depends on. If the task depends on more
-   than one task, the engine asks for the merger first, to merge the branches of
-   the other dependencies into the new branch. Then the engine asks for a worker
-   in the worktree, with `job:run`, and the orchestrator runs it in the Agents.
-   The worker works only in its worktree, and its results are kept on its
-   branch, which is on the remote. When the worker ends, the orchestrator gives
-   the result to the engine, which records it.
-3. **Propose.** When all the tasks are done, the engine asks for the merger, to
-   merge the branches of the final tasks into the worktree of the work. When the
-   merger has ended, the engine pushes the branch of the work, and opens a pull
+   than one task, the engine asks for the task merger first, to merge the
+   branches of the other dependencies into the new branch. Then the engine asks
+   for a worker in the worktree, with `job:run`, and the orchestrator runs it in
+   the Agents. The worker works only in its worktree, and its results are kept
+   on its branch, which is on the remote. When the worker ends, the orchestrator
+   gives the result to the engine, which records it.
+3. **Propose.** When all the tasks are done, the engine asks for the work
+   merger, to merge the branches of the final tasks into the worktree of the
+   work. When the work merger has ended, the engine writes its DOD checklist in
+   the work and commits it, pushes the branch of the work, and opens a pull
    request, so the work is `PROPOSED`. The description of the pull request is a
-   Markdown text that holds the DOD checklists of the tasks.
+   Markdown text that holds the `summary` of the work merger, the DOD checklist
+   of the work, and the DOD checklists of the tasks, because the tasks are
+   removed with the worktree of the work.
 
 ```plantuml
 @startuml
@@ -92,13 +95,14 @@ loop for each task that is ready
   Handler -> Runtime : record the result
   Handler -> Git : remove worktree of the task
 end
-Handler ->> PS : job:run, the merger, to merge the final tasks
+Handler ->> PS : job:run, the work merger
 PS ->> Orch : job:run
-Orch -> Agents : run the merger
+Orch -> Agents : run the work merger
 Agents -->> Orch : onEnded
 Orch -> Fn : jobEnded
-Fn -> EL : enqueue merger:ended
-EL -> Handler : give merger:ended
+Fn -> EL : enqueue work-merger:ended
+EL -> Handler : give work-merger:ended
+Handler -> Git : write the DOD checklist of the work, commit
 Handler -> Git : push, create pull request
 Handler -> Git : remove worktree of the work
 @enduml
@@ -162,14 +166,13 @@ A task is not run again. If its worker fails (the process fails, it is killed
 because it runs too long, or its result does not match the schema), the whole
 work fails, and the tasks that have not started never start. The engine
 publishes `job:stop`, and the orchestrator asks the Agents to stop the other
-jobs of the work at once, to save the cost. A failure of the merger fails the
-work in the same way. The engine then writes the `error` in the work, commits
-it, and pushes the branch of the work, which is kept on the remote as the trace
-of the work. It removes the worktrees of the work, which removes its tasks too,
-and deletes the branches of its tasks. A failed work is final, like a rejected
-one: to try again, a new work is assigned. A failed task is recorded as
-`completed` with an `error`, so it is `FAILED` (see "Derived status" in
-`storage.md`).
+jobs of the work at once, to save the cost. A failure of a merger fails the work
+in the same way. The engine then writes the `error` in the work, commits it, and
+pushes the branch of the work, which is kept on the remote as the trace of the
+work. It removes the worktrees of the work, which removes its tasks too, and
+deletes the branches of its tasks. A failed work is final, like a rejected one:
+to try again, a new work is assigned. A failed task is recorded as `completed`
+with an `error`, so it is `FAILED` (see "Derived status" in `storage.md`).
 
 ## Archive a work
 

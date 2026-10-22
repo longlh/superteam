@@ -1,21 +1,23 @@
 # Claude process
 
-The `claude` process that runs an AI agent, as the worker of a task or as the
-merger. It is spawned in the folder of the worktree of the job (see "The worker"
-in `agents.md`).
+The `claude` process that runs an AI agent, as the worker of a task, the task
+merger or the work merger. It is spawned in the folder of the worktree of the
+job (see "The worker" in `agents.md`).
 
 The behavior below was checked with `claude` 2.1.300 (see "Checked behavior").
 
 ## Component
 
 - The prompt is made of the instructions of the role, the `instruction` of the
-  task, the content of its work, and the artifacts of the tasks it depends on.
+  task, the content of its work, the artifacts of the tasks it depends on, and
+  the `summary` of the task, which the task merger wrote when it merged the
+  dependencies.
 - The process runs with the agent of the role (`.claude/agents/{role}.md`, or
-  the agent file of the merger that comes with the plugin), and the tools of the
-  role are allowed. Its stdin is `/dev/null`.
+  the agent files of the mergers, which come with the plugin), and the tools of
+  the role are allowed. Its stdin is `/dev/null`.
 - The result is validated against the JSON schema, and it is in the
-  `structured_output` field of the JSON output. This is how the worker returns
-  its result.
+  `structured_output` field of the JSON output. This is how the worker and the
+  mergers return their result, `{ summary, data }` (see `engine.md`).
 - **The tools of the role include `StructuredOutput`.** The Seed Skill puts it
   there (see `seed-skill.md`). If a role lists its `tools` without it, the
   schema is not applied, and nothing reports it: `structured_output` is `null`,

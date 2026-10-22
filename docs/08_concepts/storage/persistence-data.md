@@ -35,10 +35,11 @@ job writes in a worktree does not go through the engine loop.
 
 The engine writes the work in `.superteam/.p/works/{id}.json` of the worktree of
 the work, when it prepares the worktree, and commits it on the branch of the
-work. When the work fails, it writes the `error` there too. The file reaches the
-root branch only when the work is approved. The branch of a work that failed or
-was rejected is kept on the remote, so its file stays there (see "Branches" in
-`git-adapter.md`).
+work. When the work merger has merged the final tasks, it writes the DOD
+checklist of the work there too, and when the work fails, it writes the `error`
+there. The file reaches the root branch only when the work is approved. The
+branch of a work that failed or was rejected is kept on the remote, so its file
+stays there (see "Branches" in `git-adapter.md`).
 
 #### Artifacts
 

@@ -1,6 +1,6 @@
 # ADR 6. The merger is a role of the engine
 
-- Status: Accepted
+- Status: Superseded by ADR 14
 
 ## Context
 

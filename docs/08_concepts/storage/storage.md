@@ -73,6 +73,7 @@ class TASK <<entity>> {
   instruction : string
   dependOn : taskId[]
   dodChecklist : boolean[]
+  summary : string - what its last job said
   completed : boolean
   completedAt : datetime
   error : string - why the task failed
@@ -103,13 +104,30 @@ that is written back by an entity that refers to it, and the references between
 entities never form a circle. So it is rare that more than one actor writes the
 same entity.
 
+### Identity
+
+| Entity   | `id`                                                                                                                                                                                                               |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| WORK     | A slug, such as `add-login-page`: lowercase letters and digits, in words joined by `-`, up to 63 characters. The client can give it. Otherwise the engine creates a random one, of 8 lowercase letters and digits. |
+| TASK     | The `name` of its step. A step makes one task in a work, so the name is unique in the work. So the name of a step is a slug too.                                                                                   |
+| ARTIFACT | A hash (see "The id of an artifact" in `persistence-data.md`).                                                                                                                                                     |
+
+The `id` of a work is in the name of its branch, in the path of its file and in
+the URL of the API, so it must be safe for all three. An `id` is used while one
+of these is left: the branch `works/{id}`, the file
+`.superteam/.p/works/{id}.json` on the root branch, or a pull request from the
+branch `works/{id}`. The engine refuses a work whose `id` is used, so a work
+that is assigned twice with the same `id` is created once. A work that failed
+and was archived leaves nothing, so its `id` can be used again. A rejected work
+leaves its closed pull request, so its `id` cannot.
+
 ### Roles
 
 A role names a job. There are two kinds of role (see the principles in
 `solution-strategy.md`):
 
-- **The roles of the engine:** the assigner, the approver and the merger. The
-  engine defines them.
+- **The roles of the engine:** the assigner, the approver, the task merger and
+  the work merger. The engine defines them.
 - **The roles of the project:** such as the developer and the business analyst.
   The project defines them.
 
