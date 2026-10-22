@@ -13,6 +13,7 @@ import { startReady } from "./start-ready.js";
 const now = new Date("2026-01-02T03:04:05.000Z");
 const linear = {
   name: "linear",
+  title: "Linear",
   dod: ["wf dod"],
   steps: [
     {
@@ -28,6 +29,7 @@ const linear = {
 };
 const fan = {
   name: "fan",
+  title: "Fan",
   steps: [
     {
       name: "a",
@@ -44,9 +46,20 @@ const fan = {
     },
   ],
 };
+// Changed on disk after the assign was accepted: a step has lost its role.
+const broken = {
+  name: "broken",
+  title: "Broken",
+  steps: [
+    {
+      name: "a",
+    },
+  ],
+};
 const workflows = {
   linear,
   fan,
+  broken,
 };
 
 let baseDir;
@@ -343,6 +356,22 @@ test("an unknown workflow throws a non retryable error", async () => {
       }),
     ),
     (error) => error.retryable === false,
+  );
+  assert.equal(calls.length, 0);
+});
+
+test("a workflow that is not valid any more throws a non retryable error", async () => {
+  await assert.rejects(
+    handlers["work:assign"](
+      event({
+        id: "w1",
+        workflow: "broken",
+        title: "T",
+      }),
+    ),
+    (error) =>
+      error.retryable === false &&
+      /workflow broken: step a: role must be a slug/.test(error.message),
   );
   assert.equal(calls.length, 0);
 });

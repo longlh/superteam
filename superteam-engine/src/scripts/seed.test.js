@@ -50,9 +50,11 @@ const workflow = {
   steps: [
     {
       name: "build",
+      role: "developer",
     },
     {
       name: "review",
+      role: "reviewer",
       dependOn: ["build"],
     },
   ],
@@ -291,10 +293,12 @@ test("writeWorkflow refuses a cycle", async () => {
         steps: [
           {
             name: "a",
+            role: "dev",
             dependOn: ["b"],
           },
           {
             name: "b",
+            role: "dev",
             dependOn: ["a"],
           },
         ],

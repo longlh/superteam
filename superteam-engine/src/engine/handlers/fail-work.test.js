@@ -7,6 +7,7 @@ import { assignEvent, createHarness } from "./harness.js";
 
 const linear = {
   name: "linear",
+  title: "Linear",
   steps: [
     {
       name: "a",

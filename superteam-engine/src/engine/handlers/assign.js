@@ -1,15 +1,25 @@
 import { readJson, writeJson } from "../../lib/storage/files.js";
 import { workFile, worktreeDir } from "../../lib/storage/paths.js";
+import { validateWorkflow } from "../../lib/storage/validate.js";
 import { createTasks, createTaskStore } from "../tasks.js";
 import { startReady } from "./start-ready.js";
+
+function refuse(message) {
+  return Object.assign(new Error(message), {
+    retryable: false,
+  });
+}
 
 export async function assign(deps, event) {
   const { id, workflow: name, title, description, dod } = event.payload.data;
   const workflow = await deps.loadWorkflow(name);
   if (!workflow) {
-    throw Object.assign(new Error(`unknown workflow ${name}`), {
-      retryable: false,
-    });
+    throw refuse(`unknown workflow ${name}`);
+  }
+  // Checked again: the file may have changed since the assign was accepted.
+  const reason = validateWorkflow(workflow);
+  if (reason !== null) {
+    throw refuse(`workflow ${name}: ${reason}`);
   }
 
   const folder = worktreeDir(deps.baseDir, {

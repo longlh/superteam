@@ -234,6 +234,7 @@ test("assign refuses a workflow that could never finish", async () => {
       steps: [
         {
           name: "a",
+          role: "developer",
           dependOn: ["b"],
         },
       ],
@@ -244,10 +245,12 @@ test("assign refuses a workflow that could never finish", async () => {
       steps: [
         {
           name: "a",
+          role: "developer",
           dependOn: ["b"],
         },
         {
           name: "b",
+          role: "developer",
           dependOn: ["a"],
         },
       ],
@@ -261,7 +264,9 @@ test("assign refuses a workflow that could never finish", async () => {
           workflow: workflow.name,
         }),
       ),
-      code("invalid"),
+      (error) =>
+        code("invalid")(error) &&
+        /no step|non-empty|unknown step|cycle/.test(error.message),
     );
   }
 });

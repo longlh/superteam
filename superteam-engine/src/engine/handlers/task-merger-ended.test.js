@@ -9,6 +9,7 @@ import { assignEvent, createHarness, endedEvent, now } from "./harness.js";
 
 const fan = {
   name: "fan",
+  title: "Fan",
   steps: [
     {
       name: "a",

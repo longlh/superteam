@@ -46,15 +46,15 @@ workflow file by hand.
   "name": "feature",
   "title": "Feature",
   "description": "optional",
-  "dod": "optional definition of done",
-  "canApprove": "optional",
+  "dod": ["optional item of the definition of done"],
+  "canApprove": ["optional role that can approve"],
   "steps": [
     {
       "name": "build",
       "role": "developer",
       "dependOn": [],
       "timeout": 720,
-      "dod": "optional",
+      "dod": ["optional item of the definition of done"],
       "description": "optional",
       "instruction": "optional"
     }
@@ -62,14 +62,17 @@ workflow file by hand.
 }
 ```
 
-- `name` and `title` are required. `steps` is a non-empty list.
+- `name` and `title` are required. `steps` is a non-empty list. Each step
+  requires `name` and `role`.
+- `dod` and `canApprove` are lists of strings. `description` and `instruction`
+  are strings.
 - Names of the workflow and of each step are slugs: lowercase letters and digits
   joined by `-`, up to 63 characters. The name of a step is the id of its task
   and is part of a branch name.
 - `dependOn` is a list of names of other steps of the same workflow. It must not
   make a cycle. Step names are unique.
-- `timeout` is in minutes. The default is 720.
-- `role` names a role of `.claude/agents/`.
+- `timeout` is a whole number of minutes, from 1 to 35791. The default is 720.
+- `role` names a role of `.claude/agents/`. It is a slug.
 - Do not use the roles `task-merger` and `work-merger`, and do not create them.
   They belong to the engine.
 - Running the skill again overwrites a workflow file of the same name.

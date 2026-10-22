@@ -1,5 +1,8 @@
 import { isSlug } from "./ids.js";
 
+// In minutes: the largest delay of setTimeout is 2^31 - 1 ms.
+const MAX_TIMEOUT = Math.floor((2 ** 31 - 1) / 60000);
+
 function isObject(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -44,16 +47,23 @@ function validateStep(step) {
   if (step.dod !== undefined && !isStringArray(step.dod)) {
     return `${at}: dod must be an array of strings`;
   }
-  for (const field of ["role", "description", "instruction"]) {
+  if (!isSlug(step.role)) {
+    return `${at}: role must be a slug`;
+  }
+  for (const field of ["description", "instruction"]) {
     if (step[field] !== undefined && typeof step[field] !== "string") {
       return `${at}: ${field} must be a string`;
     }
   }
   if (
     step.timeout !== undefined &&
-    !(Number.isInteger(step.timeout) && step.timeout > 0)
+    !(
+      Number.isInteger(step.timeout) &&
+      step.timeout > 0 &&
+      step.timeout <= MAX_TIMEOUT
+    )
   ) {
-    return `${at}: timeout must be a positive integer`;
+    return `${at}: timeout must be an integer from 1 to ${MAX_TIMEOUT}`;
   }
   return null;
 }
@@ -85,6 +95,17 @@ export function validateWorkflow(workflow) {
   }
   if (typeof workflow.title !== "string" || workflow.title === "") {
     return "title must be a non-empty string";
+  }
+  if (
+    workflow.description !== undefined &&
+    typeof workflow.description !== "string"
+  ) {
+    return "description must be a string";
+  }
+  for (const field of ["dod", "canApprove"]) {
+    if (workflow[field] !== undefined && !isStringArray(workflow[field])) {
+      return `${field} must be an array of strings`;
+    }
   }
   if (!Array.isArray(workflow.steps) || workflow.steps.length === 0) {
     return "steps must be a non-empty array";

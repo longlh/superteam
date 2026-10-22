@@ -77,125 +77,169 @@ describe("validateAssignBody", () => {
 });
 
 describe("validateWorkflow", () => {
-  const flow = (steps) => ({
+  const flow = (steps, extra = {}) => ({
     name: "flow",
     title: "Flow",
     steps,
+    ...extra,
+  });
+  const step = (name, extra = {}) => ({
+    name,
+    role: "dev",
+    ...extra,
   });
 
   test("accepts a valid workflow", () => {
     assert.equal(
       validateWorkflow(
-        flow([
+        flow(
+          [
+            step("a", {
+              timeout: 30,
+              dod: ["x"],
+              description: "d",
+              instruction: "i",
+            }),
+            step("b", {
+              dependOn: ["a"],
+              timeout: 35791,
+            }),
+          ],
           {
-            name: "a",
-            role: "dev",
-            timeout: 30,
-            dod: ["x"],
+            description: "About the flow",
+            dod: ["shipped"],
+            canApprove: ["lead"],
           },
-          {
-            name: "b",
-            dependOn: ["a"],
-          },
-        ]),
+        ),
       ),
       null,
     );
   });
 
-  test("refuses bad workflows", () => {
-    for (const workflow of [
-      null,
-      {
-        title: "Flow",
-        steps: [
+  test("refuses bad workflows, each with its reason", () => {
+    for (const [workflow, reason] of [
+      [null, /workflow must be an object/],
+      [
+        {
+          title: "Flow",
+          steps: [step("a")],
+        },
+        /name must be a slug/,
+      ],
+      [
+        {
+          name: "Bad Name",
+          title: "Flow",
+          steps: [step("a")],
+        },
+        /name must be a slug/,
+      ],
+      [
+        {
+          name: "flow",
+          steps: [step("a")],
+        },
+        /title must be a non-empty string/,
+      ],
+      [
+        flow([step("a")], {
+          description: 5,
+        }),
+        /^description must be a string/,
+      ],
+      [
+        flow([step("a")], {
+          dod: "shipped",
+        }),
+        /^dod must be an array of strings/,
+      ],
+      [
+        flow([step("a")], {
+          dod: [1],
+        }),
+        /^dod must be an array of strings/,
+      ],
+      [
+        flow([step("a")], {
+          canApprove: "lead",
+        }),
+        /^canApprove must be an array of strings/,
+      ],
+      [flow([]), /steps must be a non-empty array/],
+      [flow(undefined), /steps must be a non-empty array/],
+      [flow([step("Bad")]), /step name must be a slug/],
+      [
+        flow([
           {
             name: "a",
           },
-        ],
-      },
-      {
-        name: "Bad Name",
-        title: "Flow",
-        steps: [
-          {
-            name: "a",
-          },
-        ],
-      },
-      {
-        name: "flow",
-        steps: [
-          {
-            name: "a",
-          },
-        ],
-      },
-      flow([]),
-      flow(undefined),
-      flow([
-        {
-          name: "Bad",
-        },
+        ]),
+        /step a: role must be a slug/,
+      ],
+      [
+        flow([
+          step("a", {
+            role: "Bad Role",
+          }),
+        ]),
+        /step a: role must be a slug/,
+      ],
+      [flow([step("a"), step("a")]), /duplicate step name a/],
+      [
+        flow([
+          step("a", {
+            dependOn: ["zzz"],
+          }),
+        ]),
+        /depends on unknown step zzz/,
+      ],
+      [
+        flow([
+          step("a", {
+            dependOn: ["b"],
+          }),
+          step("b", {
+            dependOn: ["a"],
+          }),
+        ]),
+        /cycle/,
+      ],
+      [
+        flow([
+          step("a", {
+            dependOn: ["a"],
+          }),
+        ]),
+        /cycle/,
+      ],
+      ...[0, 1.5, "5", 35792].map((timeout) => [
+        flow([
+          step("a", {
+            timeout,
+          }),
+        ]),
+        /step a: timeout must be an integer from 1 to 35791/,
       ]),
-      flow([
-        {
-          name: "a",
-        },
-        {
-          name: "a",
-        },
-      ]),
-      flow([
-        {
-          name: "a",
-          dependOn: ["zzz"],
-        },
-      ]),
-      flow([
-        {
-          name: "a",
-          dependOn: ["b"],
-        },
-        {
-          name: "b",
-          dependOn: ["a"],
-        },
-      ]),
-      flow([
-        {
-          name: "a",
-          dependOn: ["a"],
-        },
-      ]),
-      flow([
-        {
-          name: "a",
-          timeout: 0,
-        },
-      ]),
-      flow([
-        {
-          name: "a",
-          timeout: 1.5,
-        },
-      ]),
-      flow([
-        {
-          name: "a",
-          timeout: "5",
-        },
-      ]),
-      flow([
-        {
-          name: "a",
-          dod: "x",
-        },
-      ]),
+      [
+        flow([
+          step("a", {
+            dod: "x",
+          }),
+        ]),
+        /step a: dod must be an array of strings/,
+      ],
+      [
+        flow([
+          step("a", {
+            instruction: 5,
+          }),
+        ]),
+        /step a: instruction must be a string/,
+      ],
     ]) {
-      assert.equal(
-        typeof validateWorkflow(workflow),
-        "string",
+      assert.match(
+        String(validateWorkflow(workflow)),
+        reason,
         JSON.stringify(workflow),
       );
     }

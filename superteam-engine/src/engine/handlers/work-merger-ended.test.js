@@ -7,6 +7,7 @@ import { assignEvent, createHarness, endedEvent, now } from "./harness.js";
 
 const flow = {
   name: "flow",
+  title: "Flow",
   steps: [
     {
       name: "a",
