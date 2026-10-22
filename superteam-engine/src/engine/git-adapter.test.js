@@ -227,6 +227,13 @@ describe("git parts (real git)", () => {
     await adapter.deleteBranch("works/a");
   });
 
+  test("deleteBranch removes a branch that is only local", async () => {
+    const { adapter, baseDir } = makeRepo();
+    git(baseDir, "branch", "works/l");
+    await adapter.deleteBranch("works/l");
+    assert.equal(git(baseDir, "branch", "--list", "works/l"), "");
+  });
+
   test("listBranches returns local and pushed branches with the prefix, deduped", async () => {
     const { adapter, folder } = makeRepo();
     await adapter.createWorktree({
@@ -263,8 +270,11 @@ describe("git parts (real git)", () => {
   });
 
   test("a branch name is never interpreted by a shell", async () => {
-    const { adapter } = makeRepo();
+    const { adapter, baseDir } = makeRepo();
     assert.equal(await adapter.branchExists("works/$(touch pwned)"), false);
+    await adapter.deleteBranch("works/$(touch pwned)");
+    assert.equal(existsSync(join(baseDir, "pwned")), false);
+    assert.equal(existsSync(join(baseDir, "works", "$(touch pwned)")), false);
   });
 });
 
@@ -387,6 +397,59 @@ describe("gh parts (fake run)", () => {
         ["gh", "pr", "merge", "works/a", "--squash"],
         ["gh", "pr", "close", "works/a"],
       ],
+    );
+  });
+});
+
+describe("real git failures propagate", () => {
+  const broken = () => {
+    const run = async () => {
+      throw Object.assign(new Error("fatal: not a git repository"), {
+        code: 128,
+      });
+    };
+    return createGitAdapter({
+      baseDir: "/base",
+      run,
+    });
+  };
+
+  test("branchExists and deleteBranch rethrow a failure that is not a missing ref", async () => {
+    await assert.rejects(
+      broken().branchExists("works/a"),
+      /not a git repository/,
+    );
+    await assert.rejects(
+      broken().deleteBranch("works/a"),
+      /not a git repository/,
+    );
+  });
+
+  test("readFileOnBranch rethrows a failure that is not a missing file", async () => {
+    await assert.rejects(
+      broken().readFileOnBranch("works/a", "x.json"),
+      /not a git repository/,
+    );
+  });
+
+  test("readFileOnBranch rethrows a git show failure that is not a missing path", async () => {
+    const run = async (command, args) => {
+      if (args[0] === "show-ref") {
+        return {
+          stdout: "",
+        };
+      }
+      throw Object.assign(new Error("fatal: bad object"), {
+        code: 128,
+      });
+    };
+    const adapter = createGitAdapter({
+      baseDir: "/base",
+      run,
+    });
+    await assert.rejects(
+      adapter.readFileOnBranch("works/a", "x.json"),
+      /bad object/,
     );
   });
 });

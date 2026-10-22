@@ -27,24 +27,22 @@ export function createGitAdapter({ baseDir, run = defaultRun }) {
       cwd: baseDir,
     });
 
-  async function succeeds(args) {
+  // `show-ref --verify --quiet` exits 1 only when the ref is missing: any other
+  // failure (exit 128, git not found) is a real error and propagates.
+  async function refExists(ref) {
     try {
-      await git(args);
+      await git(["show-ref", "--verify", "--quiet", ref]);
       return true;
-    } catch {
-      return false;
+    } catch (error) {
+      if (error.code === 1) {
+        return false;
+      }
+      throw error;
     }
   }
 
-  const hasLocal = (branch) =>
-    succeeds(["show-ref", "--verify", "--quiet", `refs/heads/${branch}`]);
-  const hasRemote = (branch) =>
-    succeeds([
-      "show-ref",
-      "--verify",
-      "--quiet",
-      `refs/remotes/origin/${branch}`,
-    ]);
+  const hasLocal = (branch) => refExists(`refs/heads/${branch}`);
+  const hasRemote = (branch) => refExists(`refs/remotes/origin/${branch}`);
 
   return {
     async rootBranch() {
@@ -139,18 +137,27 @@ export function createGitAdapter({ baseDir, run = defaultRun }) {
     },
 
     async readFileOnBranch(branch, path) {
-      for (const ref of [
-        `refs/heads/${branch}`,
-        `refs/remotes/origin/${branch}`,
-      ]) {
-        try {
-          const { stdout } = await git(["show", `${ref}:${path}`]);
-          return stdout;
-        } catch {
-          // The branch or the file is not in this ref: try the next one.
-        }
+      let ref;
+      if (await hasLocal(branch)) {
+        ref = `refs/heads/${branch}`;
+      } else if (await hasRemote(branch)) {
+        ref = `refs/remotes/origin/${branch}`;
+      } else {
+        return null;
       }
-      return null;
+      try {
+        const { stdout } = await git(["show", `${ref}:${path}`]);
+        return stdout;
+      } catch (error) {
+        if (
+          /does not exist in|exists on disk, but not in/.test(
+            `${error.message}\n${error.stderr ?? ""}`,
+          )
+        ) {
+          return null;
+        }
+        throw error;
+      }
     },
 
     async getPullRequest(branch) {
