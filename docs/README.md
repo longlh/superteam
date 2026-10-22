@@ -1,14 +1,17 @@
 # Documents
 
-The documents follow arc42, which gives the 12 chapters. The chapter of the
-building blocks follows the C4 model. A chapter that has no content yet is an
-empty folder with a `.gitkeep`. The folder `draft/` holds the legacy documents:
-they are not part of the structure, and they are not migrated.
+The documents follow four methods (see `02_constraints/constraints.md`): arc42
+gives the 12 chapters, Views and Beyond gives the views from which the system is
+seen, the C4 model gives the levels of the structure in the chapter of the
+building blocks, and UML draws the views that the C4 model does not draw. A
+chapter that has no content yet is an empty folder with a `.gitkeep`. The folder
+`draft/` holds the legacy documents: they are not part of the structure, and
+they are not migrated.
 
 | Chapter              | Folder                  | Holds                                                           |
 | -------------------- | ----------------------- | --------------------------------------------------------------- |
 | 1. Introduction      | `01_introduction/`      | What the system must do: the requirements and the use cases     |
-| 2. Constraints       | `02_constraints/`       | Not written yet                                                 |
+| 2. Constraints       | `02_constraints/`       | The conventions, such as the method of the documents            |
 | 3. Context           | `03_context/`           | Who uses the system, and what outside it the system depends on  |
 | 4. Solution strategy | `04_solution-strategy/` | The principles of the design                                    |
 | 5. Building blocks   | `05_building-blocks/`   | The structure: the containers, and the components inside        |
@@ -76,6 +79,7 @@ docs/
 │   ├── introduction.md          The actors and the requirements of the system
 │   └── use-cases.md             What the actors want from the system
 ├── 02_constraints/
+│   └── constraints.md           The conventions, such as the method of the documents
 ├── 03_context/
 │   └── context.md               Who uses the system, and what it depends on
 ├── 04_solution-strategy/
