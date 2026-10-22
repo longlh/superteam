@@ -52,8 +52,10 @@ export function createAgentManager({
     }
   }
 
+  const pidFile = (pid) => path.join(dir, `${pid}.pid`);
+
   const removePidFile = (pid) =>
-    rm(path.join(dir, `${pid}.pid`), {
+    rm(pidFile(pid), {
       force: true,
     });
 
@@ -103,17 +105,23 @@ export function createAgentManager({
 
     let stdout = "";
     let settled = false;
+    child.stdout?.setEncoding("utf8");
     child.stdout?.on("data", (chunk) => {
       stdout += chunk;
     });
+    child.stderr?.setEncoding("utf8");
     child.stderr?.resume();
 
-    if (child.pid !== undefined) {
-      await writeJson(path.join(dir, `${child.pid}.pid`), {
-        pid: child.pid,
-        job,
-      });
-    }
+    const pidWritten =
+      child.pid === undefined
+        ? Promise.resolve()
+        : writeJson(pidFile(child.pid), {
+            pid: child.pid,
+            job,
+          }).catch((error) => {
+            console.error(`agent ${job.id}: pid file not written`, error);
+          });
+    entry.pidWritten = pidWritten;
 
     const timer = setTimeout(
       () => {
@@ -130,6 +138,7 @@ export function createAgentManager({
       settled = true;
       clearTimeout(timer);
       running.delete(job.id);
+      await pidWritten;
       if (entry.stopped) {
         return;
       }
@@ -138,10 +147,11 @@ export function createAgentManager({
           id: job.id,
           ...result,
         });
-      } finally {
-        if (child.pid !== undefined) {
-          await removePidFile(child.pid);
-        }
+      } catch (error) {
+        console.error(`agent ${job.id}: onEnded failed`, error);
+      }
+      if (child.pid !== undefined) {
+        await removePidFile(child.pid);
       }
     }
 
@@ -150,18 +160,19 @@ export function createAgentManager({
         error: `the agent could not start: ${error.message}`,
       });
     });
-    child.on("close", (code) => {
+    child.on("close", (code, signal) => {
       if (entry.timedOut) {
         settle({
           error: `the agent was killed by the timeout of ${job.timeout} minutes`,
         });
         return;
       }
-      settle(parseResult(stdout, code));
+      settle(parseResult(stdout, code, signal));
     });
     if (entry.stopped) {
       killGroup(child.pid);
     }
+    await pidWritten;
   }
 
   async function stopWork(workId) {
@@ -172,6 +183,7 @@ export function createAgentManager({
       entry.stopped = true;
       if (entry.child?.pid !== undefined) {
         killGroup(entry.child.pid);
+        await entry.pidWritten;
         await removePidFile(entry.child.pid);
       }
       running.delete(id);

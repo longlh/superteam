@@ -97,4 +97,32 @@ describe("parseResult", () => {
       );
     }
   });
+
+  it("errors on a summary or data of the wrong type", () => {
+    for (const structured of [
+      {
+        data: {},
+      },
+      {
+        summary: "x",
+      },
+      {
+        summary: "x",
+        data: null,
+      },
+    ]) {
+      const out = JSON.stringify({
+        is_error: false,
+        structured_output: structured,
+      });
+      assert.equal(
+        parseResult(out, 0).error,
+        "the result does not match the schema",
+      );
+    }
+  });
+
+  it("names the signal when the process was killed", () => {
+    assert.match(parseResult("", null, "SIGKILL").error, /SIGKILL/);
+  });
 });

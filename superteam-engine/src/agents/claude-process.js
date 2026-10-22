@@ -20,7 +20,12 @@ export function buildCommand(job, { maxBudgetUsd } = {}) {
   };
 }
 
-export function parseResult(stdout, exitCode) {
+export function parseResult(stdout, exitCode, signal) {
+  if (exitCode === null) {
+    return {
+      error: `the agent was killed by the signal ${signal}`,
+    };
+  }
   if (exitCode !== 0) {
     return {
       error: `the agent exited with exit code ${exitCode}`,
@@ -41,6 +46,15 @@ export function parseResult(stdout, exitCode) {
   }
   const structured = output?.structured_output;
   if (structured === null || structured === undefined) {
+    return {
+      error: "the result does not match the schema",
+    };
+  }
+  if (
+    typeof structured.summary !== "string" ||
+    typeof structured.data !== "object" ||
+    structured.data === null
+  ) {
     return {
       error: "the result does not match the schema",
     };

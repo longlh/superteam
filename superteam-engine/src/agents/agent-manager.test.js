@@ -156,6 +156,28 @@ describe("agent manager run", () => {
     }
   });
 
+  it("never loses the end of an agent that exits at once", async () => {
+    const manager = make("fail");
+    const seen = ended();
+    for (let i = 0; i < 20; i += 1) {
+      await manager.run(job(`w${i}/t1/worker`), seen.onEnded);
+    }
+    await until(() => seen.results.length === 20);
+    await until(async () => (await pidFiles()).length === 0);
+    assert.equal(new Set(seen.results.map((r) => r.id)).size, 20);
+  });
+
+  it("reports a throwing onEnded and still deletes the pid file", async (t) => {
+    const errors = t.mock.method(console, "error", () => {});
+    const manager = make("ok");
+    await manager.run(job(), () => {
+      throw new Error("boom");
+    });
+    await until(() => errors.mock.callCount() === 1);
+    await until(async () => (await pidFiles()).length === 0);
+    assert.match(errors.mock.calls[0].arguments[0], /onEnded failed/);
+  });
+
   it("ends with an error when the command cannot be spawned", async () => {
     const manager = make("ok", {
       command: path.join(baseDir, "missing"),
@@ -232,7 +254,6 @@ describe("agent manager stop", () => {
       "w1/t2/worker",
       "w2/t1/worker",
     ]);
-    const pids = names.map((n) => Number.parseInt(n, 10));
     const byJob = {};
     for (const name of names) {
       const content = await readJson(path.join(agentsDir(baseDir), name));
@@ -243,7 +264,6 @@ describe("agent manager stop", () => {
     await until(() => !alive(byJob["w1/t2/worker"]));
     assert.ok(alive(byJob["w2/t1/worker"]));
     assert.deepEqual(await pidFiles(), [`${byJob["w2/t1/worker"]}.pid`]);
-    assert.equal(pids.length, 3);
   });
 
   it("stopAll kills every agent and keeps the pid files", async () => {
