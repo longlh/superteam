@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
@@ -19,6 +26,7 @@ let strays;
 
 beforeEach(async () => {
   baseDir = await mkdtemp(path.join(tmpdir(), "agents-"));
+  await putRole("developer", "Bash, Read, Write, Edit, StructuredOutput");
   managers = [];
   strays = [];
 });
@@ -35,6 +43,18 @@ afterEach(async () => {
     force: true,
   });
 });
+
+// The agent file of a role in the project of the test (the workdir of a job).
+async function putRole(role, toolsLine) {
+  const dir = path.join(baseDir, ".claude", "agents");
+  await mkdir(dir, {
+    recursive: true,
+  });
+  await writeFile(
+    path.join(dir, `${role}.md`),
+    `---\nname: ${role}\n${toolsLine === null ? "" : `tools: ${toolsLine}\n`}---\n\nYou are the ${role}.\n`,
+  );
+}
 
 function kill(pid) {
   try {
@@ -130,6 +150,75 @@ describe("agent manager run", () => {
     });
     assert.equal(during.length, 1);
     await until(async () => (await pidFiles()).length === 0);
+  });
+
+  it("allows the tools of the agent file of the role", async () => {
+    const argsFile = path.join(baseDir, "args.json");
+    const manager = make("ok", {
+      env: {
+        FAKE_CLAUDE_MODE: "ok",
+        FAKE_CLAUDE_ARGS_FILE: argsFile,
+      },
+    });
+    const seen = ended();
+    await manager.run(job(), seen.onEnded);
+    await until(() => seen.results.length === 1);
+    const args = await readJson(argsFile);
+    const at = args.indexOf("--allowedTools");
+    assert.ok(at > args.indexOf("--permission-mode"));
+    assert.equal(args[at + 1], "Bash,Read,Write,Edit,StructuredOutput");
+  });
+
+  it("runs without --allowedTools and warns when the file has no tools line", async (t) => {
+    const errors = t.mock.method(console, "error", () => {});
+    await putRole("developer", null);
+    const argsFile = path.join(baseDir, "args.json");
+    const manager = make("ok", {
+      env: {
+        FAKE_CLAUDE_MODE: "ok",
+        FAKE_CLAUDE_ARGS_FILE: argsFile,
+      },
+    });
+    const seen = ended();
+    await manager.run(job(), seen.onEnded);
+    await until(() => seen.results.length === 1);
+    assert.ok(!(await readJson(argsFile)).includes("--allowedTools"));
+    assert.equal(errors.mock.callCount(), 1);
+    assert.match(errors.mock.calls[0].arguments[0], /no tool under dontAsk/);
+  });
+
+  it("ends with an error, with no spawn and no pid file, when the role has no file", async () => {
+    const argsFile = path.join(baseDir, "args.json");
+    const pluginRoot = path.join(baseDir, "plugin");
+    const manager = make("ok", {
+      pluginRoot,
+      env: {
+        FAKE_CLAUDE_MODE: "ok",
+        FAKE_CLAUDE_ARGS_FILE: argsFile,
+      },
+    });
+    const seen = ended();
+    await manager.run(
+      job("w1/t1/worker", {
+        role: "ghost",
+      }),
+      seen.onEnded,
+    );
+    assert.equal(seen.results.length, 1);
+    assert.equal(seen.results[0].id, "w1/t1/worker");
+    assert.ok(seen.results[0].error.includes("ghost"));
+    assert.ok(
+      seen.results[0].error.includes(
+        path.join(baseDir, ".claude", "agents", "ghost.md"),
+      ),
+    );
+    assert.ok(
+      seen.results[0].error.includes(
+        path.join(pluginRoot, "agents", "ghost.md"),
+      ),
+    );
+    assert.deepEqual(await pidFiles(), []);
+    await assert.rejects(readFile(argsFile));
   });
 
   it("writes {pid, job} in {pid}.pid while the agent runs", async () => {

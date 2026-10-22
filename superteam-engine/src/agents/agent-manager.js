@@ -1,6 +1,7 @@
 import { spawn as nodeSpawn } from "node:child_process";
 import { readdir, rm } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { readJson, writeJson } from "../lib/storage/files.js";
 import { processCommand } from "../lib/process-command.js";
 import { agentsDir } from "../lib/storage/paths.js";
@@ -10,6 +11,10 @@ import {
   parseResult,
   STDERR_TAIL,
 } from "./claude-process.js";
+import { readRoleTools } from "./role-file.js";
+
+// superteam-engine/, where the agent files of the plugin are.
+const PLUGIN_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 
 function isAlive(pid) {
   try {
@@ -35,6 +40,7 @@ export function createAgentManager({
   env = {},
   maxBudgetUsd,
   commandOf = processCommand,
+  pluginRoot = PLUGIN_ROOT,
 }) {
   const dir = agentsDir(baseDir);
   const running = new Map();
@@ -99,8 +105,40 @@ export function createAgentManager({
       return;
     }
 
+    // The tools of the agent file limit what is available; dontAsk denies
+    // them unless they are allowed, so they are passed with --allowedTools.
+    let allowedTools;
+    try {
+      allowedTools = await readRoleTools({
+        workdir: job.workdir,
+        role: job.role,
+        pluginRoot,
+      });
+    } catch (error) {
+      running.delete(job.id);
+      try {
+        await onEnded({
+          id: job.id,
+          error: error.message,
+        });
+      } catch (endError) {
+        console.error(`agent ${job.id}: onEnded failed`, endError);
+      }
+      return;
+    }
+    if (allowedTools === null) {
+      console.error(
+        `agent ${job.id}: the agent file of the role ${job.role} has no tools line, so the agent gets no tool under dontAsk`,
+      );
+    }
+    if (entry.stopped) {
+      running.delete(job.id);
+      return;
+    }
+
     const built = buildCommand(job, {
       maxBudgetUsd,
+      allowedTools: allowedTools ?? undefined,
     });
     const child = spawn(command ?? built.command, built.args, {
       cwd: job.workdir,

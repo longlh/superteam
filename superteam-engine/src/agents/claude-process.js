@@ -1,7 +1,7 @@
 // The command of an agent.
 export const CLAUDE = "claude";
 
-export function buildCommand(job, { maxBudgetUsd } = {}) {
+export function buildCommand(job, { maxBudgetUsd, allowedTools } = {}) {
   const args = [
     "-p",
     job.instruction.prompt,
@@ -14,6 +14,9 @@ export function buildCommand(job, { maxBudgetUsd } = {}) {
     "--permission-mode",
     "dontAsk",
   ];
+  if (Array.isArray(allowedTools) && allowedTools.length > 0) {
+    args.push("--allowedTools", allowedTools.join(","));
+  }
   if (maxBudgetUsd !== undefined) {
     args.push("--max-budget-usd", String(maxBudgetUsd));
   }

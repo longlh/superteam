@@ -36,6 +36,25 @@ describe("buildCommand", () => {
     });
   });
 
+  it("allows the tools after --permission-mode dontAsk, only when given", () => {
+    const withTools = buildCommand(job, {
+      allowedTools: ["Bash", "Read"],
+    });
+    assert.deepEqual(withTools.args.slice(-4), [
+      "--permission-mode",
+      "dontAsk",
+      "--allowedTools",
+      "Bash,Read",
+    ]);
+    for (const allowedTools of [undefined, []]) {
+      assert.ok(
+        !buildCommand(job, {
+          allowedTools,
+        }).args.includes("--allowedTools"),
+      );
+    }
+  });
+
   it("gives --max-budget-usd only when it is given", () => {
     const withBudget = buildCommand(job, {
       maxBudgetUsd: 2.5,

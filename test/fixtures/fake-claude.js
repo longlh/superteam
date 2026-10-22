@@ -85,6 +85,14 @@ function work(prompt) {
 
 const mode = modeOf(process.cwd());
 
+// A test reads the args of this run from this file.
+if (process.env.FAKE_CLAUDE_ARGS_FILE) {
+  writeFileSync(
+    process.env.FAKE_CLAUDE_ARGS_FILE,
+    JSON.stringify(process.argv.slice(2)),
+  );
+}
+
 const result = {
   type: "result",
   is_error: false,

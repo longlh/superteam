@@ -99,6 +99,17 @@ async function createProject(t, { rootBranch = "main" } = {}) {
     path.join(workflows, "build.json"),
     `${JSON.stringify(WORKFLOW, null, 2)}\n`,
   );
+  // The agent files of the roles, committed so every worktree has them.
+  const roles = path.join(baseDir, ".claude", "agents");
+  await mkdir(roles, {
+    recursive: true,
+  });
+  for (const role of ["developer", "tester"]) {
+    await writeFile(
+      path.join(roles, `${role}.md`),
+      `---\nname: ${role}\ntools: Bash, Read, Write, Edit, StructuredOutput\n---\n\nYou are the ${role}.\n`,
+    );
+  }
   await git(baseDir, ["add", "-A"]);
   await git(baseDir, ["commit", "-m", "Seed superteam"]);
   await git(baseDir, ["remote", "add", "origin", origin]);
