@@ -1,5 +1,7 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -64,6 +66,30 @@ export function createGitAdapter({ baseDir, run = defaultRun }) {
 
   return {
     rootBranch,
+
+    // Adds `line` to the exclude file of the common git dir (shared by every
+    // worktree) when it is missing, so a worktree never commits the runtime
+    // files, even when the .gitignore of the project is not committed.
+    async ensureExcluded(line) {
+      const { stdout } = await git(["rev-parse", "--git-common-dir"]);
+      const file = path.resolve(baseDir, stdout.trim(), "info", "exclude");
+      let text = "";
+      try {
+        text = await readFile(file, "utf8");
+      } catch (error) {
+        if (error.code !== "ENOENT") {
+          throw error;
+        }
+      }
+      if (text.split("\n").some((l) => l.trim() === line)) {
+        return;
+      }
+      const prefix = text === "" || text.endsWith("\n") ? "" : "\n";
+      await mkdir(path.dirname(file), {
+        recursive: true,
+      });
+      await writeFile(file, `${text}${prefix}${line}\n`);
+    },
 
     // The preflight of a start: is a remote `origin` set, and is gh signed in.
     async hasOrigin() {
@@ -170,7 +196,7 @@ export function createGitAdapter({ baseDir, run = defaultRun }) {
       return [...names].sort();
     },
 
-    async readFileOnBranch(branch, path) {
+    async readFileOnBranch(branch, file) {
       let ref;
       if (await hasLocal(branch)) {
         ref = `refs/heads/${branch}`;
@@ -180,7 +206,7 @@ export function createGitAdapter({ baseDir, run = defaultRun }) {
         return null;
       }
       try {
-        const { stdout } = await git(["show", `${ref}:${path}`]);
+        const { stdout } = await git(["show", `${ref}:${file}`]);
         return stdout;
       } catch (error) {
         const text = `${error.message}\n${error.stderr ?? ""}`;

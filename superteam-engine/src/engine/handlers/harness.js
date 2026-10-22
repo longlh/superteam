@@ -25,6 +25,9 @@ export async function createHarness(workflows) {
     async rootBranch() {
       return "main";
     },
+    async ensureExcluded(line) {
+      calls.push(["ensureExcluded", line]);
+    },
     async createWorktree(args) {
       if (existsSync(args.folder)) {
         return;

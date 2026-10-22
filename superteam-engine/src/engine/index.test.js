@@ -92,6 +92,7 @@ async function start() {
   );
   running = engine.start();
   await ready;
+  gitLog.length = 0;
 }
 
 const code = (expected) => (error) =>
@@ -779,6 +780,13 @@ test("reconcile starts a ready task whose worktree was never created", async () 
     ),
     true,
   );
+});
+
+test("start keeps the runtime folder out of git, before the loop starts", async () => {
+  await start();
+  assert.deepEqual(h.named("ensureExcluded"), [
+    ["ensureExcluded", ".superteam/.r/"],
+  ]);
 });
 
 test("engine:ready is published once the loop is ready", async () => {

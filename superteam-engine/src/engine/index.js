@@ -488,7 +488,10 @@ export function createEngine({
     },
 
     subscribe: pubsub.subscribe,
-    start: () => loop.start(),
+    async start() {
+      await git.ensureExcluded(".superteam/.r/");
+      return loop.start();
+    },
     shutdown: () => loop.shutdown(),
   };
 }

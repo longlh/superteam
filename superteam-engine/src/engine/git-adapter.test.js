@@ -4,6 +4,7 @@ import {
   mkdirSync,
   mkdtempSync,
   existsSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -293,6 +294,39 @@ function fakeRun(answer) {
     run,
   };
 }
+
+describe("ensureExcluded", () => {
+  test("adds the line once to the exclude file of the common git dir", async () => {
+    const { adapter, baseDir } = makeRepo();
+    const file = join(baseDir, ".git", "info", "exclude");
+    writeFileSync(file, "# comment");
+    await adapter.ensureExcluded(".superteam/.r/");
+    await adapter.ensureExcluded(".superteam/.r/");
+    assert.equal(readFileSync(file, "utf8"), "# comment\n.superteam/.r/\n");
+    mkdirSync(join(baseDir, ".superteam", ".r", "x"), {
+      recursive: true,
+    });
+    writeFileSync(join(baseDir, ".superteam", ".r", "x", "f"), "x");
+    assert.equal(git(baseDir, "status", "--porcelain"), "");
+  });
+
+  test("from a worktree, it writes the exclude file of the main repository", async () => {
+    const { baseDir } = makeRepo();
+    const tree = join(baseDir, "..", "tree");
+    git(baseDir, "worktree", "add", "-q", "-b", "side", tree);
+    rmSync(join(baseDir, ".git", "info"), {
+      recursive: true,
+      force: true,
+    });
+    await createGitAdapter({
+      baseDir: tree,
+    }).ensureExcluded(".superteam/.r/");
+    assert.equal(
+      readFileSync(join(baseDir, ".git", "info", "exclude"), "utf8"),
+      ".superteam/.r/\n",
+    );
+  });
+});
 
 describe("preflight", () => {
   test("hasOrigin says whether the remote origin is set", async () => {

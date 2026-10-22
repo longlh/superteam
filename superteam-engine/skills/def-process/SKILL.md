@@ -39,6 +39,18 @@ workflow file by hand.
    It adds `.superteam/.r/` and `.superteam/.env` to `.gitignore` and writes
    `SUPERTEAM_PORT` in `.superteam/.env` when it is missing. It prints the port.
 
+5. Tell the person to commit the files of the setup on the root branch:
+   `.gitignore`, `.claude/agents/*.md` and `.superteam/.p/workflows/*.json`. The
+   agents run in worktrees created from the root branch, so a role or a workflow
+   that is not committed is not there for them. Offer to make the commit, and
+   make it only if the person says yes (leave out a path that does not exist
+   yet):
+
+   ```
+   git add .gitignore .claude/agents .superteam/.p/workflows
+   git commit -m "Set up superteam"
+   ```
+
 ## Shape of a workflow
 
 ```
