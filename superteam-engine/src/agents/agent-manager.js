@@ -31,6 +31,9 @@ export function createAgentManager({
 }) {
   const dir = agentsDir(baseDir);
   const running = new Map();
+  // The ends that are being given to onEnded: stopAll waits for them, so a
+  // shutdown never loses the end of an agent that has already exited.
+  const ending = new Set();
 
   async function pidFileNames() {
     try {
@@ -136,6 +139,16 @@ export function createAgentManager({
         return;
       }
       settled = true;
+      const end = giveEnd(result);
+      ending.add(end);
+      try {
+        await end;
+      } finally {
+        ending.delete(end);
+      }
+    }
+
+    async function giveEnd(result) {
       clearTimeout(timer);
       running.delete(job.id);
       await pidWritten;
@@ -198,6 +211,7 @@ export function createAgentManager({
       }
     }
     running.clear();
+    await Promise.allSettled(ending);
   }
 
   async function recover() {

@@ -277,6 +277,28 @@ describe("agent manager stop", () => {
     await new Promise((resolve) => setTimeout(resolve, 100));
     assert.deepEqual(await pidFiles(), names);
   });
+
+  it("stopAll waits for the end of an agent that is being given", async () => {
+    const manager = make("ok");
+    let release;
+    let called = false;
+    await manager.run(job(), async () => {
+      called = true;
+      await new Promise((resolve) => {
+        release = resolve;
+      });
+    });
+    await until(() => called);
+    let stopped = false;
+    const stopping = manager.stopAll().then(() => {
+      stopped = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(stopped, false);
+    release();
+    await stopping;
+    assert.deepEqual(await pidFiles(), []);
+  });
 });
 
 describe("agent manager recover", () => {
