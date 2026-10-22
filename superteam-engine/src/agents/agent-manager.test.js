@@ -1,0 +1,299 @@
+import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
+import { agentsDir } from "../lib/storage/paths.js";
+import { readJson, writeJson } from "../lib/storage/files.js";
+import { createAgentManager } from "./agent-manager.js";
+
+const fake = fileURLToPath(
+  new URL("../../../test/fixtures/fake-claude.js", import.meta.url),
+);
+
+let baseDir;
+let managers;
+let strays;
+
+beforeEach(async () => {
+  baseDir = await mkdtemp(path.join(tmpdir(), "agents-"));
+  managers = [];
+  strays = [];
+});
+
+afterEach(async () => {
+  for (const manager of managers) {
+    await manager.stopAll();
+  }
+  for (const child of strays) {
+    kill(child.pid);
+  }
+  await rm(baseDir, {
+    recursive: true,
+    force: true,
+  });
+});
+
+function kill(pid) {
+  try {
+    process.kill(-pid, "SIGKILL");
+  } catch {
+    // already gone
+  }
+}
+
+function alive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function until(check, ms = 5000) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    const value = await check();
+    if (value) {
+      return value;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error("until: timed out");
+}
+
+function make(mode, options = {}) {
+  const manager = createAgentManager({
+    baseDir,
+    command: fake,
+    env: {
+      FAKE_CLAUDE_MODE: mode,
+    },
+    ...options,
+  });
+  managers.push(manager);
+  return manager;
+}
+
+function job(id = "w1/t1/worker", extra = {}) {
+  return {
+    id,
+    role: "developer",
+    timeout: 5,
+    workdir: baseDir,
+    schema: {
+      type: "object",
+    },
+    instruction: {
+      target: "task",
+      targetIds: ["t1"],
+      prompt: "go",
+    },
+    ...extra,
+  };
+}
+
+const pidFiles = async () =>
+  (await readdir(agentsDir(baseDir)).catch(() => [])).filter((n) =>
+    n.endsWith(".pid"),
+  );
+
+function ended() {
+  const results = [];
+  return {
+    results,
+    onEnded: (result) => {
+      results.push(result);
+    },
+  };
+}
+
+describe("agent manager run", () => {
+  it("calls onEnded with the result and removes the pid file after", async () => {
+    const manager = make("ok");
+    const seen = ended();
+    let during;
+    await manager.run(job(), async (result) => {
+      during = await pidFiles();
+      seen.onEnded(result);
+    });
+    await until(() => seen.results.length === 1);
+    assert.deepEqual(seen.results[0], {
+      id: "w1/t1/worker",
+      summary: "done",
+      data: {
+        dodChecklist: [],
+      },
+    });
+    assert.equal(during.length, 1);
+    await until(async () => (await pidFiles()).length === 0);
+  });
+
+  it("writes {pid, job} in {pid}.pid while the agent runs", async () => {
+    const manager = make("hang");
+    await manager.run(job(), () => {});
+    const [name] = await until(async () => {
+      const names = await pidFiles();
+      return names.length === 1 && names;
+    });
+    const content = await readJson(path.join(agentsDir(baseDir), name));
+    assert.equal(`${content.pid}.pid`, name);
+    assert.deepEqual(content.job, job());
+    assert.ok(alive(content.pid));
+  });
+
+  it("ends with an error when the process fails, or prints bad output", async () => {
+    for (const mode of ["fail", "null-output", "bad-json"]) {
+      const manager = make(mode);
+      const seen = ended();
+      await manager.run(job(`w-${mode}/t1/worker`), seen.onEnded);
+      await until(() => seen.results.length === 1);
+      assert.equal(seen.results[0].id, `w-${mode}/t1/worker`);
+      assert.equal(typeof seen.results[0].error, "string");
+    }
+  });
+
+  it("ends with an error when the command cannot be spawned", async () => {
+    const manager = make("ok", {
+      command: path.join(baseDir, "missing"),
+    });
+    const seen = ended();
+    await manager.run(job(), seen.onEnded);
+    await until(() => seen.results.length === 1);
+    assert.match(seen.results[0].error, /ENOENT/);
+    assert.deepEqual(await pidFiles(), []);
+  });
+
+  it("does not run a job that this manager already runs", async () => {
+    const manager = make("hang");
+    await manager.run(job(), () => {});
+    await manager.run(job(), () => {});
+    await manager.run(job(), () => {});
+    assert.equal((await pidFiles()).length, 1);
+  });
+
+  it("does not run a job whose id is in a pid file of a live process", async () => {
+    const other = spawn(fake, [], {
+      detached: true,
+      stdio: "ignore",
+      env: {
+        ...process.env,
+        FAKE_CLAUDE_MODE: "hang",
+      },
+    });
+    strays.push(other);
+    await writeJson(path.join(agentsDir(baseDir), `${other.pid}.pid`), {
+      pid: other.pid,
+      job: job(),
+    });
+    const manager = make("ok");
+    const seen = ended();
+    await manager.run(job(), seen.onEnded);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    assert.deepEqual(seen.results, []);
+    assert.deepEqual(await pidFiles(), [`${other.pid}.pid`]);
+  });
+
+  it("kills a job that outlives its timeout, with its process group", async () => {
+    const manager = make("hang");
+    const seen = ended();
+    await manager.run(
+      job("w1/t1/worker", {
+        timeout: 0.001,
+      }),
+      seen.onEnded,
+    );
+    await until(() => seen.results.length === 1);
+    assert.match(seen.results[0].error, /timeout/);
+    await until(async () => (await pidFiles()).length === 0);
+  });
+});
+
+describe("agent manager stop", () => {
+  async function started(manager, ids) {
+    for (const id of ids) {
+      await manager.run(job(id), () => {
+        throw new Error("onEnded must not be called");
+      });
+    }
+    return until(async () => {
+      const names = await pidFiles();
+      return names.length === ids.length && names;
+    });
+  }
+
+  it("stopWork kills the agents of that work and deletes their files", async () => {
+    const manager = make("hang");
+    const names = await started(manager, [
+      "w1/t1/worker",
+      "w1/t2/worker",
+      "w2/t1/worker",
+    ]);
+    const pids = names.map((n) => Number.parseInt(n, 10));
+    const byJob = {};
+    for (const name of names) {
+      const content = await readJson(path.join(agentsDir(baseDir), name));
+      byJob[content.job.id] = content.pid;
+    }
+    await manager.stopWork("w1");
+    await until(() => !alive(byJob["w1/t1/worker"]));
+    await until(() => !alive(byJob["w1/t2/worker"]));
+    assert.ok(alive(byJob["w2/t1/worker"]));
+    assert.deepEqual(await pidFiles(), [`${byJob["w2/t1/worker"]}.pid`]);
+    assert.equal(pids.length, 3);
+  });
+
+  it("stopAll kills every agent and keeps the pid files", async () => {
+    const manager = make("hang");
+    const names = await started(manager, ["w1/t1/worker", "w2/t1/worker"]);
+    const pids = names.map((n) => Number.parseInt(n, 10));
+    await manager.stopAll();
+    for (const pid of pids) {
+      await until(() => !alive(pid));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.deepEqual(await pidFiles(), names);
+  });
+});
+
+describe("agent manager recover", () => {
+  it("kills a live pid, removes the files and returns the jobs", async () => {
+    const live = spawn(fake, [], {
+      detached: true,
+      stdio: "ignore",
+      env: {
+        ...process.env,
+        FAKE_CLAUDE_MODE: "hang",
+      },
+    });
+    strays.push(live);
+    const dir = agentsDir(baseDir);
+    await writeJson(path.join(dir, `${live.pid}.pid`), {
+      pid: live.pid,
+      job: job("w1/t1/worker"),
+    });
+    await writeJson(path.join(dir, "999999.pid"), {
+      pid: 999999,
+      job: job("w2/t1/worker"),
+    });
+    await writeFile(path.join(dir, "123.pid"), "{corrupt");
+    const manager = make("ok");
+    const jobs = await manager.recover();
+    assert.deepEqual(jobs.map((j) => j.id).sort(), [
+      "w1/t1/worker",
+      "w2/t1/worker",
+    ]);
+    await until(() => !alive(live.pid));
+    assert.deepEqual(await pidFiles(), []);
+  });
+
+  it("returns no job when there is no folder", async () => {
+    await mkdir(baseDir, {
+      recursive: true,
+    });
+    assert.deepEqual(await make("ok").recover(), []);
+  });
+});
