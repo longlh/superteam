@@ -244,6 +244,22 @@ test("shutdown closes the API, stops the agents, then the engine", async () => {
   assert.deepEqual(t.calls, ["api.close", "agents.stopAll", "engine.shutdown"]);
 });
 
+test("a job:run published once the shutdown has begun is not run", async () => {
+  const t = setup({
+    onEngineStart: readyOnStart,
+  });
+  await t.orchestrator.start();
+  const done = t.orchestrator.shutdown();
+  t.publish("job:run", {
+    id: "late",
+  });
+  await done;
+  t.publish("job:run", {
+    id: "later",
+  });
+  assert.equal(t.agents.run.mock.calls.length, 0);
+});
+
 test("an addon other than notifier throws at start, before anything starts", async () => {
   const t = setup({
     extra: {

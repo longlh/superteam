@@ -36,6 +36,10 @@ export function createOrchestrator({
   }),
 }) {
   let engineDone;
+  // Set when the shutdown begins: a job that a handler still publishes is not
+  // run, so no agent outlives the shutdown. The engine publishes it again at
+  // the next start, because it waits for it and it was never run.
+  let stopping = false;
 
   function validate() {
     for (const sub of subscriptions) {
@@ -56,9 +60,14 @@ export function createOrchestrator({
       });
       engine.subscribe(
         "job:run",
-        guarded((job) =>
-          agents.run(job, (result) => engine.jobEnded(result).catch(report)),
-        ),
+        guarded((job) => {
+          if (stopping) {
+            return;
+          }
+          return agents.run(job, (result) =>
+            engine.jobEnded(result).catch(report),
+          );
+        }),
       );
       engine.subscribe(
         "job:stop",
@@ -97,6 +106,7 @@ export function createOrchestrator({
     },
 
     async shutdown() {
+      stopping = true;
       await httpApi.close();
       await agents.stopAll();
       engine.shutdown();
