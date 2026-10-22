@@ -1,21 +1,21 @@
-import { MAX_ORDER, eventId } from "./event.js";
+import { createHash } from "node:crypto";
+import { MAX_ORDER, validatePayload } from "./event.js";
 
-// The factory creates events. It knows nothing of where they go: see queue.js.
-export function createFactory({ now = () => new Date() } = {}) {
-  // The maximum `order` that was given out so far.
+export function createFactory({ queue, now }) {
   let counter = 0;
 
-  // Synchronous on purpose: two calls never get the same `order`.
-  function build(payload, order, attempts, errors) {
-    const createdAt = now().toISOString();
-    return {
+  async function build(order, payload, attempts, errors) {
+    const createdAt = now();
+    const event = {
       order,
-      id: eventId(createdAt, order),
+      id: createHash("sha256").update(`${createdAt}:${order}`).digest("hex"),
       payload,
       createdAt,
       attempts,
       errors,
     };
+    await queue.put(event);
+    return event;
   }
 
   return {
@@ -23,19 +23,23 @@ export function createFactory({ now = () => new Date() } = {}) {
       counter = value;
     },
 
-    // A new event goes to the end of the queue.
-    // Throws when `order` would pass MAX_ORDER: the file name has 6 digits.
-    create(payload) {
-      if (counter >= MAX_ORDER) {
-        throw new Error(`order above ${MAX_ORDER} is not supported`);
+    // A new event goes to the tail: order is the counter plus one. The counter
+    // moves before the first await, so two calls never share an order.
+    async create(payload) {
+      const result = validatePayload(payload);
+      if (!result.valid) {
+        throw new Error(result.reason);
       }
-      return build(payload, ++counter, 0, []);
+      if (counter + 1 > MAX_ORDER) {
+        throw new Error(`the queue is full: order is above ${MAX_ORDER}`);
+      }
+      counter += 1;
+      return build(counter, payload, 0, []);
     },
 
-    // An event goes back to the head of the queue: `order` 0 is reserved for the
-    // event of a retry and the event that is recovered at the start. It keeps
-    // the errors of the attempts that failed.
-    createAtHead: (payload, attempts, errors) =>
-      build(payload, 0, attempts, errors),
+    // An event that goes back to the head of the queue: order 0.
+    createAtHead(payload, attempts, errors) {
+      return build(0, payload, attempts, [...errors]);
+    },
   };
 }

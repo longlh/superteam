@@ -1,191 +1,144 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
+import { describe, test } from "node:test";
 import {
   MAX_ORDER,
-  eventId,
-  padOrder,
   parseEvent,
-  sha256,
+  queueFileName,
   validateEvent,
+  validateOrder,
   validatePayload,
 } from "./event.js";
 
-const payload = {
-  type: "work:submit",
-  data: {
-    title: "a",
-  },
-};
 const event = {
   order: 1,
-  id: "x",
-  payload,
+  id: "abc",
+  payload: {
+    type: "work:assign",
+    data: {},
+  },
   createdAt: "2026-01-01T00:00:00.000Z",
   attempts: 0,
   errors: [],
 };
 
-test("padOrder pads to 6 digits", () => {
-  assert.equal(padOrder(0), "000000");
-  assert.equal(padOrder(1), "000001");
-  assert.equal(padOrder(MAX_ORDER), "999999");
-});
-
-test("sha256 gives 64 hex characters, and the id comes from createdAt and order", () => {
-  assert.match(sha256("a"), /^[0-9a-f]{64}$/);
-  assert.equal(
-    eventId("2026-01-01T00:00:00.000Z", 1),
-    eventId("2026-01-01T00:00:00.000Z", 1),
-  );
-  assert.notEqual(
-    eventId("2026-01-01T00:00:00.000Z", 1),
-    eventId("2026-01-01T00:00:00.001Z", 1),
-  );
-  assert.notEqual(
-    eventId("2026-01-01T00:00:00.000Z", 1),
-    eventId("2026-01-01T00:00:00.000Z", 2),
-  );
-});
-
-test("a valid event and payload pass", () => {
-  assert.equal(validateEvent(event), null);
-  assert.equal(validatePayload(payload), null);
-  assert.equal(
-    validateEvent({
-      ...event,
-      errors: [
-        {
-          attempt: 1,
-          error: "boom",
-          time: "2026-01-01T00:00:00.000Z",
+describe("validatePayload", () => {
+  test("a valid payload passes", () => {
+    assert.deepEqual(
+      validatePayload({
+        type: "a",
+        data: {
+          x: 1,
         },
-      ],
-    }),
-    null,
-  );
-});
-
-test("invalid payloads are rejected", () => {
-  const bad = [
-    null,
-    [],
-    "text",
-    {},
-    {
-      type: "",
-      data: {},
-    },
-    {
-      type: 1,
-      data: {},
-    },
-    {
-      type: "a",
-    },
-    {
-      type: "a",
-      data: null,
-    },
-    {
-      type: "a",
-      data: [],
-    },
-    {
-      type: "a",
-      data: "text",
-    },
-  ];
-  for (const value of bad) {
-    assert.equal(
-      typeof validatePayload(value),
-      "string",
-      JSON.stringify(value),
+      }),
+      {
+        valid: true,
+      },
     );
-  }
-});
-
-test("invalid events are rejected", () => {
-  const bad = [
-    null,
-    [],
-    {
-      ...event,
-      order: -1,
-    },
-    {
-      ...event,
-      order: MAX_ORDER + 1,
-    },
-    {
-      ...event,
-      order: 1.5,
-    },
-    {
-      ...event,
-      id: 1,
-    },
-    {
-      ...event,
-      createdAt: 1,
-    },
-    {
-      ...event,
-      attempts: undefined,
-    },
-    {
-      ...event,
-      attempts: -1,
-    },
-    {
-      ...event,
-      errors: undefined,
-    },
-    {
-      ...event,
-      errors: "boom",
-    },
-    {
-      ...event,
-      errors: [
-        {
-          attempt: 1,
-          error: "boom",
-        },
-      ],
-    },
-    {
-      ...event,
-      errors: [
-        {
-          attempt: 0,
-          error: "boom",
-          time: "t",
-        },
-      ],
-    },
-    {
-      ...event,
-      errors: [null],
-    },
-    {
-      ...event,
-      payload: {},
-    },
-  ];
-  for (const value of bad) {
-    assert.equal(typeof validateEvent(value), "string", JSON.stringify(value));
-  }
-});
-
-test("parseEvent returns the event, or the error and the parsed value", () => {
-  assert.deepEqual(parseEvent(JSON.stringify(event)), {
-    event,
   });
-  assert.match(parseEvent("{not json").error, /^invalid JSON/);
-  assert.equal(parseEvent("{not json").parsed, undefined);
-  const wrong = parseEvent('{"a":1}');
-  assert.equal(typeof wrong.error, "string");
-  assert.deepEqual(wrong.parsed, {
-    a: 1,
+
+  test("a type that is not a non-empty string is refused with a reason", () => {
+    for (const type of [undefined, "", 3, null, {}]) {
+      const result = validatePayload({
+        type,
+        data: {},
+      });
+      assert.equal(result.valid, false);
+      assert.match(result.reason, /type/);
+    }
+  });
+
+  test("a data that is not an object is refused with a reason", () => {
+    for (const data of [undefined, null, "x", 3, []]) {
+      const result = validatePayload({
+        type: "a",
+        data,
+      });
+      assert.equal(result.valid, false);
+      assert.match(result.reason, /data/);
+    }
+  });
+
+  test("a payload that is not an object is refused", () => {
+    assert.equal(validatePayload(null).valid, false);
+    assert.equal(validatePayload("x").valid, false);
+  });
+});
+
+describe("order", () => {
+  test("0 to 999999 passes, above it is refused", () => {
+    assert.equal(validateOrder(0).valid, true);
+    assert.equal(validateOrder(MAX_ORDER).valid, true);
+    assert.equal(validateOrder(MAX_ORDER + 1).valid, false);
+    assert.equal(validateOrder(-1).valid, false);
+    assert.equal(validateOrder(1.5).valid, false);
+  });
+
+  test("the file name is padded to 6 digits", () => {
+    assert.equal(queueFileName(1), "000001.json");
+    assert.equal(queueFileName(0), "000000.json");
+    assert.equal(queueFileName(999999), "999999.json");
+  });
+});
+
+describe("validateEvent and parseEvent", () => {
+  test("a valid event passes", () => {
+    assert.equal(validateEvent(event).valid, true);
+    assert.deepEqual(parseEvent(JSON.stringify(event)), {
+      event,
+    });
+  });
+
+  test("an order above 999999 is refused", () => {
+    assert.equal(
+      validateEvent({
+        ...event,
+        order: 1000000,
+      }).valid,
+      false,
+    );
+  });
+
+  test("a wrong field is refused with a reason", () => {
+    for (const bad of [
+      {
+        ...event,
+        id: "",
+      },
+      {
+        ...event,
+        createdAt: 3,
+      },
+      {
+        ...event,
+        attempts: -1,
+      },
+      {
+        ...event,
+        errors: [
+          {
+            attempt: 0,
+            error: "x",
+            time: "t",
+          },
+        ],
+      },
+      {
+        ...event,
+        errors: "no",
+      },
+      {
+        ...event,
+        payload: {
+          type: "a",
+        },
+      },
+    ]) {
+      assert.equal(validateEvent(bad).valid, false);
+    }
+  });
+
+  test("broken JSON and a wrong structure give a reason", () => {
+    assert.match(parseEvent("{oops").reason, /invalid JSON/);
+    assert.match(parseEvent("[]").reason, /invalid event/);
   });
 });

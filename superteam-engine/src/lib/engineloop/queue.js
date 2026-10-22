@@ -1,97 +1,121 @@
-import { randomUUID } from "node:crypto";
-import { readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
-import { padOrder } from "./event.js";
+import { queueFileName } from "./event.js";
 
 const QUEUE_FILE = /^\d{6}\.json$/;
-const ID = /^[0-9a-f]{64}$/;
+const EVENT_ID = /^[0-9a-f]{64}$/;
 
-// The file name of a claim: the event id, or the queue file name when the file
-// has no usable id (so a broken event can still be claimed).
-function claimNameOf(raw, queueFile) {
+// The key of a claim is the id of its event. A file that is not an event has
+// no id, so its key is the name of its queue file.
+function claimKey(raw, queueName) {
   try {
     const { id } = JSON.parse(raw);
-    if (ID.test(id)) {
+    if (typeof id === "string" && EVENT_ID.test(id)) {
       return id;
     }
   } catch {
-    // Not valid JSON: use the queue file name.
+    // Not JSON: the loop sends it to the DLQ.
   }
-  return path.basename(queueFile, ".json");
+  return queueName.replace(/\.json$/, "");
 }
 
-// The folders of the queue: the waiting events, the claim, and the DLQ.
-// A claim is named without its `.json` extension.
 export function createQueue(paths) {
-  const claimFile = (name) => path.join(paths.claim, `${name}.json`);
-
-  // Atomic: write to tmp first, then move to `file`, so nobody reads a file
-  // that is half written. An existing file is overwritten.
-  async function writeAtomic(file, event) {
-    const tmpFile = path.join(paths.tmp, `${randomUUID()}.tmp`);
-    await writeFile(tmpFile, JSON.stringify(event));
-    await rename(tmpFile, file);
-  }
-
-  // The queue files, from the lowest `order` to the highest.
-  async function list() {
-    return (await readdir(paths.queue))
-      .filter((f) => QUEUE_FILE.test(f))
-      .sort();
+  async function queueNames() {
+    const names = await readdir(paths.queue);
+    return names.filter((name) => QUEUE_FILE.test(name)).sort();
   }
 
   return {
-    put: (event) =>
-      writeAtomic(
-        path.join(paths.queue, `${padOrder(event.order)}.json`),
-        event,
-      ),
-
-    list,
-
-    // The maximum `order` in the queue, 0 when it is empty.
-    async maxOrder() {
-      const files = await list();
-      return files.length ? Number.parseInt(files.at(-1), 10) : 0;
+    // Writes the event to `tmp/` and moves it into the queue, so a half
+    // written file is never in the queue. An existing file is overwritten.
+    async put(event) {
+      const temporary = path.join(paths.tmp, `${event.id}.json`);
+      await writeFile(temporary, JSON.stringify(event, null, 2));
+      await rename(
+        temporary,
+        path.join(paths.queue, queueFileName(event.order)),
+      );
     },
 
-    // Moves the lowest event from the queue to the claim folder.
-    // Returns { name, raw } or null when the queue is empty.
+    async maxOrder() {
+      const names = await queueNames();
+      return names.length === 0 ? 0 : Number.parseInt(names.at(-1), 10);
+    },
+
+    // Moves the file with the smallest order to `claim/`. Gives `null` when
+    // the queue is empty, else `{ key, raw }`.
     async claimNext() {
-      const [file] = await list();
-      if (!file) {
+      const [name] = await queueNames();
+      if (name === undefined) {
         return null;
       }
-      const from = path.join(paths.queue, file);
-      const raw = await readFile(from, "utf8");
-      const name = claimNameOf(raw, file);
-      await rename(from, claimFile(name));
+      const file = path.join(paths.queue, name);
+      const raw = await readFile(file, "utf8");
+      const key = claimKey(raw, name);
+      await rename(file, path.join(paths.claim, `${key}.json`));
       return {
-        name,
+        key,
         raw,
       };
     },
 
     async listClaims() {
-      const files = await readdir(paths.claim);
-      return files
-        .filter((f) => f.endsWith(".json"))
-        .map((f) => f.slice(0, -5));
+      const names = (await readdir(paths.claim)).filter((name) =>
+        name.endsWith(".json"),
+      );
+      return Promise.all(
+        names.sort().map(async (name) => ({
+          key: name.replace(/\.json$/, ""),
+          raw: await readFile(path.join(paths.claim, name), "utf8"),
+        })),
+      );
     },
 
-    readClaim: (name) => readFile(claimFile(name), "utf8"),
+    async deleteClaim(key) {
+      await rm(path.join(paths.claim, `${key}.json`), {
+        force: true,
+      });
+    },
 
-    deleteClaim: (name) => rm(claimFile(name)),
+    // Writes `content` (an event or the raw text) to `dlq/{key}.json`, then
+    // deletes the claim.
+    async toDlq(key, content) {
+      const text =
+        typeof content === "string"
+          ? content
+          : JSON.stringify(content, null, 2);
+      await writeFile(path.join(paths.dlq, `${key}.json`), text);
+      await rm(path.join(paths.claim, `${key}.json`), {
+        force: true,
+      });
+    },
 
-    // Moves a claim to the DLQ. With `event`, the DLQ file holds that event
-    // (the one with the last error) and the claim is deleted.
-    async toDlq(name, event) {
-      const dlqFile = path.join(paths.dlq, `${name}.json`);
-      if (!event) {
-        return rename(claimFile(name), dlqFile);
-      }
-      await writeAtomic(dlqFile, event);
-      await rm(claimFile(name));
+    async ensureFolders() {
+      await Promise.all(
+        [paths.queue, paths.claim, paths.dlq, paths.tmp].map((folder) =>
+          mkdir(folder, {
+            recursive: true,
+          }),
+        ),
+      );
+    },
+
+    async clearTmp() {
+      const names = await readdir(paths.tmp);
+      await Promise.all(
+        names.map((name) =>
+          rm(path.join(paths.tmp, name), {
+            force: true,
+          }),
+        ),
+      );
     },
   };
 }

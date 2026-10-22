@@ -2,47 +2,45 @@ import { createControl } from "./control.js";
 import { createFactory } from "./factory.js";
 import { createHandlers } from "./handlers.js";
 import { createLoop } from "./loop.js";
+import { createPaths } from "./paths.js";
 import { createQueue } from "./queue.js";
 import { createSubscribers } from "./subscribers.js";
-import { getPaths } from "./paths.js";
+
+export { createSubscribers };
 
 const defaultSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const defaultNow = () => new Date().toISOString();
 
-// Puts the parts together and gives the public API.
 export function createEngineLoop({
   baseDir,
-  maxAttempts,
-  pollIntervalMs,
+  maxAttempts = 3,
+  pollIntervalMs = 1000,
   sleep = defaultSleep,
-  now,
+  now = defaultNow,
 }) {
-  if (!baseDir) {
-    throw new Error("baseDir is required");
-  }
-  const paths = getPaths(baseDir);
+  const queue = createQueue(createPaths(baseDir));
   const factory = createFactory({
+    queue,
     now,
   });
   const handlers = createHandlers();
   const subscribers = createSubscribers();
-  const queue = createQueue(paths);
   const loop = createLoop({
     queue,
     factory,
     handlers,
     subscribers,
     maxAttempts,
+    pollIntervalMs,
     sleep,
     now,
   });
   const control = createControl({
-    paths,
     queue,
     factory,
     handlers,
     loop,
-    pollIntervalMs,
-    sleep,
+    subscribers,
   });
 
   return {

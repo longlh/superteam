@@ -1,30 +1,35 @@
-// The subscribers of the notifications of the loop.
+// Subscribers by name. `emit` calls them in order and does not wait for them,
+// and a subscriber that fails never stops the others.
 export function createSubscribers() {
-  // Each entry is { name, subscriber }, kept in the order of the subscription.
-  let entries = [];
+  const byName = new Map();
 
   return {
-    // Returns a function that unsubscribes the subscriber.
     subscribe(name, subscriber) {
+      if (typeof subscriber !== "function") {
+        throw new TypeError("subscriber must be a function");
+      }
+      if (!byName.has(name)) {
+        byName.set(name, new Set());
+      }
+      // A wrapper, so the same function can subscribe twice.
       const entry = {
-        name,
         subscriber,
       };
-      entries.push(entry);
+      byName.get(name).add(entry);
       return () => {
-        entries = entries.filter((e) => e !== entry);
+        byName.get(name)?.delete(entry);
       };
     },
 
-    // Calls the subscribers in order and does not wait for them. The try and
-    // catch only keeps a failing subscriber from stopping the loop or the other
-    // subscribers: handling its error is not the job of the loop.
     emit(name, data) {
-      for (const entry of entries.filter((e) => e.name === name)) {
+      for (const { subscriber } of [...(byName.get(name) ?? [])]) {
         try {
-          Promise.resolve(entry.subscriber(data)).catch(() => {});
+          const result = subscriber(data);
+          if (typeof result?.catch === "function") {
+            result.catch(() => {});
+          }
         } catch {
-          // A synchronous error of a subscriber is isolated here.
+          // Isolated: a failing subscriber is not the problem of the loop.
         }
       }
     },

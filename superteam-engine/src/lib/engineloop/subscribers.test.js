@@ -1,50 +1,54 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
+import { test } from "node:test";
 import { createSubscribers } from "./subscribers.js";
 
-test("handlers are called in the order of the subscription", () => {
+test("emit calls the subscribers of a name in order", () => {
   const subscribers = createSubscribers();
   const calls = [];
-  subscribers.subscribe("a", () => calls.push(1));
-  subscribers.subscribe("a", () => calls.push(2));
-  subscribers.subscribe("b", () => calls.push(3));
-  subscribers.emit("a", {});
-  assert.deepEqual(calls, [1, 2]);
+  subscribers.subscribe("a", (data) => calls.push(["one", data]));
+  subscribers.subscribe("a", (data) => calls.push(["two", data]));
+  subscribers.subscribe("b", () => calls.push(["other"]));
+  subscribers.emit("a", 5);
+  assert.deepEqual(calls, [
+    ["one", 5],
+    ["two", 5],
+  ]);
 });
 
-test("the function that subscribe returns unsubscribes the handler", () => {
+test("the function that subscribe returns unsubscribes", () => {
   const subscribers = createSubscribers();
   const calls = [];
   const off = subscribers.subscribe("a", () => calls.push(1));
+  subscribers.emit("a");
   off();
-  subscribers.emit("a", {});
-  assert.deepEqual(calls, []);
+  subscribers.emit("a");
+  assert.equal(calls.length, 1);
 });
 
-test("a handler that throws or rejects does not stop the other handlers", async () => {
+test("a throwing and a rejecting subscriber do not stop the others", async () => {
   const subscribers = createSubscribers();
   const calls = [];
   subscribers.subscribe("a", () => {
     throw new Error("boom");
   });
-  subscribers.subscribe("a", async () => {
-    throw new Error("rejected");
-  });
+  subscribers.subscribe("a", () => Promise.reject(new Error("later")));
   subscribers.subscribe("a", () => calls.push("third"));
-  subscribers.emit("a", {});
+  subscribers.emit("a");
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(calls, ["third"]);
 });
 
-test("a handler can unsubscribe during an emit", () => {
+test("emit does not wait for a subscriber", () => {
   const subscribers = createSubscribers();
-  const calls = [];
-  const off = subscribers.subscribe("a", () => {
-    calls.push(1);
-    off();
+  let finished = false;
+  subscribers.subscribe("a", async () => {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    finished = true;
   });
-  subscribers.subscribe("a", () => calls.push(2));
-  subscribers.emit("a", {});
-  subscribers.emit("a", {});
-  assert.deepEqual(calls, [1, 2, 2]);
+  subscribers.emit("a");
+  assert.equal(finished, false);
+});
+
+test("a subscriber that is not a function throws", () => {
+  assert.throws(() => createSubscribers().subscribe("a", 3), TypeError);
 });

@@ -1,27 +1,23 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
+import { test } from "node:test";
 import { createHandlers } from "./handlers.js";
 
-test("a handler is found by its type, and a type with no handler gives nothing", () => {
+test("a type has one handler", () => {
   const handlers = createHandlers();
-  const handler = () => {};
-  handlers.register("work:submit", handler);
-  assert.equal(handlers.get("work:submit"), handler);
-  assert.equal(handlers.get("work:approve"), undefined);
+  const handler = async () => {};
+  handlers.handle("work:assign", handler);
+  assert.equal(handlers.get("work:assign"), handler);
+  assert.equal(handlers.get("other"), undefined);
 });
 
-test("a second handler for the same type throws", () => {
+test("a second handler for a type throws", () => {
   const handlers = createHandlers();
-  handlers.register("a", () => {});
-  assert.throws(
-    () => handlers.register("a", () => {}),
-    /already has a handler/,
-  );
+  handlers.handle("a", async () => {});
+  assert.throws(() => handlers.handle("a", async () => {}), /already/);
 });
 
 test("a handler that is not a function throws", () => {
-  assert.throws(
-    () => createHandlers().register("a", "text"),
-    /must be a function/,
-  );
+  const handlers = createHandlers();
+  assert.throws(() => handlers.handle("a", "no"), TypeError);
+  assert.throws(() => handlers.handle("", async () => {}), TypeError);
 });

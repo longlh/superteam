@@ -1,136 +1,143 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { test } from "node:test";
+import { createPaths } from "./paths.js";
 import { createQueue } from "./queue.js";
-import { ensurePaths, getPaths } from "./paths.js";
-import { eventId } from "./event.js";
+import { withTempDir } from "./testkit.js";
 
-async function setup() {
-  const paths = getPaths(await mkdtemp(path.join(tmpdir(), "engineloop-q-")));
-  await ensurePaths(paths);
+const id = (n) => String(n).repeat(64);
+
+function event(order, extra = {}) {
   return {
-    paths,
-    queue: createQueue(paths),
+    order,
+    id: id(order),
+    payload: {
+      type: "t",
+      data: {},
+    },
+    createdAt: "2026-01-01T00:00:00.000Z",
+    attempts: 0,
+    errors: [],
+    ...extra,
   };
 }
 
-const put = (paths, name, text) =>
-  writeFile(path.join(paths.queue, name), text);
-const id = eventId("2026-01-01T00:00:00.000Z", 1);
-
-test("put writes the file named by the order, with no tmp file left, and overwrites", async () => {
-  const { paths, queue } = await setup();
-  const event = {
-    order: 3,
-    id: "x",
-    payload: {},
-    attempts: 1,
-    errors: [],
+async function setup(dir) {
+  const paths = createPaths(dir);
+  const queue = createQueue(paths);
+  await queue.ensureFolders();
+  return {
+    paths,
+    queue,
   };
-  await queue.put(event);
-  const file = path.join(paths.queue, "000003.json");
-  assert.deepEqual(JSON.parse(await readFile(file, "utf8")), event);
-  assert.deepEqual(await readdir(paths.tmp), []);
-  await queue.put({
-    ...event,
-    attempts: 2,
+}
+
+test("maxOrder is 0 on an empty queue", async () => {
+  await withTempDir(async (dir) => {
+    const { queue } = await setup(dir);
+    assert.equal(await queue.maxOrder(), 0);
   });
-  assert.equal(JSON.parse(await readFile(file, "utf8")).attempts, 2);
 });
 
-test("list is in order and ignores other files, and maxOrder is 0 when empty", async () => {
-  const { paths, queue } = await setup();
-  assert.equal(await queue.maxOrder(), 0);
-  await put(paths, "000010.json", "{}");
-  await put(paths, "000002.json", "{}");
-  await put(paths, "notes.txt", "x");
-  assert.deepEqual(await queue.list(), ["000002.json", "000010.json"]);
-  assert.equal(await queue.maxOrder(), 10);
-});
-
-test("claimNext moves the lowest event, and names the claim by the id", async () => {
-  const { paths, queue } = await setup();
-  assert.equal(await queue.claimNext(), null);
-  await put(
-    paths,
-    "000002.json",
-    JSON.stringify({
-      id: "short",
-    }),
-  );
-  await put(
-    paths,
-    "000001.json",
-    JSON.stringify({
-      id,
-    }),
-  );
-  const claim = await queue.claimNext();
-  assert.equal(claim.name, id);
-  assert.deepEqual(JSON.parse(claim.raw), {
-    id,
+test("put writes the padded file and leaves tmp empty", async () => {
+  await withTempDir(async (dir) => {
+    const { paths, queue } = await setup(dir);
+    await queue.put(event(7));
+    assert.deepEqual(await readdir(paths.queue), ["000007.json"]);
+    assert.deepEqual(await readdir(paths.tmp), []);
+    assert.equal(await queue.maxOrder(), 7);
   });
-  assert.deepEqual(await queue.list(), ["000002.json"]);
-  assert.deepEqual(await queue.listClaims(), [id]);
 });
 
-test("a broken event is claimed by its queue file name", async () => {
-  const { paths, queue } = await setup();
-  await put(paths, "000003.json", "{not json");
-  assert.equal((await queue.claimNext()).name, "000003");
-  assert.deepEqual(await queue.listClaims(), ["000003"]);
-});
-
-test("readClaim and deleteClaim", async () => {
-  const { paths, queue } = await setup();
-  await put(
-    paths,
-    "000001.json",
-    JSON.stringify({
-      id,
-    }),
-  );
-  const { name } = await queue.claimNext();
-  assert.deepEqual(JSON.parse(await queue.readClaim(name)), {
-    id,
+test("claimNext takes the smallest order and moves it to claim/", async () => {
+  await withTempDir(async (dir) => {
+    const { paths, queue } = await setup(dir);
+    await queue.put(event(2));
+    await queue.put(event(1));
+    await queue.put(event(0));
+    const claimed = await queue.claimNext();
+    assert.equal(claimed.key, id(0));
+    assert.equal(JSON.parse(claimed.raw).order, 0);
+    assert.deepEqual(await readdir(paths.claim), [`${id(0)}.json`]);
+    assert.deepEqual(await readdir(paths.queue), [
+      "000001.json",
+      "000002.json",
+    ]);
   });
-  await queue.deleteClaim(name);
-  assert.deepEqual(await queue.listClaims(), []);
 });
 
-test("toDlq moves the claim, or writes the given event and deletes the claim", async () => {
-  const { paths, queue } = await setup();
-  await put(paths, "000001.json", "{}");
-  const { name } = await queue.claimNext();
-  await queue.toDlq(name);
-  assert.deepEqual(await queue.listClaims(), []);
-  assert.deepEqual(await readdir(paths.dlq), [`${name}.json`]);
+test("claimNext gives null on an empty queue", async () => {
+  await withTempDir(async (dir) => {
+    const { queue } = await setup(dir);
+    assert.equal(await queue.claimNext(), null);
+  });
+});
 
-  await put(
-    paths,
-    "000002.json",
-    JSON.stringify({
-      id,
-    }),
-  );
-  await queue.claimNext();
-  const event = {
-    order: 2,
-    errors: [
-      {
-        attempt: 1,
-        error: "boom",
-        time: "t",
-      },
-    ],
-  };
-  await queue.toDlq(id, event);
-  assert.deepEqual(await queue.listClaims(), []);
-  assert.deepEqual(
-    JSON.parse(await readFile(path.join(paths.dlq, `${id}.json`), "utf8")),
-    event,
-  );
-  assert.deepEqual(await readdir(paths.tmp), []);
+test("a file that is not JSON is claimed by the name of its file", async () => {
+  await withTempDir(async (dir) => {
+    const { paths, queue } = await setup(dir);
+    await writeFile(path.join(paths.queue, "000003.json"), "{oops");
+    const claimed = await queue.claimNext();
+    assert.deepEqual(claimed, {
+      key: "000003",
+      raw: "{oops",
+    });
+    assert.deepEqual(await queue.listClaims(), [claimed]);
+  });
+});
+
+test("listClaims, deleteClaim", async () => {
+  await withTempDir(async (dir) => {
+    const { queue } = await setup(dir);
+    assert.deepEqual(await queue.listClaims(), []);
+    await queue.put(event(1));
+    const claimed = await queue.claimNext();
+    assert.deepEqual(await queue.listClaims(), [claimed]);
+    await queue.deleteClaim(claimed.key);
+    assert.deepEqual(await queue.listClaims(), []);
+  });
+});
+
+test("toDlq writes the content to dlq/ and deletes the claim", async () => {
+  await withTempDir(async (dir) => {
+    const { paths, queue } = await setup(dir);
+    await queue.put(event(1));
+    const { key } = await queue.claimNext();
+    const failed = event(1, {
+      errors: [
+        {
+          attempt: 1,
+          error: "x",
+          time: "t",
+        },
+      ],
+    });
+    await queue.toDlq(key, failed);
+    assert.deepEqual(await queue.listClaims(), []);
+    const file = await readFile(path.join(paths.dlq, `${key}.json`), "utf8");
+    assert.deepEqual(JSON.parse(file), failed);
+  });
+});
+
+test("toDlq keeps the raw text of a broken file", async () => {
+  await withTempDir(async (dir) => {
+    const { paths, queue } = await setup(dir);
+    await writeFile(path.join(paths.queue, "000001.json"), "{oops");
+    const { key, raw } = await queue.claimNext();
+    await queue.toDlq(key, raw);
+    assert.equal(
+      await readFile(path.join(paths.dlq, "000001.json"), "utf8"),
+      "{oops",
+    );
+  });
+});
+
+test("clearTmp deletes every file of tmp/", async () => {
+  await withTempDir(async (dir) => {
+    const { paths, queue } = await setup(dir);
+    await writeFile(path.join(paths.tmp, "half.json"), "{");
+    await queue.clearTmp();
+    assert.deepEqual(await readdir(paths.tmp), []);
+  });
 });

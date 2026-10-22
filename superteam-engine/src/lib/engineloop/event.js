@@ -1,91 +1,101 @@
-import { createHash } from "node:crypto";
-
 export const MAX_ORDER = 999999;
 
-// SHA-256 in hex, of a string or of bytes.
-export const sha256 = (data) => createHash("sha256").update(data).digest("hex");
+const valid = {
+  valid: true,
+};
 
-// The name of the queue file: 1 becomes "000001".
-export const padOrder = (order) => String(order).padStart(6, "0");
-
-// The id of an event is the hash of its createdAt and its order.
-export const eventId = (createdAt, order) => sha256(`${createdAt}:${order}`);
-
-const isObject = (value) =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-const isCount = (value) => Number.isInteger(value) && value >= 0;
-
-// Each validator returns an error message, or null when the value is valid.
-// The loop reads only `type` and `data`: what is in `data` is for the handler.
-export function validatePayload(payload) {
-  if (!isObject(payload)) {
-    return "payload must be an object";
-  }
-  if (typeof payload.type !== "string" || payload.type === "") {
-    return "payload.type must be a text that is not empty";
-  }
-  if (!isObject(payload.data)) {
-    return "payload.data must be an object";
-  }
-  return null;
+function invalid(reason) {
+  return {
+    valid: false,
+    reason,
+  };
 }
 
-// Each entry records one failed attempt: which one, why, and when.
-function validateErrors(errors) {
-  if (!Array.isArray(errors)) {
-    return "event.errors must be an array";
+function isObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+// The name of the queue file of an order: `000001.json`.
+export function queueFileName(order) {
+  return `${String(order).padStart(6, "0")}.json`;
+}
+
+// The loop checks only the shape of the payload, never what is in `data`.
+export function validatePayload(payload) {
+  if (!isObject(payload)) {
+    return invalid("payload must be an object");
   }
-  for (const entry of errors) {
-    if (
-      !isObject(entry) ||
-      !Number.isInteger(entry.attempt) ||
-      entry.attempt < 1 ||
-      typeof entry.error !== "string" ||
-      typeof entry.time !== "string"
-    ) {
-      return "event.errors must hold { attempt, error, time } entries";
-    }
+  if (typeof payload.type !== "string" || payload.type === "") {
+    return invalid("payload.type must be a non-empty string");
   }
-  return null;
+  if (!isObject(payload.data)) {
+    return invalid("payload.data must be an object");
+  }
+  return valid;
+}
+
+export function validateOrder(order) {
+  if (!Number.isInteger(order) || order < 0 || order > MAX_ORDER) {
+    return invalid(`order must be an integer from 0 to ${MAX_ORDER}`);
+  }
+  return valid;
+}
+
+function validateError(entry) {
+  return (
+    isObject(entry) &&
+    Number.isInteger(entry.attempt) &&
+    entry.attempt >= 1 &&
+    typeof entry.error === "string" &&
+    typeof entry.time === "string"
+  );
 }
 
 export function validateEvent(event) {
   if (!isObject(event)) {
-    return "event must be an object";
+    return invalid("event must be an object");
   }
-  if (!isCount(event.order) || event.order > MAX_ORDER) {
-    return "event.order must be an integer from 0 to 999999";
+  const order = validateOrder(event.order);
+  if (!order.valid) {
+    return order;
   }
-  if (typeof event.id !== "string") {
-    return "event.id must be a string";
+  if (typeof event.id !== "string" || event.id === "") {
+    return invalid("event.id must be a non-empty string");
   }
-  if (typeof event.createdAt !== "string") {
-    return "event.createdAt must be a string";
+  const payload = validatePayload(event.payload);
+  if (!payload.valid) {
+    return payload;
   }
-  if (!isCount(event.attempts)) {
-    return "event.attempts must be an integer";
+  if (typeof event.createdAt !== "string" || event.createdAt === "") {
+    return invalid("event.createdAt must be a non-empty string");
   }
-  return validateErrors(event.errors) ?? validatePayload(event.payload);
+  if (!Number.isInteger(event.attempts) || event.attempts < 0) {
+    return invalid("event.attempts must be a non-negative integer");
+  }
+  if (!Array.isArray(event.errors) || !event.errors.every(validateError)) {
+    return invalid("event.errors must be a list of { attempt, error, time }");
+  }
+  return valid;
 }
 
-// Reads the text of an event file. Returns { event } when it is valid, and
-// { error, parsed } when it is not JSON or has a wrong structure.
+// Parses the text of a claim. Gives `{ event }`, or `{ reason }` when the
+// text is not JSON or the structure is wrong.
 export function parseEvent(raw) {
-  let parsed;
+  let event;
   try {
-    parsed = JSON.parse(raw);
+    event = JSON.parse(raw);
   } catch (error) {
     return {
-      error: `invalid JSON: ${error.message}`,
+      reason: `invalid JSON: ${error.message}`,
     };
   }
-  const error = validateEvent(parsed);
-  return error
-    ? {
-        error,
-        parsed,
-      }
-    : {
-        event: parsed,
-      };
+  const result = validateEvent(event);
+  if (!result.valid) {
+    return {
+      reason: `invalid event: ${result.reason}`,
+    };
+  }
+  return {
+    event,
+  };
 }

@@ -1,80 +1,110 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { readdir, readFile } from "node:fs/promises";
+import path from "node:path";
+import { test } from "node:test";
 import { createFactory } from "./factory.js";
-import { MAX_ORDER, eventId } from "./event.js";
+import { createPaths } from "./paths.js";
+import { createQueue } from "./queue.js";
+import { createClock, withTempDir } from "./testkit.js";
+
+async function setup(dir) {
+  const paths = createPaths(dir);
+  const queue = createQueue(paths);
+  await queue.ensureFolders();
+  const factory = createFactory({
+    queue,
+    now: createClock(),
+  });
+  return {
+    paths,
+    queue,
+    factory,
+  };
+}
 
 const payload = {
-  type: "work:submit",
-  data: {},
+  type: "work:assign",
+  data: {
+    id: "w",
+  },
 };
-const createdAt = "2026-01-01T00:00:00.000Z";
-const setup = () =>
-  createFactory({
-    now: () => new Date(createdAt),
-  });
 
-test("create gives order, id, createdAt, attempts and no errors", () => {
-  const factory = setup();
-  assert.deepEqual(factory.create(payload), {
-    order: 1,
-    id: eventId(createdAt, 1),
-    payload,
-    createdAt,
-    attempts: 0,
-    errors: [],
+test("create on an empty queue starts at order 1", async () => {
+  await withTempDir(async (dir) => {
+    const { factory, paths } = await setup(dir);
+    const event = await factory.create(payload);
+    assert.equal(event.order, 1);
+    assert.equal(event.attempts, 0);
+    assert.deepEqual(event.errors, []);
+    assert.deepEqual(event.payload, payload);
+    assert.equal(
+      event.id,
+      createHash("sha256").update(`${event.createdAt}:1`).digest("hex"),
+    );
+    const file = path.join(paths.queue, "000001.json");
+    assert.deepEqual(JSON.parse(await readFile(file, "utf8")), event);
+    assert.deepEqual(await readdir(paths.tmp), []);
   });
-  assert.equal(factory.create(payload).order, 2);
 });
 
-test("100 calls at the same time give 100 different orders", async () => {
-  const factory = setup();
-  const events = await Promise.all(
-    Array.from(
+test("create gives the counter plus one, and setCounter sets it", async () => {
+  await withTempDir(async (dir) => {
+    const { factory } = await setup(dir);
+    factory.setCounter(41);
+    assert.equal((await factory.create(payload)).order, 42);
+    assert.equal((await factory.create(payload)).order, 43);
+  });
+});
+
+test("two creates at the same time get two orders", async () => {
+  await withTempDir(async (dir) => {
+    const { factory, paths } = await setup(dir);
+    const events = await Promise.all([
+      factory.create(payload),
+      factory.create(payload),
+    ]);
+    assert.deepEqual(events.map((e) => e.order).sort(), [1, 2]);
+    assert.equal((await readdir(paths.queue)).length, 2);
+  });
+});
+
+test("create refuses an invalid payload", async () => {
+  await withTempDir(async (dir) => {
+    const { factory } = await setup(dir);
+    await assert.rejects(
+      factory.create({
+        type: "",
+        data: {},
+      }),
+      /type/,
+    );
+  });
+});
+
+test("createAtHead gives order 0 and keeps attempts and errors", async () => {
+  await withTempDir(async (dir) => {
+    const { factory, paths } = await setup(dir);
+    const errors = [
       {
-        length: 100,
+        attempt: 1,
+        error: "x",
+        time: "t",
       },
-      async () => factory.create(payload),
-    ),
-  );
-  assert.equal(new Set(events.map((e) => e.order)).size, 100);
-  assert.equal(new Set(events.map((e) => e.id)).size, 100);
-});
-
-test("setCounter continues from the given maximum", () => {
-  const factory = setup();
-  factory.setCounter(7);
-  assert.equal(factory.create(payload).order, 8);
-  factory.setCounter(2);
-  assert.equal(factory.create(payload).order, 3);
-});
-
-test("createAtHead gives order 0 with the attempts and the errors, and keeps the counter", () => {
-  const factory = setup();
-  const errors = [
-    {
-      attempt: 1,
-      error: "boom",
-      time: createdAt,
-    },
-  ];
-  assert.deepEqual(factory.createAtHead(payload, 2, errors), {
-    order: 0,
-    id: eventId(createdAt, 0),
-    payload,
-    createdAt,
-    attempts: 2,
-    errors,
+    ];
+    const event = await factory.createAtHead(payload, 1, errors);
+    assert.equal(event.order, 0);
+    assert.equal(event.attempts, 1);
+    assert.deepEqual(event.errors, errors);
+    assert.deepEqual(await readdir(paths.queue), ["000000.json"]);
   });
-  assert.equal(factory.create(payload).order, 1);
 });
 
-test("create throws when the order would pass the maximum", () => {
-  const factory = setup();
-  factory.setCounter(MAX_ORDER - 1);
-  assert.equal(factory.create(payload).order, MAX_ORDER);
-  assert.throws(() => factory.create(payload), /not supported/);
-});
-
-test("the factory works with the real clock", () => {
-  assert.match(createFactory().create(payload).createdAt, /^\d{4}-\d\d-\d\dT/);
+test("an order above 999999 throws", async () => {
+  await withTempDir(async (dir) => {
+    const { factory } = await setup(dir);
+    factory.setCounter(999998);
+    assert.equal((await factory.create(payload)).order, 999999);
+    await assert.rejects(factory.create(payload), /999999/);
+  });
 });
