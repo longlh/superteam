@@ -1,25 +1,16 @@
-import { existsSync } from "node:fs";
 import { readJson } from "../../lib/storage/files.js";
-import { parseJobId } from "../../lib/storage/ids.js";
 import { workFile, worktreeDir } from "../../lib/storage/paths.js";
-import { createTaskStore } from "../tasks.js";
+import { readEndedJob } from "./ended-job.js";
 import { failTask } from "./fail-work.js";
 import { workerJob } from "./start-ready.js";
 
 export async function taskMergerEnded(deps, event) {
   const { jobId, summary, error } = event.payload.data;
-  const { workId, taskId } = parseJobId(jobId);
-  const workFolder = worktreeDir(deps.baseDir, {
-    workId,
-  });
-  if (!existsSync(workFolder)) {
+  const ended = await readEndedJob(deps, jobId, "task-merger");
+  if (ended === null || ended.task.summary !== undefined) {
     return;
   }
-  const store = createTaskStore(workFolder);
-  const task = await store.get(taskId);
-  if (task === null || task.completed || task.summary !== undefined) {
-    return;
-  }
+  const { workId, workFolder, store, task } = ended;
   if (error !== undefined) {
     await failTask({
       deps,
@@ -32,7 +23,7 @@ export async function taskMergerEnded(deps, event) {
 
   const merged = {
     ...task,
-    summary,
+    summary: summary ?? "",
     updatedAt: deps.now().toISOString(),
   };
   await store.put(merged);

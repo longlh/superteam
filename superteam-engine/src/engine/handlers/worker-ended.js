@@ -1,27 +1,18 @@
-import { existsSync } from "node:fs";
 import { readJson } from "../../lib/storage/files.js";
-import { parseJobId } from "../../lib/storage/ids.js";
 import { workFile, worktreeDir } from "../../lib/storage/paths.js";
 import { taskStatus } from "../../lib/storage/status.js";
 import { buildJob } from "../jobs.js";
-import { createTaskStore } from "../tasks.js";
+import { readEndedJob } from "./ended-job.js";
 import { failTask } from "./fail-work.js";
 import { startReady } from "./start-ready.js";
 
 export async function workerEnded(deps, event) {
   const { jobId, summary, data, error } = event.payload.data;
-  const { workId, taskId } = parseJobId(jobId);
-  const workFolder = worktreeDir(deps.baseDir, {
-    workId,
-  });
-  if (!existsSync(workFolder)) {
+  const ended = await readEndedJob(deps, jobId, "worker");
+  if (ended === null) {
     return;
   }
-  const store = createTaskStore(workFolder);
-  const task = await store.get(taskId);
-  if (task === null || task.completed) {
-    return;
-  }
+  const { workId, taskId, workFolder, store, task } = ended;
   if (error !== undefined) {
     await failTask({
       deps,

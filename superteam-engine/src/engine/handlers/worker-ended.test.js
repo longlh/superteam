@@ -197,3 +197,29 @@ test("an unknown task is ignored", async () => {
   assert.equal(h.published.length, 0);
   assert.equal(h.calls.length, 0);
 });
+
+test("an ended job with an invalid id is ignored", async () => {
+  for (const jobId of [
+    "../x/worker",
+    "w1/../worker",
+    "w1/a/task-merger",
+    "w1/a/work-merger",
+    "w1",
+    "",
+  ]) {
+    await h.handlers["worker:ended"](
+      endedEvent("worker:ended", {
+        jobId,
+        error: "boom",
+      }),
+    );
+  }
+  await h.handlers["task-merger:ended"](
+    endedEvent("task-merger:ended", {
+      jobId: "w1/a/worker",
+      error: "boom",
+    }),
+  );
+  assert.equal(h.published.length, 0);
+  assert.equal(h.calls.length, 0);
+});

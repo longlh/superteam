@@ -126,3 +126,11 @@ test("an event for a work whose worktree is gone is ignored", async () => {
   assert.equal(h.published.length, 0);
   assert.equal(h.calls.length, 0);
 });
+
+test("a result without summary delivered twice publishes once", async () => {
+  const event = ended({});
+  await h.handlers["task-merger:ended"](event);
+  await h.handlers["task-merger:ended"](event);
+  assert.equal((await store.get("c")).summary, "");
+  assert.equal(h.published.length, 1);
+});
