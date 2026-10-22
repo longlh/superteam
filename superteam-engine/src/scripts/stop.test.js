@@ -23,6 +23,7 @@ async function withDir(fn, { pid } = {}) {
   }
 }
 
+const superteam = () => "node /plugin/src/orchestrator/main.js";
 const pidFile = (dir) => path.join(dir, ".superteam/.r/superteam.pid");
 const exists = (file) =>
   access(file).then(
@@ -36,6 +37,7 @@ test("sends SIGTERM to a live pid and deletes the pid file", () =>
       const sent = [];
       const result = await stopSuperteam({
         baseDir: dir,
+        commandOf: superteam,
         kill: (pid, signal) => sent.push([pid, signal]),
         isAlive: () => sent.length === 0,
         sleep: async () => {},
@@ -55,6 +57,7 @@ test("returns stopped false without a pid file", () =>
   withDir(async (dir) => {
     const result = await stopSuperteam({
       baseDir: dir,
+      commandOf: superteam,
       kill: () => assert.fail("must not kill"),
       isAlive: () => true,
     });
@@ -68,6 +71,7 @@ test("deletes a stale pid file without killing", () =>
     async (dir) => {
       const result = await stopSuperteam({
         baseDir: dir,
+        commandOf: superteam,
         kill: () => assert.fail("must not kill"),
         isAlive: () => false,
       });
@@ -87,6 +91,7 @@ for (const content of ["", "0", "-1", "abc"]) {
       async (dir) => {
         const result = await stopSuperteam({
           baseDir: dir,
+          commandOf: superteam,
           kill: () => assert.fail("must not kill"),
           isAlive: () => true,
         });
@@ -108,6 +113,7 @@ test("waits for the process to exit before deleting the pid file", () =>
       let slept = 0;
       const result = await stopSuperteam({
         baseDir: dir,
+        commandOf: superteam,
         kill: () => {},
         isAlive: () => ++polls < 4,
         sleep: async () => {
@@ -131,6 +137,7 @@ test("keeps the pid file when the process is still alive after the wait", () =>
     async (dir) => {
       const result = await stopSuperteam({
         baseDir: dir,
+        commandOf: superteam,
         kill: () => {},
         isAlive: () => true,
         sleep: async () => {},
@@ -153,6 +160,7 @@ test("counts ESRCH from kill as stopped", () =>
       let dead = false;
       const result = await stopSuperteam({
         baseDir: dir,
+        commandOf: superteam,
         kill: () => {
           dead = true;
           throw Object.assign(new Error("no such process"), {
@@ -165,6 +173,30 @@ test("counts ESRCH from kill as stopped", () =>
       assert.deepEqual(result, {
         stopped: true,
       });
+      assert.equal(await exists(pidFile(dir)), false);
+    },
+    {
+      pid: 555,
+    },
+  ));
+
+test("never kills a live pid whose command is not superteam, and deletes the stale file", () =>
+  withDir(
+    async (dir) => {
+      const seen = [];
+      const result = await stopSuperteam({
+        baseDir: dir,
+        commandOf: (pid) => {
+          seen.push(pid);
+          return "/usr/bin/vim notes.txt";
+        },
+        kill: () => assert.fail("must not kill"),
+        isAlive: () => true,
+      });
+      assert.deepEqual(result, {
+        stopped: false,
+      });
+      assert.deepEqual(seen, [555]);
       assert.equal(await exists(pidFile(dir)), false);
     },
     {

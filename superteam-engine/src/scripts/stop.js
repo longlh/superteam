@@ -2,6 +2,7 @@ import fs from "node:fs";
 import { rm } from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
+import { processCommand } from "../lib/process-command.js";
 import { pidFilePath, processIsAlive, readPid } from "./pid-file.js";
 
 const STEP_MS = 100;
@@ -12,13 +13,15 @@ export async function stopSuperteam({
   isAlive = processIsAlive,
   sleep = delay,
   timeoutMs = 10_000,
+  commandOf = processCommand,
 }) {
   const pid = await readPid(baseDir);
   const removePidFile = () =>
     rm(pidFilePath(baseDir), {
       force: true,
     });
-  if (pid === null || !isAlive(pid)) {
+  // A stale pid may be another process by now: only superteam is stopped.
+  if (pid === null || !isAlive(pid) || !commandOf(pid)?.includes("main.js")) {
     await removePidFile();
     return {
       stopped: false,

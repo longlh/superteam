@@ -1,3 +1,6 @@
+// The command of an agent.
+export const CLAUDE = "claude";
+
 export function buildCommand(job, { maxBudgetUsd } = {}) {
   const args = [
     "-p",
@@ -15,7 +18,7 @@ export function buildCommand(job, { maxBudgetUsd } = {}) {
     args.push("--max-budget-usd", String(maxBudgetUsd));
   }
   return {
-    command: "claude",
+    command: CLAUDE,
     args,
   };
 }

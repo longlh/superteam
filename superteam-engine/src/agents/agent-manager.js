@@ -2,8 +2,9 @@ import { spawn as nodeSpawn } from "node:child_process";
 import { readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { readJson, writeJson } from "../lib/storage/files.js";
+import { processCommand } from "../lib/process-command.js";
 import { agentsDir } from "../lib/storage/paths.js";
-import { buildCommand, parseResult } from "./claude-process.js";
+import { buildCommand, CLAUDE, parseResult } from "./claude-process.js";
 
 function isAlive(pid) {
   try {
@@ -28,6 +29,7 @@ export function createAgentManager({
   spawn = nodeSpawn,
   env = {},
   maxBudgetUsd,
+  commandOf = processCommand,
 }) {
   const dir = agentsDir(baseDir);
   const running = new Map();
@@ -214,12 +216,19 @@ export function createAgentManager({
     await Promise.allSettled(ending);
   }
 
+  function isAgent(pid) {
+    const name = path.basename(command ?? CLAUDE);
+    return commandOf(pid)?.includes(name) ?? false;
+  }
+
   async function recover() {
     const jobs = [];
     for (const name of await pidFileNames()) {
       const content = await readPidFile(name);
       if (content) {
-        if (isAlive(content.pid)) {
+        // A pid of a leftover file may be another process by now: it is
+        // killed only when it still runs the command of the agents.
+        if (isAlive(content.pid) && isAgent(content.pid)) {
           killGroup(content.pid);
         }
         jobs.push(content.job);

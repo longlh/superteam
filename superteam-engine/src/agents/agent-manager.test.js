@@ -332,6 +332,38 @@ describe("agent manager recover", () => {
     assert.deepEqual(await pidFiles(), []);
   });
 
+  it("never kills a live pid whose command is not the agent command", async () => {
+    const live = spawn(fake, [], {
+      detached: true,
+      stdio: "ignore",
+      env: {
+        ...process.env,
+        FAKE_CLAUDE_MODE: "hang",
+      },
+    });
+    strays.push(live);
+    await writeJson(path.join(agentsDir(baseDir), `${live.pid}.pid`), {
+      pid: live.pid,
+      job: job("w1/t1/worker"),
+    });
+    const seen = [];
+    const manager = make("ok", {
+      commandOf: (pid) => {
+        seen.push(pid);
+        return "/usr/bin/vim notes.txt";
+      },
+    });
+    const jobs = await manager.recover();
+    assert.deepEqual(
+      jobs.map((j) => j.id),
+      ["w1/t1/worker"],
+    );
+    assert.deepEqual(seen, [live.pid]);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.ok(alive(live.pid));
+    assert.deepEqual(await pidFiles(), []);
+  });
+
   it("returns no job when there is no folder", async () => {
     await mkdir(baseDir, {
       recursive: true,
