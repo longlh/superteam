@@ -1,0 +1,203 @@
+import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
+
+const PR_STATES = {
+  OPEN: "open",
+  MERGED: "merged",
+  CLOSED: "closed",
+};
+
+function defaultRun(command, args, { cwd }) {
+  return execFileAsync(command, args, {
+    cwd,
+    maxBuffer: 64 * 1024 * 1024,
+  });
+}
+
+export function createGitAdapter({ baseDir, run = defaultRun }) {
+  const git = (args, cwd = baseDir) =>
+    run("git", args, {
+      cwd,
+    });
+  const gh = (args) =>
+    run("gh", args, {
+      cwd: baseDir,
+    });
+
+  async function succeeds(args) {
+    try {
+      await git(args);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  const hasLocal = (branch) =>
+    succeeds(["show-ref", "--verify", "--quiet", `refs/heads/${branch}`]);
+  const hasRemote = (branch) =>
+    succeeds([
+      "show-ref",
+      "--verify",
+      "--quiet",
+      `refs/remotes/origin/${branch}`,
+    ]);
+
+  return {
+    async rootBranch() {
+      const { stdout } = await git(["branch", "--show-current"]);
+      return stdout.trim();
+    },
+
+    async fetch() {
+      await git(["fetch", "--prune", "origin"]);
+    },
+
+    async createWorktree({ folder, branch, base }) {
+      if (existsSync(folder)) {
+        return;
+      }
+      if (await hasLocal(branch)) {
+        await git(["worktree", "add", folder, branch]);
+      } else if (await hasRemote(branch)) {
+        await git([
+          "worktree",
+          "add",
+          "--track",
+          "-b",
+          branch,
+          folder,
+          `origin/${branch}`,
+        ]);
+      } else {
+        await git(["worktree", "add", "-b", branch, folder, base]);
+      }
+    },
+
+    async removeWorktree(folder) {
+      if (existsSync(folder)) {
+        await git(["worktree", "remove", "--force", folder]);
+      }
+      await git(["worktree", "prune"]);
+    },
+
+    async commitAll(folder, message) {
+      await git(["add", "-A"], folder);
+      const { stdout } = await git(["status", "--porcelain"], folder);
+      if (stdout.trim() === "") {
+        return false;
+      }
+      await git(["commit", "-m", message], folder);
+      return true;
+    },
+
+    async push(branch) {
+      await git(["push", "--set-upstream", "origin", branch]);
+    },
+
+    async branchExists(branch) {
+      return (await hasLocal(branch)) || (await hasRemote(branch));
+    },
+
+    async deleteBranch(branch) {
+      if (await hasLocal(branch)) {
+        await git(["branch", "-D", branch]);
+      }
+      const { stdout } = await git([
+        "ls-remote",
+        "--heads",
+        "origin",
+        `refs/heads/${branch}`,
+      ]);
+      if (stdout.trim() !== "") {
+        await git(["push", "origin", "--delete", branch]);
+      }
+    },
+
+    async listBranches(prefix) {
+      const { stdout } = await git([
+        "for-each-ref",
+        "--format=%(refname)",
+        "refs/heads/",
+        "refs/remotes/origin/",
+      ]);
+      const names = new Set();
+      for (const ref of stdout.split("\n")) {
+        const name = ref.startsWith("refs/heads/")
+          ? ref.slice("refs/heads/".length)
+          : ref.startsWith("refs/remotes/origin/")
+            ? ref.slice("refs/remotes/origin/".length)
+            : null;
+        if (name !== null && name !== "HEAD" && name.startsWith(prefix)) {
+          names.add(name);
+        }
+      }
+      return [...names].sort();
+    },
+
+    async readFileOnBranch(branch, path) {
+      for (const ref of [
+        `refs/heads/${branch}`,
+        `refs/remotes/origin/${branch}`,
+      ]) {
+        try {
+          const { stdout } = await git(["show", `${ref}:${path}`]);
+          return stdout;
+        } catch {
+          // The branch or the file is not in this ref: try the next one.
+        }
+      }
+      return null;
+    },
+
+    async getPullRequest(branch) {
+      let stdout;
+      try {
+        ({ stdout } = await gh(["pr", "view", branch, "--json", "url,state"]));
+      } catch (error) {
+        if (
+          `${error.message}\n${error.stderr ?? ""}`.includes(
+            "no pull requests found",
+          )
+        ) {
+          return null;
+        }
+        throw error;
+      }
+      const { url, state } = JSON.parse(stdout);
+      return {
+        url,
+        state: PR_STATES[state],
+      };
+    },
+
+    async openPullRequest({ branch, title, body }) {
+      const { stdout } = await gh([
+        "pr",
+        "create",
+        "--head",
+        branch,
+        "--title",
+        title,
+        "--body",
+        body,
+      ]);
+      return stdout.trim();
+    },
+
+    async mergePullRequest(branch) {
+      await gh(["pr", "merge", branch, "--squash"]);
+    },
+
+    async closePullRequest(branch) {
+      await gh(["pr", "close", branch]);
+    },
+
+    async pullRoot() {
+      await git(["pull", "--ff-only"]);
+    },
+  };
+}
