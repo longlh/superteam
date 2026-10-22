@@ -109,12 +109,13 @@ async function createProject(t, { rootBranch = "main" } = {}) {
 // shutdown checks that no agent it spawned is left.
 async function startStack(project, modes = {}) {
   const { baseDir } = project;
+  const git = createGitAdapter({
+    baseDir,
+    run: project.run,
+  });
   const engine = createEngine({
     baseDir,
-    git: createGitAdapter({
-      baseDir,
-      run: project.run,
-    }),
+    git,
     loopOptions: {
       pollIntervalMs: 20,
     },
@@ -143,6 +144,7 @@ async function startStack(project, modes = {}) {
     port: 0,
     engine,
     agents,
+    git,
     httpApi: {
       async listen(wanted) {
         const address = await api.listen(wanted);

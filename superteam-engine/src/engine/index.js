@@ -67,6 +67,12 @@ function parseWork(text) {
   }
 }
 
+// The first line of the stderr of a failed command, else of its message.
+function shortReason(error) {
+  const text = String(error?.stderr ?? "").trim() || String(error?.message);
+  return text.split("\n")[0].trim().slice(0, 200);
+}
+
 export function createEngine({
   baseDir,
   git = createGitAdapter({
@@ -75,6 +81,26 @@ export function createEngine({
   loopOptions = {},
   log = console.error,
 }) {
+  // The git of the functions of the engine: a failure of git or gh (offline,
+  // no origin, gh signed out) is "unavailable", with a short reason.
+  const remote = new Proxy(git, {
+    get(target, name) {
+      const value = target[name];
+      if (typeof value !== "function") {
+        return value;
+      }
+      return async (...args) => {
+        try {
+          return await value.apply(target, args);
+        } catch (error) {
+          throw new EngineError(
+            "unavailable",
+            `git or gh failed (${String(name)}): ${shortReason(error)}`,
+          );
+        }
+      };
+    },
+  });
   const pubsub = createPubSub();
   const loop = createEngineLoop({
     ...loopOptions,
@@ -135,7 +161,7 @@ export function createEngine({
         root: false,
       };
     }
-    const text = await git.readFileOnBranch(
+    const text = await remote.readFileOnBranch(
       branchOf(id),
       path.relative(baseDir, workFile(baseDir, id)),
     );
@@ -165,7 +191,7 @@ export function createEngine({
       return null;
     }
     const { work, tasks, root } = found;
-    const pr = await git.getPullRequest(branchOf(id));
+    const pr = await remote.getPullRequest(branchOf(id));
     return {
       id,
       title: work.title,
@@ -189,11 +215,22 @@ export function createEngine({
     };
   }
 
+  // Offline, the state is read from the local refs, with a warning.
+  async function fetchOrWarn() {
+    try {
+      await git.fetch();
+    } catch (error) {
+      log(
+        `warning: git fetch failed, the local refs are used: ${shortReason(error)}`,
+      );
+    }
+  }
+
   async function getWork(id) {
     if (!isSlug(id)) {
       throw new EngineError("not-found", `no work ${id}`);
     }
-    await git.fetch();
+    await fetchOrWarn();
     const state = await readWork(id);
     if (state === null) {
       throw new EngineError("not-found", `no work ${id}`);
@@ -203,9 +240,9 @@ export function createEngine({
 
   async function isUsed(id) {
     return (
-      (await git.branchExists(branchOf(id))) ||
+      (await remote.branchExists(branchOf(id))) ||
       existsSync(workFile(baseDir, id)) ||
-      (await git.getPullRequest(branchOf(id))) !== null
+      (await remote.getPullRequest(branchOf(id))) !== null
     );
   }
 
@@ -415,10 +452,10 @@ export function createEngine({
     getWork,
 
     async listWorks() {
-      await git.fetch();
+      await fetchOrWarn();
       const ids = [
         ...(await listNames(worksFolder, (entry) => entry.isDirectory())),
-        ...(await git.listBranches("works/")).map((branch) =>
+        ...(await remote.listBranches("works/")).map((branch) =>
           branch.slice("works/".length),
         ),
         ...(

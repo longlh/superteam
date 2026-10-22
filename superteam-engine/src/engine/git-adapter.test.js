@@ -294,6 +294,45 @@ function fakeRun(answer) {
   };
 }
 
+describe("preflight", () => {
+  test("hasOrigin says whether the remote origin is set", async () => {
+    const { adapter, baseDir } = makeRepo();
+    assert.equal(await adapter.hasOrigin(), true);
+    git(baseDir, "remote", "remove", "origin");
+    assert.equal(await adapter.hasOrigin(), false);
+  });
+
+  test("checkForge runs gh auth status, and says whether it passed", async () => {
+    const ok = fakeRun(() => ({
+      stdout: "",
+    }));
+    assert.equal(
+      await createGitAdapter({
+        baseDir: "/base",
+        run: ok.run,
+      }).checkForge(),
+      true,
+    );
+    assert.deepEqual(ok.calls, [
+      {
+        command: "gh",
+        args: ["auth", "status"],
+        cwd: "/base",
+      },
+    ]);
+    const failing = fakeRun(() => {
+      throw new Error("You are not logged into any GitHub hosts");
+    });
+    assert.equal(
+      await createGitAdapter({
+        baseDir: "/base",
+        run: failing.run,
+      }).checkForge(),
+      false,
+    );
+  });
+});
+
 describe("gh parts (fake run)", () => {
   test("openPullRequest runs gh pr create on the root branch and returns the url", async () => {
     const { calls, run } = fakeRun((command) => ({

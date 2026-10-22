@@ -79,6 +79,12 @@ export function createFakeGh({ baseDir, defaultBranch = "main" }) {
 
   async function gh(args) {
     const [group, action, branch] = args;
+    if (group === "auth" && action === "status") {
+      return {
+        stdout: "",
+        stderr: "Logged in to github.com as fake\n",
+      };
+    }
     if (group !== "pr") {
       throw failure(args, `unknown command ${group}\n`);
     }

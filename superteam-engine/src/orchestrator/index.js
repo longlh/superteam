@@ -1,5 +1,6 @@
 import { createEngine } from "../engine/index.js";
 import { createAgents } from "../agents/index.js";
+import { createGitAdapter } from "../engine/git-adapter.js";
 import { createNotifier } from "../notifier/index.js";
 import { fromEnv } from "../notifier/google-chat.js";
 import { createHttpApi } from "./http-api.js";
@@ -34,6 +35,9 @@ export function createOrchestrator({
   httpApi = createHttpApi({
     engine,
   }),
+  git = createGitAdapter({
+    baseDir,
+  }),
 }) {
   let engineDone;
   // Set when the shutdown begins: a job that a handler still publishes is not
@@ -65,6 +69,16 @@ export function createOrchestrator({
 
     async start() {
       validate();
+      if (!(await git.hasOrigin())) {
+        throw new Error(
+          "superteam cannot start: the project has no git remote named origin: add one with `git remote add origin <url>`",
+        );
+      }
+      if (!(await git.checkForge())) {
+        throw new Error(
+          "superteam cannot start: gh is not signed in to GitHub: run `gh auth login`",
+        );
+      }
 
       const ready = new Promise((resolve) => {
         engine.subscribe("engine:ready", resolve);

@@ -65,6 +65,25 @@ export function createGitAdapter({ baseDir, run = defaultRun }) {
   return {
     rootBranch,
 
+    // The preflight of a start: is a remote `origin` set, and is gh signed in.
+    async hasOrigin() {
+      try {
+        await git(["remote", "get-url", "origin"]);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+
+    async checkForge() {
+      try {
+        await gh(["auth", "status"]);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+
     fetch: oneAtATime(async () => {
       await git(["fetch", "--prune", "origin"]);
     }),

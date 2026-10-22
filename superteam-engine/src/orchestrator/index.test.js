@@ -67,6 +67,16 @@ function setup(options = {}) {
       calls.push("api.close");
     },
   };
+  const git = {
+    async hasOrigin() {
+      calls.push("git.hasOrigin");
+      return options.origin ?? true;
+    },
+    async checkForge() {
+      calls.push("git.checkForge");
+      return options.forge ?? true;
+    },
+  };
   const orchestrator = createOrchestrator({
     baseDir: "/tmp/none",
     port: 4000,
@@ -74,6 +84,7 @@ function setup(options = {}) {
     agents,
     notifier,
     httpApi,
+    git,
     ...options.extra,
   });
   return {
@@ -99,6 +110,8 @@ test("start subscribes, recovers, starts the engine, then reconciles and listens
   });
   assert.equal(resolved, true);
   assert.deepEqual(t.calls, [
+    "git.hasOrigin",
+    "git.checkForge",
     "subscribe:engine:ready",
     "subscribe:job:run",
     "subscribe:job:stop",
@@ -108,6 +121,28 @@ test("start subscribes, recovers, starts the engine, then reconciles and listens
     "api.listen:4000",
   ]);
   await t.orchestrator.shutdown();
+});
+
+test("start rejects with a clear message when origin is missing, before anything starts", async () => {
+  const t = setup({
+    origin: false,
+  });
+  await assert.rejects(
+    t.orchestrator.start(),
+    /no git remote named origin: add one with `git remote add origin <url>`/,
+  );
+  assert.deepEqual(t.calls, ["git.hasOrigin"]);
+});
+
+test("start rejects with a clear message when gh is not signed in, before anything starts", async () => {
+  const t = setup({
+    forge: false,
+  });
+  await assert.rejects(
+    t.orchestrator.start(),
+    /gh is not signed in to GitHub: run `gh auth login`/,
+  );
+  assert.deepEqual(t.calls, ["git.hasOrigin", "git.checkForge"]);
 });
 
 test("start waits for engine:ready before reconcile and listen", async () => {

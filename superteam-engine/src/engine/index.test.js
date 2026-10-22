@@ -427,6 +427,57 @@ test("getWork fetches first, then reads the worktree before the branch", async (
   assert.equal(gitLog.filter((name) => name === "fetch").length, 1);
 });
 
+test("getWork and listWorks use the local refs when the fetch fails", async () => {
+  onBranch(work("w1"));
+  h.git.fetch = async () => {
+    throw new Error("Could not resolve host: github.com");
+  };
+  assert.equal((await engine.getWork("w1")).id, "w1");
+  assert.deepEqual(
+    (await engine.listWorks()).map((w) => w.id),
+    ["w1"],
+  );
+  assert.equal(logs.length, 2);
+  for (const message of logs) {
+    assert.match(
+      message,
+      /^warning: git fetch failed, the local refs are used: Could not resolve host/,
+    );
+  }
+});
+
+test("a failure of git or gh in a function is unavailable, with a short reason", async () => {
+  await saveWorkflow(flow);
+  await start();
+  h.git.getPullRequest = async () => {
+    throw Object.assign(new Error("Command failed: gh pr view works/w1"), {
+      stderr:
+        "error connecting to api.github.com\ncheck your internet connection\n",
+    });
+  };
+  onBranch(work("w1"));
+  for (const call of [
+    () => engine.getWork("w1"),
+    () => engine.listWorks(),
+    () => engine.decide("w1", "approve"),
+    () => engine.archive("w1"),
+    () =>
+      engine.assign(
+        body({
+          id: "free",
+        }),
+      ),
+  ]) {
+    await assert.rejects(
+      call(),
+      (error) =>
+        code("unavailable")(error) &&
+        error.message ===
+          "git or gh failed (getPullRequest): error connecting to api.github.com",
+    );
+  }
+});
+
 test("getWork gives OPEN for a work in its worktree with no task", async () => {
   await inWorktree(work("w1"));
   assert.equal((await engine.getWork("w1")).status, "OPEN");
