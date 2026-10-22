@@ -1,0 +1,322 @@
+import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
+import { mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, test } from "node:test";
+import { readJson } from "../../lib/storage/files.js";
+import { workFile, worktreeDir } from "../../lib/storage/paths.js";
+import { createTaskStore } from "../tasks.js";
+import { createEngineHandlers } from "./index.js";
+
+const now = new Date("2026-01-02T03:04:05.000Z");
+const linear = {
+  name: "linear",
+  dod: ["wf dod"],
+  steps: [
+    {
+      name: "a",
+      role: "dev",
+    },
+    {
+      name: "b",
+      role: "qa",
+      dependOn: ["a"],
+    },
+  ],
+};
+const fan = {
+  name: "fan",
+  steps: [
+    {
+      name: "a",
+      role: "dev",
+    },
+    {
+      name: "b",
+      role: "dev",
+    },
+    {
+      name: "c",
+      role: "dev",
+      dependOn: ["a", "b"],
+    },
+  ],
+};
+const workflows = {
+  linear,
+  fan,
+};
+
+let baseDir;
+let calls;
+let published;
+let handlers;
+
+function fakeGit() {
+  return {
+    async rootBranch() {
+      return "main";
+    },
+    async createWorktree(args) {
+      if (existsSync(args.folder)) {
+        return;
+      }
+      calls.push(["createWorktree", args]);
+      await mkdir(args.folder, {
+        recursive: true,
+      });
+    },
+    async commitAll(folder, message) {
+      calls.push(["commitAll", folder, message]);
+      return true;
+    },
+  };
+}
+
+function event(data) {
+  return {
+    type: "work:assign",
+    payload: {
+      data,
+    },
+  };
+}
+
+beforeEach(async () => {
+  baseDir = await mkdtemp(path.join(os.tmpdir(), "assign-"));
+  calls = [];
+  published = [];
+  handlers = createEngineHandlers({
+    baseDir,
+    git: fakeGit(),
+    loadWorkflow: async (name) => workflows[name] ?? null,
+    publish: (topic, data) => published.push([topic, data]),
+    now: () => now,
+  });
+});
+
+afterEach(() =>
+  rm(baseDir, {
+    recursive: true,
+    force: true,
+  }),
+);
+
+const created = () => calls.filter(([name]) => name === "createWorktree");
+
+test("assign creates the work worktree, the work file, the tasks and one job", async () => {
+  await handlers["work:assign"](
+    event({
+      id: "w1",
+      workflow: "linear",
+      title: "Title",
+    }),
+  );
+  const workTree = worktreeDir(baseDir, {
+    workId: "w1",
+  });
+  assert.deepEqual(created()[0][1], {
+    folder: workTree,
+    branch: "works/w1",
+    base: "main",
+  });
+  assert.deepEqual(await readJson(workFile(workTree, "w1")), {
+    id: "w1",
+    workflow: "linear",
+    title: "Title",
+    dod: ["wf dod"],
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString(),
+  });
+  assert.deepEqual(calls.find(([name]) => name === "commitAll").slice(1), [
+    workTree,
+    "Assign the work w1",
+  ]);
+  const tasks = await createTaskStore(workTree).list();
+  assert.deepEqual(
+    tasks.map((t) => t.id),
+    ["a", "b"],
+  );
+  assert.equal(published.length, 1);
+  const [topic, job] = published[0];
+  assert.equal(topic, "job:run");
+  assert.equal(job.role, "dev");
+  assert.equal(job.instruction.target, "task");
+  assert.deepEqual(job.instruction.targetIds, ["a"]);
+  assert.equal(
+    job.workdir,
+    worktreeDir(baseDir, {
+      workId: "w1",
+      taskId: "a",
+    }),
+  );
+  assert.deepEqual(created()[1][1], {
+    folder: job.workdir,
+    branch: "tasks/w1/a",
+    base: "main",
+  });
+});
+
+test("the dod and description of the body win over the workflow", async () => {
+  await handlers["work:assign"](
+    event({
+      id: "w1",
+      workflow: "linear",
+      title: "T",
+      description: "D",
+      dod: ["mine"],
+    }),
+  );
+  const work = await readJson(
+    workFile(
+      worktreeDir(baseDir, {
+        workId: "w1",
+      }),
+      "w1",
+    ),
+  );
+  assert.deepEqual(work.dod, ["mine"]);
+  assert.equal(work.description, "D");
+});
+
+test("a step with two dependencies starts a task merger first", async () => {
+  await handlers["work:assign"](
+    event({
+      id: "w2",
+      workflow: "fan",
+      title: "T",
+    }),
+  );
+  assert.deepEqual(
+    published.map(([, job]) => job.instruction.target),
+    ["task", "task"],
+  );
+  // c is PENDING until a and b are done, so no merger yet.
+  const workTree = worktreeDir(baseDir, {
+    workId: "w2",
+  });
+  const store = createTaskStore(workTree);
+  for (const id of ["a", "b"]) {
+    await store.put({
+      ...(await store.get(id)),
+      completed: true,
+    });
+  }
+  published.length = 0;
+  const { startReady } = await import("./start-ready.js");
+  await startReady({
+    deps: {
+      baseDir,
+      git: fakeGit(),
+      publish: (topic, data) => published.push([topic, data]),
+      now: () => now,
+    },
+    workId: "w2",
+  });
+  assert.equal(published.length, 1);
+  const job = published[0][1];
+  assert.equal(job.role, "task-merger");
+  assert.deepEqual(job.instruction.targetIds, ["b"]);
+  assert.deepEqual(created().at(-1)[1], {
+    folder: job.workdir,
+    branch: "tasks/w2/c",
+    base: "tasks/w2/a",
+  });
+});
+
+test("handling the same event twice changes nothing", async () => {
+  const e = event({
+    id: "w1",
+    workflow: "linear",
+    title: "T",
+  });
+  await handlers["work:assign"](e);
+  await handlers["work:assign"](e);
+  assert.equal(created().length, 2);
+  assert.equal(published.length, 1);
+  assert.equal(
+    (
+      await readdir(
+        path.join(
+          worktreeDir(baseDir, {
+            workId: "w1",
+          }),
+          ".superteam",
+          ".p",
+          "works",
+        ),
+      )
+    ).length,
+    1,
+  );
+});
+
+test("two events with the same id create the work once", async () => {
+  await handlers["work:assign"](
+    event({
+      id: "w1",
+      workflow: "linear",
+      title: "First",
+    }),
+  );
+  await handlers["work:assign"](
+    event({
+      id: "w1",
+      workflow: "linear",
+      title: "Second",
+    }),
+  );
+  const work = await readJson(
+    workFile(
+      worktreeDir(baseDir, {
+        workId: "w1",
+      }),
+      "w1",
+    ),
+  );
+  assert.equal(work.title, "First");
+  assert.equal(published.length, 1);
+});
+
+test("a crash after the work file and before the tasks is repaired", async () => {
+  const e = event({
+    id: "w1",
+    workflow: "linear",
+    title: "T",
+  });
+  await handlers["work:assign"](e);
+  const workTree = worktreeDir(baseDir, {
+    workId: "w1",
+  });
+  await rm(path.join(workTree, ".superteam", ".r"), {
+    recursive: true,
+    force: true,
+  });
+  await rm(path.join(baseDir, ".superteam", ".r", "worktrees", "tasks"), {
+    recursive: true,
+    force: true,
+  });
+  await mkdir(workTree, {
+    recursive: true,
+  });
+  published.length = 0;
+  calls.length = 0;
+  await handlers["work:assign"](e);
+  assert.equal((await createTaskStore(workTree).list()).length, 2);
+  assert.equal(published.length, 1);
+});
+
+test("an unknown workflow throws a non retryable error", async () => {
+  await assert.rejects(
+    handlers["work:assign"](
+      event({
+        id: "w1",
+        workflow: "nope",
+        title: "T",
+      }),
+    ),
+    (error) => error.retryable === false,
+  );
+  assert.equal(calls.length, 0);
+});
