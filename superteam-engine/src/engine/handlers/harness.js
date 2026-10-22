@@ -19,6 +19,8 @@ export async function createHarness(workflows) {
   const published = [];
   const branches = new Set();
   const committed = new Map();
+  const pullRequests = new Map();
+  const branchFiles = new Map();
   const git = {
     async rootBranch() {
       return "main";
@@ -67,6 +69,35 @@ export async function createHarness(workflows) {
     async listBranches(prefix) {
       return [...branches].filter((b) => b.startsWith(prefix)).sort();
     },
+    async getPullRequest(branch) {
+      return pullRequests.get(branch) ?? null;
+    },
+    async openPullRequest(args) {
+      calls.push(["openPullRequest", args]);
+      const pullRequest = {
+        url: `https://example.test/${args.branch}`,
+        state: "open",
+      };
+      pullRequests.set(args.branch, pullRequest);
+      return pullRequest;
+    },
+    async mergePullRequest(branch) {
+      calls.push(["mergePullRequest", branch]);
+      pullRequests.get(branch).state = "merged";
+    },
+    async closePullRequest(branch) {
+      calls.push(["closePullRequest", branch]);
+      pullRequests.get(branch).state = "closed";
+    },
+    async pullRoot() {
+      calls.push(["pullRoot"]);
+    },
+    async branchExists(branch) {
+      return branches.has(branch);
+    },
+    async readFileOnBranch(branch, file) {
+      return branchFiles.get(`${branch}:${file}`) ?? null;
+    },
     async deleteBranch(branch) {
       calls.push(["deleteBranch", branch]);
       branches.delete(branch);
@@ -87,6 +118,8 @@ export async function createHarness(workflows) {
     commitArtifact(branch, artifact) {
       committed.set(branch, [...(committed.get(branch) ?? []), artifact]);
     },
+    pullRequests,
+    branchFiles,
     named: (name) => calls.filter(([n]) => n === name),
     cleanup: () =>
       rm(baseDir, {

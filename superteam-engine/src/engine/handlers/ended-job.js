@@ -34,3 +34,29 @@ export async function readEndedJob(deps, jobId, kind) {
     task,
   };
 }
+
+// The same for the work merger, whose job id has no task: `{workId}/work-merger`.
+export function readEndedWorkMerger(deps, jobId) {
+  if (typeof jobId !== "string") {
+    return null;
+  }
+  const parsed = parseJobId(jobId);
+  const { workId } = parsed;
+  if (
+    parsed.kind !== "work-merger" ||
+    parsed.taskId !== undefined ||
+    !isSlug(workId)
+  ) {
+    return null;
+  }
+  const workFolder = worktreeDir(deps.baseDir, {
+    workId,
+  });
+  if (!existsSync(workFolder)) {
+    return null;
+  }
+  return {
+    workId,
+    workFolder,
+  };
+}
