@@ -432,6 +432,30 @@ describe("real git failures propagate", () => {
     );
   });
 
+  test("readFileOnBranch returns null when the branch is deleted between the check and the read", async () => {
+    const run = async (command, args) => {
+      if (args[0] === "show-ref") {
+        return {
+          stdout: "",
+        };
+      }
+      throw Object.assign(
+        new Error(
+          "Command failed: git show refs/heads/works/a:x.json\nfatal: invalid object name 'refs/heads/works/a'.",
+        ),
+        {
+          code: 128,
+          stderr: "fatal: invalid object name 'refs/heads/works/a'.\n",
+        },
+      );
+    };
+    const adapter = createGitAdapter({
+      baseDir: "/base",
+      run,
+    });
+    assert.equal(await adapter.readFileOnBranch("works/a", "x.json"), null);
+  });
+
   test("readFileOnBranch rethrows a git show failure that is not a missing path", async () => {
     const run = async (command, args) => {
       if (args[0] === "show-ref") {
@@ -451,5 +475,62 @@ describe("real git failures propagate", () => {
       adapter.readFileOnBranch("works/a", "x.json"),
       /bad object/,
     );
+  });
+});
+
+describe("the calls that update the refs of origin", () => {
+  test("fetch, push, deleteBranch and pullRoot run one at a time", async () => {
+    let running = 0;
+    let most = 0;
+    const run = async (command, args) => {
+      if (args[0] === "show-ref") {
+        return {
+          stdout: "",
+        };
+      }
+      if (args[0] === "ls-remote") {
+        return {
+          stdout: "abc\trefs/heads/works/a\n",
+        };
+      }
+      running += 1;
+      most = Math.max(most, running);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      running -= 1;
+      return {
+        stdout: "",
+      };
+    };
+    const adapter = createGitAdapter({
+      baseDir: "/base",
+      run,
+    });
+    await Promise.all([
+      adapter.fetch(),
+      adapter.push("works/a"),
+      adapter.deleteBranch("works/a"),
+      adapter.pullRoot(),
+      adapter.fetch(),
+    ]);
+    assert.equal(most, 1);
+  });
+
+  test("a failed call does not block the next one", async () => {
+    const run = async (command, args) => {
+      if (args[0] === "fetch") {
+        throw Object.assign(new Error("fatal: cannot lock ref"), {
+          code: 1,
+        });
+      }
+      return {
+        stdout: "",
+      };
+    };
+    const adapter = createGitAdapter({
+      baseDir: "/base",
+      run,
+    });
+    await assert.rejects(adapter.fetch(), /cannot lock ref/);
+    await adapter.pullRoot();
   });
 });

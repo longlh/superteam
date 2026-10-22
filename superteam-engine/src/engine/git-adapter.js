@@ -41,6 +41,19 @@ export function createGitAdapter({ baseDir, run = defaultRun }) {
     }
   }
 
+  // fetch, pull, push and the delete of a remote branch all update the refs of
+  // `origin`: run at the same time (a request and a handler), git refuses one
+  // with "cannot lock ref". So they run one at a time, in the order of the
+  // calls, and a failure does not block the next one.
+  let tail = Promise.resolve();
+  function oneAtATime(fn) {
+    return (...args) => {
+      const result = tail.then(() => fn(...args));
+      tail = result.catch(() => {});
+      return result;
+    };
+  }
+
   const hasLocal = (branch) => refExists(`refs/heads/${branch}`);
   const hasRemote = (branch) => refExists(`refs/remotes/origin/${branch}`);
 
@@ -50,9 +63,9 @@ export function createGitAdapter({ baseDir, run = defaultRun }) {
       return stdout.trim();
     },
 
-    async fetch() {
+    fetch: oneAtATime(async () => {
       await git(["fetch", "--prune", "origin"]);
-    },
+    }),
 
     async createWorktree({ folder, branch, base }) {
       if (existsSync(folder)) {
@@ -92,15 +105,15 @@ export function createGitAdapter({ baseDir, run = defaultRun }) {
       return true;
     },
 
-    async push(branch) {
+    push: oneAtATime(async (branch) => {
       await git(["push", "--set-upstream", "origin", branch]);
-    },
+    }),
 
     async branchExists(branch) {
       return (await hasLocal(branch)) || (await hasRemote(branch));
     },
 
-    async deleteBranch(branch) {
+    deleteBranch: oneAtATime(async (branch) => {
       if (await hasLocal(branch)) {
         await git(["branch", "-D", branch]);
       }
@@ -113,7 +126,7 @@ export function createGitAdapter({ baseDir, run = defaultRun }) {
       if (stdout.trim() !== "") {
         await git(["push", "origin", "--delete", branch]);
       }
-    },
+    }),
 
     async listBranches(prefix) {
       const { stdout } = await git([
@@ -149,10 +162,12 @@ export function createGitAdapter({ baseDir, run = defaultRun }) {
         const { stdout } = await git(["show", `${ref}:${path}`]);
         return stdout;
       } catch (error) {
+        const text = `${error.message}\n${error.stderr ?? ""}`;
+        // The last case is a branch deleted between the check and the read,
+        // such as by an archive while the works are listed.
         if (
-          /does not exist in|exists on disk, but not in/.test(
-            `${error.message}\n${error.stderr ?? ""}`,
-          )
+          /does not exist in|exists on disk, but not in/.test(text) ||
+          text.includes(`invalid object name '${ref}'`)
         ) {
           return null;
         }
@@ -203,8 +218,8 @@ export function createGitAdapter({ baseDir, run = defaultRun }) {
       await gh(["pr", "close", branch]);
     },
 
-    async pullRoot() {
+    pullRoot: oneAtATime(async () => {
       await git(["pull", "--ff-only"]);
-    },
+    }),
   };
 }
