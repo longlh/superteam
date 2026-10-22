@@ -211,33 +211,45 @@ Handler -> Git : delete branch of the work
 Realizes: no use case. It is the operation of the system.
 
 Passes through: the Control Skill, the orchestrator, the engine functions, the
-engine loop, and the Agents (see "Recover" and "Shutdown" in
-`agent-manager.md`).
+engine loop, the handlers, the git adapter, and the Agents (see "Recover" and
+"Shutdown" in `agent-manager.md`).
 
 1. **Start:** `/superteam:start` starts the process of superteam in the
    background (see `control-skill.md`). Then the orchestrator:
-   1. Loads `.superteam/.env` into the environment, and creates the Engine, the
-      Agents and the Notifier.
-   2. Subscribes to the engine: `engine:ready`, `job:run`, `job:stop`, and the
+   1. Loads `.superteam/.env` into the environment, checks `SUPERTEAM_PORT` and
+      `SUPERTEAM_MAX_BUDGET_USD`, and creates the Engine, the Agents and the
+      Notifier.
+   2. Checks that the project has a git remote named `origin`, and that `gh` is
+      signed in. Otherwise it refuses to start.
+   3. Subscribes to the engine: `engine:ready`, `job:run`, `job:stop`, and the
       topic of each subscription. It does it first, so that no job to run is
       lost.
-   3. Starts the engine loop, with the handlers registered. Its start stage
-      recovers the events that were left (see `engineloop.md`).
-   4. Calls `recover()` of the Agents, and gives the jobs that it returns to
-      `reconcile(jobs)` of the engine. The engine fails the tasks of these jobs,
-      and publishes `job:run` again for a job that it waits for and that was
-      never run. The jobs that a crash left would be stalled, because the engine
-      no longer waits for them. This step handles a crash and a shutdown in the
-      same way.
-   5. Opens the HTTP API when the engine publishes `engine:ready`, because
-      `enqueue()` needs the start stage to be done.
+   4. Calls `recover()` of the Agents, which kills the agents that a crash left,
+      and keeps the jobs that it returns. It does it before the engine starts,
+      so that it does not kill the agents just spawned for the events that were
+      left in the queue.
+   5. Starts the engine loop, with the handlers registered. Before it, the
+      engine adds `.superteam/.r/` to the exclude file of the git common dir.
+      The start stage of the loop recovers the events that were left (see
+      `engineloop.md`).
+   6. When the engine publishes `engine:ready`, gives the jobs of the step 4 to
+      `reconcile(jobs)` of the engine. The engine enqueues `engine:reconcile`,
+      so it runs after the events that were left in the queue. Its handler fails
+      the tasks of these jobs, and publishes `job:run` again for a job that it
+      waits for and that was never run. The jobs that a crash left would be
+      stalled, because the engine no longer waits for them. This step handles a
+      crash and a shutdown in the same way.
+   7. Opens the HTTP API, after `engine:ready`, because `enqueue()` needs the
+      start stage to be done.
 2. **Run:** the API calls the engine functions, which turn the requests into
    events, and the engine loop gives them to the handlers.
 3. **Shutdown:** on `SIGINT` or `SIGTERM`, such as from `/superteam:stop`, the
    orchestrator stops taking requests, calls `stopAll()` of the Agents, and
-   shuts the engine down. The jobs that were stopped are failed at the next
-   start, so their works fail. A second signal is a force quit, and the next
-   start recovers from it.
+   shuts the engine down. Once the shutdown has begun, the orchestrator does not
+   run a `job:run`: the engine publishes it again at the next start, in
+   `reconcile(jobs)`. The jobs that were stopped are failed at the next start,
+   so their works fail. A second signal is a force quit, and the next start
+   recovers from it.
 
 ## Notify
 

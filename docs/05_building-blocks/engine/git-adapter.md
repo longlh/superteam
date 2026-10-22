@@ -18,6 +18,13 @@ The engine reaches git and the forge through a git adapter, so that another
 forge can be added later. For now only GitHub is supported, and the adapter
 needs the `gh` command line.
 
+The adapter also checks the setup of the project:
+
+- `hasOrigin()` says whether the project has a git remote named `origin`.
+- `checkForge()` says whether `gh` is signed in (`gh auth status`).
+- `ensureExcluded(line)` adds a line to the exclude file of the git common dir,
+  when it is missing. The exclude file is shared by all the worktrees.
+
 ### Branches
 
 The branches of the tasks of a work are deleted when the work ends, so that they
@@ -26,6 +33,10 @@ approved, because its result is then in the root branch. When the work fails or
 is rejected, the branch of the work is pushed and kept on the remote: it is the
 only trace of the work. It is deleted when the work is archived (see "Archive a
 work" in `orchestrator.md`).
+
+The pull request of a work is opened on the root branch
+(`gh pr create --base <root branch>`). Without `--base`, `gh` would open it on
+the default branch of the repository.
 
 ## Code
 
@@ -54,3 +65,14 @@ the `.gitignore`, and they are removed with the worktree.
 The branch of a worktree is kept after the worktree is removed, because it is
 merged later, or because it is the trace of a work that failed or was rejected
 (see "Branches").
+
+### Calls at the same time
+
+A query and a handler can run git at the same time. When two calls update the
+refs of the remote at the same time, git fails one with "cannot lock ref". So
+the calls that change or read the remote refs (fetch, push, delete a branch,
+pull the root branch) run one at a time, in the order of the calls. A failure of
+one call does not block the next one.
+
+`readFileOnBranch` treats a branch that was deleted in the meantime as a missing
+file, such as a branch deleted by an archive while the works are listed.

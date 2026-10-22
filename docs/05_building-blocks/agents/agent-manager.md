@@ -19,15 +19,19 @@ When an agent ends, the agent manager calls the `onEnded` callback of its job.
   calls `onEnded` first, then deletes the file. A crash between the two makes
   `recover()` return a job that has ended, which its handler ignores because it
   checks that the step is not done yet. If the agent runs longer than the
-  `timeout` of its job, the agent manager kills it.
+  `timeout` of its job, the agent manager kills it. The error of a failed agent
+  keeps the end of its stderr, and the `result` text of an output with
+  `is_error`.
 - Kill: The process runs as a process group of its own, so the agent manager can
   kill all of it. `stopWork()` kills the agents of a work at once, to save the
   cost.
 - Recover: `recover()` handles a crash. For each pid in
-  `.superteam/.r/agents/{pid}.pid`, it kills the process if it is alive, and
+  `.superteam/.r/agents/{pid}.pid`, it kills the process if it is alive and its
+  command is still the command of the agents, because a pid can be reused. It
   returns the job of its agent. An agent that runs without its agent manager
   would be stalled, because nothing watches it. It handles a crash and a
   shutdown in the same way.
-- Shutdown: `stopAll()` kills the agents that are running at once. The pids of
-  the killed agents stay in their files, so the next `recover()` returns their
-  jobs.
+- Shutdown: `stopAll()` kills the agents that are running at once. It waits for
+  the end of an agent that is being given to its callback, so that the end of an
+  agent that has already exited is not lost. The pids of the killed agents stay
+  in their files, so the next `recover()` returns their jobs.

@@ -21,6 +21,33 @@ The loop is made for an internal tool. These limits are known and accepted:
 - A handler that does not return, because it waits for something that never
   happens, stops the loop. There is no time limit for a handler.
 
+### Engine (`engine.md`)
+
+- `listWorks()` makes one call to the forge for each work, to read its pull
+  request. A long list of works is slow.
+- `reconcile(jobs)` can publish a job again when its own event,
+  `engine:reconcile`, is retried. So an agent can run one more time.
+- A failure of the remote in one work fails the event `engine:reconcile`, so it
+  fails for all the works, not only for that one.
+
+### Handlers (`handlers.md`)
+
+- If the engine stops between the opening of the pull request of a work and the
+  removal of the worktree of the work, and the event is not processed again, the
+  worktree of the work is left. Reconcile does not remove it.
+
+### Git adapter (`git-adapter.md`)
+
+- The root branch is read from the root workspace at each call. If a person
+  switches the branch of the root workspace while a work runs, the later tasks
+  of the work are based on the new branch.
+
+### Orchestrator (`orchestrator.md`)
+
+- The start checks `gh` with `gh auth status`, which fails when any host that is
+  configured in `gh` has a bad token, even when the token of GitHub is good. So
+  the start is refused.
+
 ### Agents (`agents.md`)
 
 - The number of agents that run at once is not limited. Each task that is ready
@@ -28,6 +55,16 @@ The loop is made for an internal tool. These limits are known and accepted:
   `claude` processes together, each with the MCP servers of its session, and
   spend the usage limit or the money faster. A limit in `.superteam/.env`, with
   a queue in the Agents, can be added later without a change of the engine.
+- The pid of a leftover file is checked only by the name of its command, by
+  `recover()` (see `agent-manager.md`) and by `/superteam:stop` (see
+  `control-skill.md`). Another process whose command holds the same name can be
+  killed or stopped.
+
+### Claude process (`claude-process.md`)
+
+- The prompt is passed as an argument of the command. A very large prompt can go
+  over the limit of the length of the arguments of the operating system, and the
+  agent does not start.
 
 ## Open questions
 

@@ -45,8 +45,8 @@ class WORKFLOW_STEP <<entity>> {
   dod : string[]
   description : string
   instruction : string
-  role : string
-  timeout : int - minutes, 720 when it is absent
+  * role : string - slug
+  timeout : int - minutes, from 1 to 35791, 720 when it is absent
   dependOn : workflowStepId[]
 }
 

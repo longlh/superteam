@@ -48,7 +48,9 @@ stored, never their values, because the data is versioned in git.
 The HTTP API is the only door of the system. A client is anything that sends a
 request, such as the MCP server, and the API does not know which one it is. The
 API listens on localhost only, on the port `SUPERTEAM_PORT` of
-`.superteam/.env`.
+`.superteam/.env`. It refuses a request whose `Host` is not `127.0.0.1:{port}`
+or `localhost:{port}`, and a POST whose `content-type` is not
+`application/json`, even with no body.
 
 The API works only at the level of the work. The tasks and the worktrees are the
 business of the Engine, and the client has no request for them.
@@ -194,14 +196,17 @@ work").
 #### Errors
 
 The engine refuses a request that it cannot take, and the API turns the reason
-into a status:
+into a status. The API itself answers `403` and `415`, before it calls the
+engine:
 
 | Status | When                                                                                                                                                                                         |
 | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `400`  | The body is not valid.                                                                                                                                                                       |
+| `403`  | The `Host` of the request is another host.                                                                                                                                                   |
 | `404`  | The work or the workflow does not exist.                                                                                                                                                     |
 | `409`  | The request does not fit the state of the work, such as an id that is already used, a decision on a work that is not `PROPOSED`, or an archive of a work that is not `FAILED` or `REJECTED`. |
-| `503`  | The engine is starting, and the engine loop is not ready.                                                                                                                                    |
+| `415`  | A POST whose `content-type` is not `application/json`.                                                                                                                                       |
+| `503`  | The engine is starting, and the engine loop is not ready, or git or gh failed.                                                                                                               |
 
 #### How a request becomes a call
 
@@ -223,23 +228,35 @@ come from the API: the engine enqueues them when the orchestrator calls
 
 The process is started by `/superteam:start` (see `control-skill.md`).
 
-1. Load `.superteam/.env` into the environment, and create the Engine, the
-   Agents and the Notifier.
-2. Subscribe to the Engine: `engine:ready`, `job:run`, `job:stop`, and the topic
+1. Load `.superteam/.env` into the environment, and check `SUPERTEAM_PORT` (an
+   integer from 1 to 65535) and `SUPERTEAM_MAX_BUDGET_USD` (a positive number).
+   Create the Engine, the Agents and the Notifier.
+2. Check that the project has a git remote named `origin`, and that `gh` is
+   signed in. Otherwise refuse to start, with a message that says how to fix it.
+3. Subscribe to the Engine: `engine:ready`, `job:run`, `job:stop`, and the topic
    of each subscription. It is done first, so that no job to run is lost.
-3. Start the Engine. Its loop recovers the events that were left (see
+4. Call `agents.recover()`, which kills the agents that a crash left, and keep
+   the jobs that it returns. It is done before the Engine starts: after it,
+   `recover()` would kill the agents just spawned for the events that were left
+   in the queue.
+5. Start the Engine. Its loop recovers the events that were left (see
    `engineloop.md`).
-4. Call `agents.recover()`, which kills the agents that a crash left, and give
-   the jobs that it returns to `engine.reconcile(jobs)`. The engine fails the
-   tasks of these jobs, and publishes `job:run` again for a job that it waits
-   for and that was never run. This step handles a crash and a shutdown in the
-   same way.
-5. Open the HTTP API when the Engine publishes `engine:ready`.
+6. When the Engine publishes `engine:ready`, give the jobs of step 4 to
+   `engine.reconcile(jobs)`. The engine fails the tasks of these jobs, and
+   publishes `job:run` again for a job that it waits for and that was never run
+   (see `engine.md`). This step handles a crash and a shutdown in the same way.
+7. Open the HTTP API.
+
+The process logs the notifications `event:retry` and `event:error`. It exits
+with the code 1 when the Engine stops with an error. On exit, it removes its pid
+file, `.superteam/.r/superteam.pid`, when the file holds its own pid.
 
 ### Shutdown
 
 On `SIGINT` or `SIGTERM`, such as from `/superteam:stop`, the orchestrator
-closes the HTTP API, calls `agents.stopAll()`, and shuts the Engine down. The
-jobs that were stopped are failed at the next start, by
-`engine.reconcile(jobs)`. A second signal is a force quit, and the next start
-recovers from it.
+closes the HTTP API, calls `agents.stopAll()`, and shuts the Engine down. Once
+the shutdown has begun, the orchestrator does not run a `job:run`: the Engine
+publishes it again at the next start, in `engine.reconcile(jobs)`, because it
+waits for that job and it was never run. The jobs that were stopped are failed
+at the next start, by `engine.reconcile(jobs)`. A second signal is a force quit,
+and the next start recovers from it.

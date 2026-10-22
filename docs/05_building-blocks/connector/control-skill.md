@@ -11,4 +11,6 @@ It starts and stops the process of superteam in a workspace.
   engine runs for a workspace. It also refuses to start when `SUPERTEAM_PORT` is
   missing in `.superteam/.env`.
 - `/superteam:stop` sends `SIGTERM` to that pid, and the process shuts down (see
-  "Shutdown" in `orchestrator.md`).
+  "Shutdown" in `orchestrator.md`). It sends it only when the pid still runs
+  `main.js`, because a pid can be reused. Otherwise the pid file is stale, and
+  it is removed.

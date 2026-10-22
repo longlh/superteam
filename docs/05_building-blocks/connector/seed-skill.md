@@ -31,3 +31,6 @@ roles of Claude, and the port of the API. It writes nothing else.
 - It writes `SUPERTEAM_PORT` in `.superteam/.env`, with a free port, when it is
   missing, so that each workspace has its own port. A value that is there is
   kept.
+- The skills end by telling the person to commit `.gitignore`,
+  `.claude/agents/*.md` and `.superteam/.p/workflows/*.json` on the root branch,
+  because the worktrees are checked out from it. They offer to make the commit.

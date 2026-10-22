@@ -4,7 +4,8 @@ The `claude` process that runs an AI agent, as the worker of a task, the task
 merger or the work merger. It is spawned in the folder of the worktree of the
 job (see "The worker" in `agents.md`).
 
-The behavior below was checked with `claude` 2.1.300 (see "Checked behavior").
+The behavior below was checked with `claude` 2.1.300, and the behavior of
+`dontAsk` with `claude` 2.1.304 (see "Checked behavior").
 
 ## Component
 
@@ -14,7 +15,14 @@ The behavior below was checked with `claude` 2.1.300 (see "Checked behavior").
   dependencies.
 - The process runs with the agent of the role (`.claude/agents/{role}.md`, or
   the agent files of the mergers, which come with the plugin), and the tools of
-  the role are allowed. Its stdin is `/dev/null`.
+  the role (the `tools` line of its agent file) are allowed with
+  `--allowedTools`, because under `dontAsk` the `tools` line only limits the
+  tools and does not grant them. If the agent file has no `tools` line, no tool
+  is allowed, and the agent manager logs a warning. Its stdin is `/dev/null`.
+- The agent manager looks for the agent file of the role in
+  `.claude/agents/{role}.md` of the worktree first, then in the agent files of
+  the plugin. When there is none, the job ends with an error, and the agent is
+  not started.
 - The result is validated against the JSON schema, and it is in the
   `structured_output` field of the JSON output. This is how the worker and the
   mergers return their result, `{ summary, data }` (see `engine.md`).
@@ -23,7 +31,8 @@ The behavior below was checked with `claude` 2.1.300 (see "Checked behavior").
   schema is not applied, and nothing reports it: `structured_output` is `null`,
   the result is free text, and the exit code is 0 with `is_error` false. A
   `null` `structured_output` must be treated as a result that does not match the
-  schema. A role with no `tools` line is not limited, and it works.
+  schema. A role with no `tools` line is not limited by it, and the schema is
+  applied, but under `dontAsk` its tools, such as Bash and Write, are denied.
 - **The status and the cost** are in the same JSON output: `is_error`, `subtype`
   and `terminal_reason` for the status, `num_turns`, `total_cost_usd`, and
   `usage` and `modelUsage` for the tokens and the cost of each model.
@@ -47,7 +56,7 @@ The behavior below was checked with `claude` 2.1.300 (see "Checked behavior").
 The agent manager runs the agent with this command:
 
 ```
-claude -p '<prompt>' --agent <role> --output-format json --json-schema <schema> --permission-mode dontAsk --max-budget-usd <n>
+claude -p '<prompt>' --agent <role> --output-format json --json-schema <schema> --permission-mode dontAsk --allowedTools <tools of the role, joined with ,> --max-budget-usd <n>
 ```
 
 ### Checked behavior
@@ -58,5 +67,6 @@ Each run was a one-line task on `haiku`, in a new project with a few test roles.
 | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Does `--agent {role}` apply the role?                   | Yes. The answer follows the instructions of the role, and the model is the one of the role.                                                                                                 |
 | Is the schema applied with `--agent`?                   | Only if the tools of the role allow it. With `tools: Read` it is not applied (`structured_output` is `null`). With no `tools` line, or with `tools: Read, StructuredOutput`, it is applied. |
+| Does `dontAsk` allow the tools of the role?             | No. In a real run of a work (`claude` 2.1.304), with `dontAsk` and no `--allowedTools`, Bash and Write are denied, even when the `tools` line of the role lists them.                       |
 | Does the session load the project and the plugin again? | Yes. A server in the `.mcp.json` of the project, and a server in a plugin loaded with `--plugin-dir`, are both started by the session, with the environment of the agent manager.           |
 | What does a run cost?                                   | From 0.0004 to 0.005 USD, in 1 to 3 turns and 1 to 4 seconds. The cost is `total_cost_usd` of the JSON output.                                                                              |
