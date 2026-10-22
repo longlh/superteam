@@ -230,9 +230,48 @@ export function createEngine({
     });
   }
 
+  // The work and the jobs of its started tasks, read from its worktree; null
+  // when the work is not running (no work file, or failed).
+  async function readRunningWork(workId) {
+    const folder = worktreeDir(baseDir, {
+      workId,
+    });
+    const work = await readJson(workFile(folder, workId));
+    if (work === null || work.error !== undefined) {
+      return null;
+    }
+    const tasks = await createTaskStore(folder).list();
+    const jobs = [];
+    for (const task of tasks) {
+      const workdir = worktreeDir(baseDir, {
+        workId,
+        taskId: task.id,
+      });
+      if (task.completed || !existsSync(workdir)) {
+        continue;
+      }
+      jobs.push(
+        await taskJob({
+          deps,
+          work,
+          task,
+          tasks,
+        }),
+      );
+    }
+    return {
+      folder,
+      work,
+      tasks,
+      jobs,
+    };
+  }
+
   // The jobs that the engine waits for, rebuilt from the disk: the started
   // tasks of the running works, and the work merger of a work whose tasks are
-  // all done and that has no pull request yet.
+  // all done and that has no pull request yet. A work whose files cannot be
+  // read is skipped, so one bad work does not fail the others. An error of
+  // git is not caught: nothing has been done yet, so a retry is safe.
   async function waitingJobs() {
     const jobs = [];
     const ids = await listNames(
@@ -240,31 +279,17 @@ export function createEngine({
       (entry) => entry.isDirectory() && isSlug(entry.name),
     );
     for (const workId of ids) {
-      const folder = worktreeDir(baseDir, {
-        workId,
-      });
-      const work = await readJson(workFile(folder, workId));
-      if (work === null || work.error !== undefined) {
+      let running;
+      try {
+        running = await readRunningWork(workId);
+      } catch {
         continue;
       }
-      const tasks = await createTaskStore(folder).list();
-      for (const task of tasks) {
-        const workdir = worktreeDir(baseDir, {
-          workId,
-          taskId: task.id,
-        });
-        if (task.completed || !existsSync(workdir)) {
-          continue;
-        }
-        jobs.push(
-          await taskJob({
-            deps,
-            work,
-            task,
-            tasks,
-          }),
-        );
+      if (running === null) {
+        continue;
       }
+      const { folder, work, tasks } = running;
+      jobs.push(...running.jobs);
       if (
         tasks.length > 0 &&
         tasks.every((t) => taskStatus(t, tasks) === "DONE") &&

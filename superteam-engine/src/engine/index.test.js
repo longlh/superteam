@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { waitFor } from "../lib/engineloop/testkit.js";
@@ -726,4 +726,38 @@ test("reconcile runs after the events left in the queue, so an ended job is not 
     .filter(([topic]) => topic === "job:run")
     .map(([, job]) => job.id);
   assert.ok(!runs.includes("w1/a/worker"));
+});
+
+test("reconcile skips a work whose files cannot be read, and does the others once", async () => {
+  await inWorktree(work("w1"), [task("w1", "a")]);
+  await taskFolder("w1", "a");
+  await inWorktree(work("w2"), [task("w2", "a")]);
+  await taskFolder("w2", "a");
+  await writeFile(
+    path.join(
+      worktreeDir(h.baseDir, {
+        workId: "w1",
+      }),
+      ".superteam",
+      ".r",
+      "tasks",
+      "b.json",
+    ),
+    "{ not json",
+  );
+  await start();
+  await engine.reconcile([]);
+  await waitFor(
+    () => done("engine:reconcile").length === 1,
+    "engine:reconcile",
+  );
+  assert.deepEqual(
+    notes.filter(([topic]) => topic === "job:run").map(([, job]) => job.id),
+    ["w2/a/worker"],
+  );
+  assert.ok(
+    !notes.some(
+      ([topic]) => topic === "event:retry" || topic === "event:error",
+    ),
+  );
 });
