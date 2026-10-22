@@ -20,13 +20,15 @@ The persistence data is in `persistence-data.md`, and the runtime data is in
 
 ## Data structure
 
-A field whose name starts with `*` is required.
+The diagram is a class diagram of UML. A field whose name starts with `*` is
+required. A filled diamond is a composition: the part does not exist without the
+whole, such as a task without its work.
 
 ```plantuml
 @startuml
 hide circle
 
-entity WORKFLOW {
+class WORKFLOW <<entity>> {
   * name : string <<PK>> - slug-like
   * title : string - human readable name
   description : string - human readable description
@@ -34,7 +36,7 @@ entity WORKFLOW {
   canApprove : string[] - roles
 }
 
-entity WORKFLOW_STEP {
+class WORKFLOW_STEP <<entity>> {
   * name : string <<PK>>
   * workflow : string <<FK>>
   dod : string[]
@@ -44,7 +46,7 @@ entity WORKFLOW_STEP {
   dependOn : workflowStepId[]
 }
 
-entity WORK {
+class WORK <<entity>> {
   * id : string <<PK>>
   * workflow : string <<FK>>
   * title : string
@@ -56,7 +58,7 @@ entity WORK {
   error : string - why the work failed
 }
 
-entity TASK {
+class TASK <<entity>> {
   * id : string <<PK>>
   * work : string <<FK>>
   * title : string
@@ -73,7 +75,7 @@ entity TASK {
   error : string - why the task failed
 }
 
-entity ARTIFACT {
+class ARTIFACT <<entity>> {
   * id : string <<PK>>
   task : string <<FK>>
   work : string <<FK>>
@@ -81,13 +83,13 @@ entity ARTIFACT {
   * content : string
 }
 
-WORKFLOW ||--o{ WORKFLOW_STEP : has
-WORKFLOW_STEP }o--o{ WORKFLOW_STEP : depends on
-WORKFLOW ||--o{ WORK : follows
-WORK ||--o{ TASK : has
-TASK }o--o{ TASK : depends on
-TASK |o--o{ ARTIFACT : has
-WORK |o--o{ ARTIFACT : has
+WORKFLOW "1" *-- "0..*" WORKFLOW_STEP : has
+WORKFLOW_STEP "0..*" --> "0..*" WORKFLOW_STEP : depends on
+WORK "0..*" --> "1" WORKFLOW : follows
+WORK "1" *-- "0..*" TASK : has
+TASK "0..*" --> "0..*" TASK : depends on
+TASK "0..1" -- "0..*" ARTIFACT : has
+WORK "0..1" -- "0..*" ARTIFACT : has
 @enduml
 ```
 
