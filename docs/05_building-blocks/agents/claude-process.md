@@ -27,7 +27,9 @@ The behavior below was checked with `claude` 2.1.300 (see "Checked behavior").
 - **The status and the cost** are in the same JSON output: `is_error`, `subtype`
   and `terminal_reason` for the status, `num_turns`, `total_cost_usd`, and
   `usage` and `modelUsage` for the tokens and the cost of each model.
-  `--max-budget-usd` puts a limit on the cost of one run.
+  `--max-budget-usd` puts a limit on the cost of one run. Its value is
+  `SUPERTEAM_MAX_BUDGET_USD` of `.superteam/.env`. When it is absent, the option
+  is not given, and the run has no limit.
 - **The plan of the account** decides what a run costs. The process uses the
   account that is signed in, in the config folder of `claude`. With an API
   account, a run costs money, and the cost is `total_cost_usd` of the JSON

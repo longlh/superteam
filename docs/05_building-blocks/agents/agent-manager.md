@@ -19,8 +19,7 @@ When an agent ends, the agent manager calls the `onEnded` callback of its job.
   calls `onEnded` first, then deletes the file. A crash between the two makes
   `recover()` return a job that has ended, which its handler ignores because it
   checks that the step is not done yet. If the agent runs longer than the
-  maximum time, 12 hours by default and configurable, the agent manager kills
-  it.
+  `timeout` of its job, the agent manager kills it.
 - Kill: The process runs as a process group of its own, so the agent manager can
   kill all of it. `stopWork()` kills the agents of a work at once, to save the
   cost.

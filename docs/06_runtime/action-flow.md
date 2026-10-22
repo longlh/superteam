@@ -124,7 +124,7 @@ engine loop, the handlers, and the git adapter.
    work. The branch of the work is kept on the remote, as the trace of the work.
    A rejected work is final: to try again, a new work is assigned.
 2. **Merge.** When the work is approved, the engine merges the pull request into
-   the root branch, as rebase and squash. This merge is the approval. The engine
+   the root branch, as a squash merge. This merge is the approval. The engine
    then pulls the root branch, so the root workspace has the result, and deletes
    all the branches of the work (its own branch and the branches of its tasks),
    so that they do not pile up.

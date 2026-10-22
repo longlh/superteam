@@ -48,8 +48,9 @@ and each one points to the document where its design is.
 10. **Configure a project.** The workflows and the roles of Claude are config
     files, which a person creates with the Seed Skill (see `seed-skill.md`).
 11. **Limit the cost and the time.** An agent that runs longer than the maximum
-    time, 12 hours by default, is killed. The cost of one run can be limited
-    (see `agent-manager.md` and `claude-process.md`).
+    time of its task, 12 hours by default, is killed. The cost of one run can be
+    limited in `.superteam/.env` (see `agent-manager.md` and
+    `claude-process.md`).
 12. **One engine for a workspace.** The engine runs on its own, with no UI, and
     only one engine runs for a workspace. The HTTP API listens on localhost only
     (see `engine.md` and `orchestrator.md`).

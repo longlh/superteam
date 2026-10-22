@@ -21,6 +21,14 @@ The loop is made for an internal tool. These limits are known and accepted:
 - A handler that does not return, because it waits for something that never
   happens, stops the loop. There is no time limit for a handler.
 
+### Agents (`agents.md`)
+
+- The number of agents that run at once is not limited. Each task that is ready
+  gets its agent at once, so a wide workflow, or several works, run many
+  `claude` processes together, each with the MCP servers of its session, and
+  spend the usage limit or the money faster. A limit in `.superteam/.env`, with
+  a queue in the Agents, can be added later without a change of the engine.
+
 ## Open questions
 
 These are not decided yet.

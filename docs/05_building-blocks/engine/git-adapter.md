@@ -12,7 +12,7 @@ the platform, and each part of it has a job:
 | Worktree                  | An environment of its own for each job.                    |
 | Remote branch             | Where the results are kept.                                |
 | Pull request              | The way a work is approved: the approver reviews it there. |
-| Merge of the pull request | The way a result is recorded, as rebase and squash.        |
+| Merge of the pull request | The way a result is recorded, as a squash merge.           |
 
 The engine reaches git and the forge through a git adapter, so that another
 forge can be added later. For now only GitHub is supported, and the adapter

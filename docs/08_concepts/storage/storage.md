@@ -46,6 +46,7 @@ class WORKFLOW_STEP <<entity>> {
   description : string
   instruction : string
   role : string
+  timeout : int - minutes, 720 when it is absent
   dependOn : workflowStepId[]
 }
 
@@ -71,6 +72,7 @@ class TASK <<entity>> {
   updatedAt : datetime
   assignee : string - role
   instruction : string
+  timeout : int - minutes, from its step
   dependOn : taskId[]
   dodChecklist : boolean[]
   summary : string - what its last job said
