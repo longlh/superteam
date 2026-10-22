@@ -14,9 +14,14 @@ const STATUS_OF_CODE = {
 // engine. The API maps the answers and the errors to HTTP, and holds no logic.
 export function createHttpApi({ engine }) {
   const server = http.createServer((req, res) => {
-    handle(engine, req, res).catch((error) => {
-      reply(res, ...errorAnswer(error));
-    });
+    Promise.resolve()
+      .then(() => {
+        checkOrigin(req, server.address().port);
+        return handle(engine, req, res);
+      })
+      .catch((error) => {
+        reply(res, ...errorAnswer(error));
+      });
   });
 
   return {
@@ -46,6 +51,23 @@ class HttpError extends Error {
   constructor(status, message) {
     super(message);
     this.status = status;
+  }
+}
+
+// A web page can send a request to 127.0.0.1 too. A Host that is not this
+// server is refused (DNS rebinding), and so is a POST that does not say its
+// body is JSON: a page can send such a POST with no preflight (CSRF).
+function checkOrigin(req, port) {
+  const host = (req.headers.host ?? "").toLowerCase();
+  if (host !== `127.0.0.1:${port}` && host !== `localhost:${port}`) {
+    throw new HttpError(403, "forbidden host");
+  }
+  const type = (req.headers["content-type"] ?? "")
+    .split(";")[0]
+    .trim()
+    .toLowerCase();
+  if (req.method === "POST" && type !== "application/json") {
+    throw new HttpError(415, "the content-type must be application/json");
   }
 }
 

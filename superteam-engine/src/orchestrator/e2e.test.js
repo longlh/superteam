@@ -167,14 +167,19 @@ async function startStack(project, modes = {}) {
   project.cleanups.push(shutdown);
 
   async function request(method, route, body) {
+    // As the MCP client: every POST says it is JSON, even with no body.
     const response = await fetch(`http://127.0.0.1:${port}${route}`, {
       method,
-      ...(body === undefined
-        ? {}
-        : {
+      ...(method === "POST"
+        ? {
             headers: {
               "content-type": "application/json",
             },
+          }
+        : {}),
+      ...(body === undefined
+        ? {}
+        : {
             body: JSON.stringify(body),
           }),
     });

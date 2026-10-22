@@ -3,10 +3,13 @@ export function createApiClient({ baseUrl, fetch: fetchFn = fetch }) {
     const init = {
       method,
     };
-    if (body !== undefined) {
+    // Every POST says it is JSON, even with no body: the API refuses it else.
+    if (method === "POST") {
       init.headers = {
         "content-type": "application/json",
       };
+    }
+    if (body !== undefined) {
       init.body = JSON.stringify(body);
     }
     let response;

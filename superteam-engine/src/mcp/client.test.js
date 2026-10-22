@@ -88,6 +88,25 @@ test("sends no body and no content-type on a GET, and keeps a text answer", asyn
   }
 });
 
+test("a POST with no body still says that it is JSON", async () => {
+  const { server, seen, port } = await listen((res) => {
+    res.writeHead(202, {
+      "content-type": "application/json",
+    });
+    res.end("{}");
+  });
+  try {
+    const client = createApiClient({
+      baseUrl: `http://127.0.0.1:${port}`,
+    });
+    await client.request("POST", "/works/w/archive");
+    assert.equal(seen[0].type, "application/json");
+    assert.equal(seen[0].raw, "");
+  } finally {
+    server.close();
+  }
+});
+
 test("a refused connection says that the orchestrator is not running", async () => {
   const { server, port } = await listen(() => {});
   await new Promise((resolve) => server.close(resolve));

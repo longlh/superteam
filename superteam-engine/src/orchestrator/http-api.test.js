@@ -44,7 +44,17 @@ function fakeEngine() {
   };
 }
 
-function send(port, method, path, body) {
+// A POST says that its body is JSON, as the MCP client does. `headers` adds
+// or replaces headers; a header set to null is not sent.
+function send(port, method, path, body, headers = {}) {
+  const all = {
+    ...(method === "POST"
+      ? {
+          "content-type": "application/json",
+        }
+      : {}),
+    ...headers,
+  };
   return new Promise((resolve, reject) => {
     const req = http.request(
       {
@@ -53,6 +63,9 @@ function send(port, method, path, body) {
         method,
         path,
         agent: false,
+        headers: Object.fromEntries(
+          Object.entries(all).filter(([, value]) => value !== null),
+        ),
       },
       (res) => {
         const chunks = [];
@@ -329,6 +342,73 @@ describe("http api", () => {
       assert.equal(res.type, "application/json");
     }
     assert.deepEqual(engine.calls, []);
+  });
+
+  test("a POST whose body is not said to be JSON is 415 and the engine is not called", async () => {
+    for (const type of [
+      null,
+      "text/plain",
+      "application/x-www-form-urlencoded",
+    ]) {
+      for (const path of [
+        "/works",
+        "/works/w1/decision",
+        "/works/w1/archive",
+      ]) {
+        const res = await send(port, "POST", path, "{}", {
+          "content-type": type,
+        });
+        assert.equal(res.status, 415, `${type} ${path}`);
+        assert.equal(typeof res.body.error, "string");
+      }
+    }
+    assert.deepEqual(engine.calls, []);
+  });
+
+  test("a content-type of JSON with parameters is accepted", async () => {
+    const res = await send(
+      port,
+      "POST",
+      "/works/w1/decision",
+      JSON.stringify({
+        decision: "reject",
+      }),
+      {
+        "content-type": "Application/JSON; charset=utf-8",
+      },
+    );
+    assert.equal(res.status, 202);
+  });
+
+  test("a Host that is not this server is 403 and the engine is not called", async () => {
+    for (const host of [
+      "evil.example",
+      `evil.example:${port}`,
+      `127.0.0.1:${port + 1}`,
+      "127.0.0.1",
+      `localhost.evil.example:${port}`,
+    ]) {
+      for (const [method, path] of [
+        ["GET", "/works"],
+        ["GET", "/works/w1"],
+        ["POST", "/works/w1/archive"],
+      ]) {
+        const res = await send(port, method, path, undefined, {
+          host,
+        });
+        assert.equal(res.status, 403, `${host} ${method} ${path}`);
+      }
+    }
+    assert.deepEqual(engine.calls, []);
+  });
+
+  test("a Host of 127.0.0.1 or localhost with the port is accepted", async () => {
+    for (const host of [`127.0.0.1:${port}`, `localhost:${port}`]) {
+      const res = await send(port, "GET", "/works", undefined, {
+        host,
+      });
+      assert.equal(res.status, 200, host);
+    }
   });
 
   test("close resolves even with an idle keep-alive connection", async () => {
