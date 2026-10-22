@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -48,7 +49,10 @@ export async function writeArtifacts({
   return written;
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (
+  process.argv[1] &&
+  fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
   const [workId, taskId, ...contents] = process.argv.slice(2);
   try {
     if (contents.length === 0) {

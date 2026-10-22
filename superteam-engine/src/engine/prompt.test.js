@@ -53,7 +53,7 @@ test("a worker prompt", () => {
   assert.match(prompt, /- from a: found X/);
   assert.match(
     prompt,
-    /To create an artifact, run: node \/.*artifact\.js w d <content>/,
+    /To create an artifact, run: node "\/[^"]*artifact\.js" w d "<content>"\n/,
   );
   assert.match(
     prompt,

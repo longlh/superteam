@@ -34,7 +34,7 @@ function workerParts({ work, task, tasks, artifacts }) {
         .map((a) => `- from ${a.task}: ${a.content}`)
         .join("\n"),
     ),
-    `To create an artifact, run: node ${ARTIFACT_SCRIPT} ${work.id} ${task.id} <content>`,
+    `To create an artifact, run: node ${JSON.stringify(ARTIFACT_SCRIPT)} ${work.id} ${task.id} "<content>"`,
     "Commit all your changes and artifacts on the current branch before you return.",
   ];
 }

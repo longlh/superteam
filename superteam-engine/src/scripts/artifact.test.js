@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readdir, rm, symlink } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -100,4 +100,18 @@ test("the command line fails with a message", () =>
       }),
       (error) => error.code !== 0 && /slug/.test(error.stderr),
     );
+  }));
+
+test("the command line works through a symbolic link to the script", () =>
+  withDir(async (dir) => {
+    const link = path.join(dir, "artifact-link.js");
+    await symlink(script, link);
+    const { stdout } = await promisify(execFile)(
+      process.execPath,
+      [link, "w", "t", "linked"],
+      {
+        cwd: dir,
+      },
+    );
+    assert.equal((await readJson(stdout.trim())).content, "linked");
   }));
