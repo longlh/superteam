@@ -3,8 +3,11 @@ import { MAX_ORDER, validatePayload } from "./event.js";
 
 export function createFactory({ queue, now }) {
   let counter = 0;
+  // The last write of a tail event. The next tail event waits for it, so the
+  // files reach `queue/` in the order of their numbers.
+  let tail = Promise.resolve();
 
-  async function build(order, payload, attempts, errors) {
+  async function build(order, payload, attempts, errors, after) {
     const createdAt = now();
     const event = {
       order,
@@ -14,7 +17,7 @@ export function createFactory({ queue, now }) {
       attempts,
       errors,
     };
-    await queue.put(event);
+    await (after ? after(event) : queue.put(event));
     return event;
   }
 
@@ -34,7 +37,13 @@ export function createFactory({ queue, now }) {
         throw new Error(`the queue is full: order is above ${MAX_ORDER}`);
       }
       counter += 1;
-      return build(counter, payload, 0, []);
+      const previous = tail;
+      const built = build(counter, payload, 0, [], async (event) => {
+        await previous;
+        await queue.put(event);
+      });
+      tail = built.catch(() => {});
+      return built;
     },
 
     // An event that goes back to the head of the queue: order 0.

@@ -108,3 +108,60 @@ test("an order above 999999 throws", async () => {
     await assert.rejects(factory.create(payload), /999999/);
   });
 });
+
+test("events reach the queue in the order of their numbers, even if the first write is slow", async () => {
+  await withTempDir(async (dir) => {
+    const { paths, queue } = await setup(dir);
+    const landed = [];
+    const slowQueue = {
+      ...queue,
+      async put(event) {
+        if (event.order === 1) {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        await queue.put(event);
+        landed.push(event.order);
+      },
+    };
+    const factory = createFactory({
+      queue: slowQueue,
+      now: createClock(),
+    });
+    const events = await Promise.all([
+      factory.create(payload),
+      factory.create(payload),
+      factory.create(payload),
+    ]);
+    assert.deepEqual(
+      events.map((e) => e.order),
+      [1, 2, 3],
+    );
+    assert.deepEqual(landed, [1, 2, 3]);
+    assert.equal((await readdir(paths.queue)).length, 3);
+  });
+});
+
+test("a failed write does not block the next event", async () => {
+  await withTempDir(async (dir) => {
+    const { queue } = await setup(dir);
+    const failing = {
+      ...queue,
+      async put(event) {
+        if (event.order === 1) {
+          throw new Error("disk");
+        }
+        await queue.put(event);
+      },
+    };
+    const factory = createFactory({
+      queue: failing,
+      now: createClock(),
+    });
+    const [first, second] = await Promise.allSettled([
+      factory.create(payload),
+      factory.create(payload),
+    ]);
+    assert.equal(first.status, "rejected");
+    assert.equal(second.value.order, 2);
+  });
+});
