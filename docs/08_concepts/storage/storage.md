@@ -53,6 +53,7 @@ entity WORK {
   createdAt : datetime
   updatedAt : datetime
   dodChecklist : boolean[]
+  error : string - why the work failed
 }
 
 entity TASK {
@@ -130,19 +131,22 @@ reason. So a task that depends on a failed task stays `PENDING`.
 
 #### Work status
 
-| Status        | Formula                                                                                                   |
-| ------------- | --------------------------------------------------------------------------------------------------------- |
-| `OPEN`        | `!proposed && tasks.length == 0`                                                                          |
-| `IN_PROGRESS` | `!proposed && tasks.length > completed_tasks.length && failed_tasks.length == 0`                          |
-| `DONE`        | `proposed \|\| (tasks.length > 0 && tasks.length === completed_tasks.length && failed_tasks.length == 0)` |
-| `FAILED`      | `failed_tasks.length > 0`                                                                                 |
+| Status        | Formula                                                                                 |
+| ------------- | --------------------------------------------------------------------------------------- |
+| `OPEN`        | `!proposed && !error && tasks.length == 0`                                              |
+| `IN_PROGRESS` | `!proposed && !error && tasks.length > completed_tasks.length`                          |
+| `DONE`        | `proposed \|\| (tasks.length > 0 && tasks.length === completed_tasks.length && !error)` |
+| `FAILED`      | `error`                                                                                 |
 
 `completed_tasks` is the tasks that are `completed`, which includes the failed
-ones. `failed_tasks` is the tasks that are `FAILED`. `proposed` means that the
-work has a pull request, or that its file is in `.superteam/.p/works/` on the
-root branch. The engine opens the pull request only when all the tasks are done
-and none has failed, so a proposed work is `DONE`, and it needs no task: the
-tasks are runtime data, and exist only on the machine that ran the work.
+ones. `error` is the `error` of the work, which the engine writes when a task
+fails. `proposed` means that the work has a pull request, or that its file is in
+`.superteam/.p/works/` on the root branch. The engine opens the pull request
+only when all the tasks are done and none has failed, so a proposed work is
+`DONE`, and it needs no task: the tasks are runtime data, and exist only in the
+worktree of the work, which is removed after the pull request is opened. A
+failed work needs no task either, because its `error` is in the file of the
+work.
 
 #### Work approval status
 
@@ -162,10 +166,9 @@ root branch is the approval, and the git history keeps it.
 
 The engine opens the pull request only when all the tasks are done and none has
 failed. So a work that has a pull request is `DONE`, and its status is not
-derived from the tasks, which are runtime data and exist only on the machine
-that ran the work. A failed work is never proposed, so it has no pull request,
-and its approval status stays `DRAFT`.
+derived from the tasks, which are runtime data and exist only in the worktree of
+the work. A failed work is never proposed, so it has no pull request, and its
+approval status stays `DRAFT`.
 
 A work whose file is in `.superteam/.p/works/` on the root branch reached it
-only by the merge of its pull request, so it is `DONE` and `APPROVED`. If a work
-has a record in `.superteam/.r/works/` and a file in git, the file in git wins.
+only by the merge of its pull request, so it is `DONE` and `APPROVED`.

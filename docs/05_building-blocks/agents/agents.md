@@ -51,10 +51,9 @@ Rel(process, claude, "Uses")
 
 ### The merger
 
-The merger is run for the unit of the work. It writes the work in the worktree
-of the work, merges the branches of the dependencies of a task into the new
-branch when the task has more than one, and merges the branches of the final
-tasks. It does all the merges of the work.
+The merger is run for the unit of the work. It merges the branches of the
+dependencies of a task into the new branch when the task has more than one, and
+merges the branches of the final tasks. It does all the merges of the work.
 
 A conflict can happen only when it merges the dependencies of a task. The merger
 resolves the conflict itself, so the worker starts on a clean worktree.

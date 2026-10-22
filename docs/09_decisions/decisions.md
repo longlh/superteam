@@ -16,3 +16,4 @@ consequences. A decision that is replaced is not deleted: its status changes.
 | [8](0008-pid-file-holds-the-job.md)          | The pid file holds the pid and its job                   |
 | [9](0009-arc42-and-c4.md)                    | The documents follow arc42, and the structure follows C4 |
 | [10](0010-diagrams-are-plantuml.md)          | Diagrams are text, in PlantUML                           |
+| [11](0011-work-lives-on-its-branch.md)       | A work lives on its branch, not in the runtime storage   |

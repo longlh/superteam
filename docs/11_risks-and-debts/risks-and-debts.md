@@ -86,17 +86,11 @@ These are not decided yet.
 
 ### Data flow (`data-flow.md`)
 
-1. **The record of a work.** The engine records the work at the assignment (see
-   "Assign and run a work" in `action-flow.md`), but the rejection also creates
-   a record in the runtime storage. Does the record exist from the assignment,
-   and is it kept after an approval, when the work is in git?
-2. **The artifacts and the tasks.** An artifact in git refers to a task, but the
+1. **The artifacts and the tasks.** An artifact in git refers to a task, but the
    tasks are runtime data, and are not kept.
 
 ### Data contract (`storage.md`)
 
-1. **The record of a work.** Its fields. Its path in `runtime-data.md` is a
-   proposal.
-2. **The identity.** The format of `id` for a work and a task: a counter, a
+1. **The identity.** The format of `id` for a work and a task: a counter, a
    random id, or a slug. The path comes from it. The `id` of an artifact is
    decided (see "The id of an artifact" in `persistence-data.md`).

@@ -38,10 +38,10 @@ Passes through: the HTTP API, the engine loop, the handlers, the git adapter,
 the runtime files, and the job runner with the Claude process.
 
 1. **Assign.** A client assigns a work to the engine with one request. The
-   engine records that the work was given to it, creates the tasks of the work
-   from the steps of its workflow, with no other request, and creates the
-   worktree of the work, based on the root branch. It runs the merger in it, to
-   write the work from its runtime record.
+   engine creates the worktree of the work, based on the root branch. It writes
+   the work in it, from the request, and commits it on the branch of the work.
+   Then it creates the tasks of the work from the steps of its workflow, with no
+   other request, in the runtime of the worktree of the work.
 2. **Run.** The engine runs the tasks by itself: a task starts when it has its
    inputs, which means that its status is `IN_PROGRESS` (see "Derived status" in
    `storage.md`). For each task the engine creates a worktree and a branch,
@@ -71,11 +71,9 @@ Client -> API : assign a work
 API -> EL : enqueue work:assign
 API --> Client : 202 Accepted
 EL -> Handler : give work:assign
-Handler -> Runtime : create work record and task graph
 Handler -> Git : create worktree of the work, from root
-Handler -> Runner : run the merger, to write the work
-Runner --> EL : onEnded: enqueue merger:ended
-EL -> Handler : give merger:ended
+Handler -> Git : write the work, commit
+Handler -> Runtime : create the task graph
 loop for each task that is ready
   Handler -> Git : create worktree of the task, from its dependency
   Handler -> Runner : run the worker
@@ -96,17 +94,17 @@ Handler -> Git : remove worktree of the work
 
 Realizes: UC2, steps 5 and 6, and the extension of the rejection.
 
-Passes through: the HTTP API, the engine loop, the handlers, the git adapter,
-and the runtime files.
+Passes through: the HTTP API, the engine loop, the handlers, and the git
+adapter.
 
 1. **Decide.** The approver reviews the work in the pull request, and sends the
    decision to the API: approved or rejected. The decision is not stored: the
    merge of the pull request into the root branch is the approval, and the git
    history keeps it. So the work and the engine stay clean, and approving is one
    atomic action, with nothing else to update. If the work is rejected, the
-   engine closes the pull request, creates a record of the work in the runtime
-   storage, and deletes all the branches of the work. A rejected work is final:
-   to try again, a new work is assigned.
+   engine closes the pull request, and deletes the branches of the tasks of the
+   work. The branch of the work is kept on the remote, as the trace of the work.
+   A rejected work is final: to try again, a new work is assigned.
 2. **Merge.** When the work is approved, the engine merges the pull request into
    the root branch, as rebase and squash. This merge is the approval. The engine
    then pulls the root branch, so the root workspace has the result, and deletes
@@ -120,7 +118,6 @@ participant "HTTP API" as API
 participant "Engine loop" as EL
 participant "Handlers" as Handler
 participant Git
-participant "Runtime files" as Runtime
 
 Approver -> API : approve or reject
 API -> EL : enqueue work:decide
@@ -132,8 +129,7 @@ alt approved
   Handler -> Git : delete branches
 else rejected
   Handler -> Git : close pull request
-  Handler -> Runtime : create record of the work
-  Handler -> Git : delete branches
+  Handler -> Git : delete branches of the tasks
 end
 @enduml
 ```
@@ -149,11 +145,43 @@ A task is not run again. If its worker fails (the process fails, it is killed
 because it runs too long, or its result does not match the schema), the whole
 work fails, and the tasks that have not started never start. The engine asks the
 job runner to stop the other jobs of the work at once, to save the cost. A
-failure of the merger fails the work in the same way. The engine then removes
-the worktrees of the work, deletes all its branches, and keeps its record in the
-runtime storage. A failed work is final, like a rejected one: to try again, a
-new work is assigned. A failed task is recorded as `completed` with an `error`,
-so it is `FAILED` (see "Derived status" in `storage.md`).
+failure of the merger fails the work in the same way. The engine then writes the
+`error` in the work, commits it, and pushes the branch of the work, which is
+kept on the remote as the trace of the work. It removes the worktrees of the
+work, which removes its tasks too, and deletes the branches of its tasks. A
+failed work is final, like a rejected one: to try again, a new work is assigned.
+A failed task is recorded as `completed` with an `error`, so it is `FAILED` (see
+"Derived status" in `storage.md`).
+
+## Archive a work
+
+Realizes: UC3 (see `01_introduction/use-cases.md`).
+
+Passes through: the HTTP API, the engine loop, the handlers, and the git
+adapter.
+
+1. **Archive.** The person asks the API to archive a work that failed or was
+   rejected. The API checks that the work is `FAILED` or `REJECTED`, and
+   enqueues the event.
+2. **Delete.** The engine checks the state of the work again, and deletes the
+   branch of the work, on the remote and on this machine. The work is no longer
+   listed. The pull request of a rejected work stays closed on the forge.
+
+```plantuml
+@startuml
+actor Person
+participant "HTTP API" as API
+participant "Engine loop" as EL
+participant "Handlers" as Handler
+participant Git
+
+Person -> API : archive a work
+API -> EL : enqueue work:archive
+API --> Person : 202 Accepted
+EL -> Handler : give work:archive
+Handler -> Git : delete branch of the work
+@enduml
+```
 
 ## Start and shutdown
 

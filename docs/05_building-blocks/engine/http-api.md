@@ -9,10 +9,11 @@ business of the engine, and the client has no request for them.
 
 There are two kinds of request:
 
-- **A command** asks the engine to do something: assign a work, approve it or
-  reject it. The API checks the request, turns it into an event for the engine
-  loop, and answers at once that the event is accepted. It does not wait for the
-  event to be processed. The client follows the result with a query.
+- **A command** asks the engine to do something: assign a work, approve it,
+  reject it, or archive it. The API checks the request, turns it into an event
+  for the engine loop, and answers at once that the event is accepted. It does
+  not wait for the event to be processed. The client follows the result with a
+  query.
 - **A query** asks for the state of a work. The API answers from the runtime
   state and from git. It does not go through the engine loop.
 
@@ -72,12 +73,31 @@ processed, because the state can change between the request and the event.
 
 - `approve`: the engine merges the pull request into the root branch. This merge
   is the approval.
-- `reject`: the engine closes the pull request, deletes all the branches of the
-  work and creates a record of the work in the runtime storage. A rejected work
-  is final.
+- `reject`: the engine closes the pull request and deletes the branches of the
+  tasks of the work. The branch of the work is kept on the remote, so the work
+  is still listed (see "List the works"). A rejected work is final.
 
 The decision itself is not stored (see "Decide a work" in `action-flow.md`): the
 result is in the pull request, and the git history keeps it.
+
+### Archive a work
+
+```
+POST /works/{id}/archive
+```
+
+The client removes the trace of a work that is final and was not approved.
+
+Answer `202 Accepted` with the `eventId` of the event `work:archive`.
+
+The work must be `FAILED` or `REJECTED`. If it is not, the API answers
+`409 Conflict`. The check is made again when the event is processed, because the
+state can change between the request and the event.
+
+The engine deletes the branch of the work, on the remote and on this machine.
+The work is no longer listed, and its state can no longer be queried. The pull
+request of a rejected work stays closed on the forge, so its history is kept
+there.
 
 ### Query the state of a work
 
@@ -108,36 +128,37 @@ GET /works
 
 Answer `200 OK`: the list of all the works. It puts together three sources:
 
-- The works that are running, in the runtime storage.
-- The works that are done, in the persistent storage. They were merged from
+- The works that are running on this machine, in the worktrees of the works.
+- The works that are proposed, that failed or that were rejected, on the
+  branches of the works on the remote. A failed or rejected work is never
+  merged, so its branch is kept as its trace until it is archived (see
+  "Branches" in `git-adapter.md`, and "Archive a work").
+- The works that are approved, in the persistent storage. They were merged from
   their work branch.
-- The works that were rejected or that failed, in the runtime storage. They are
-  never merged, so there is no work branch to read them from: the engine creates
-  the record of a rejected work at the time it rejects it, and keeps the record
-  of a failed work.
 
-A work that is done is kept for good, in git. On another machine, the list shows
-only the works that reached git, so a rejected or failed work, which is not in
-git, is not in the list there.
+A work that is approved is kept for good, in git. On another machine, the list
+shows only the works that reached the remote, so a work that is running is not
+in the list there until it is proposed or fails.
 
 Each item has the fields of the state of one work (see "Query the state of a
 work").
 
 ### Errors
 
-| Status | When                                                                                                 |
-| ------ | ---------------------------------------------------------------------------------------------------- |
-| `400`  | The body is not valid.                                                                               |
-| `404`  | The work or the workflow does not exist.                                                             |
-| `409`  | The request does not fit the state of the work, such as a decision on a work that is not `PROPOSED`. |
-| `503`  | The engine is starting, and the engine loop is not ready.                                            |
+| Status | When                                                                                                                                                             |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `400`  | The body is not valid.                                                                                                                                           |
+| `404`  | The work or the workflow does not exist.                                                                                                                         |
+| `409`  | The request does not fit the state of the work, such as a decision on a work that is not `PROPOSED`, or an archive of a work that is not `FAILED` or `REJECTED`. |
+| `503`  | The engine is starting, and the engine loop is not ready.                                                                                                        |
 
 ### How a request becomes an event
 
-| Request                     | Event         |
-| --------------------------- | ------------- |
-| `POST /works`               | `work:assign` |
-| `POST /works/{id}/decision` | `work:decide` |
+| Request                     | Event          |
+| --------------------------- | -------------- |
+| `POST /works`               | `work:assign`  |
+| `POST /works/{id}/decision` | `work:decide`  |
+| `POST /works/{id}/archive`  | `work:archive` |
 
 The events `worker:ended` and `merger:ended` do not come from the API: the
 engine enqueues them when a job ends (see `handlers.md`).

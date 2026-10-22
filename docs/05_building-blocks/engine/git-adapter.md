@@ -20,8 +20,12 @@ needs the `gh` command line.
 
 ### Branches
 
-The branches of a work (its own branch and the branches of its tasks) are
-deleted when the work ends, so that they do not pile up as garbage.
+The branches of the tasks of a work are deleted when the work ends, so that they
+do not pile up as garbage. The branch of the work is deleted when the work is
+approved, because its result is then in the root branch. When the work fails or
+is rejected, the branch of the work is pushed and kept on the remote: it is the
+only trace of the work. It is deleted when the work is archived (see "Archive a
+work" in `http-api.md`).
 
 ## Code
 
@@ -30,19 +34,23 @@ deleted when the work ends, so that they do not pile up as garbage.
 A worktree is the environment where a job is done. There are two kinds, one for
 each unit of the work. The engine creates both.
 
-|          | Worktree of a work                                                      | Worktree of a task                                                                                                                                         |
-| -------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Based on | The root branch.                                                        | The branch of the task it depends on. A task with no dependency is based on the root branch. A task with more than one dependency is based on one of them. |
-| Branch   | `works/{work_id}`                                                       | `tasks/{work_id}/{task_id}`                                                                                                                                |
-| Folder   | `.superteam/.r/worktrees/works/{work_id}`                               | `.superteam/.r/worktrees/tasks/{work_id}/{task_id}`                                                                                                        |
-| Created  | When the work is assigned.                                              | When the task starts.                                                                                                                                      |
-| Removed  | After the pull request is opened.                                       | When the task ends.                                                                                                                                        |
-| Used for | The merger writes the work, and merges the branches of the final tasks. | The job of the task, by a worker, a person or an AI.                                                                                                       |
+|          | Worktree of a work                                                                 | Worktree of a task                                                                                                                                         |
+| -------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Based on | The root branch.                                                                   | The branch of the task it depends on. A task with no dependency is based on the root branch. A task with more than one dependency is based on one of them. |
+| Branch   | `works/{work_id}`                                                                  | `tasks/{work_id}/{task_id}`                                                                                                                                |
+| Folder   | `.superteam/.r/worktrees/works/{work_id}`                                          | `.superteam/.r/worktrees/tasks/{work_id}/{task_id}`                                                                                                        |
+| Created  | When the work is assigned.                                                         | When the task starts.                                                                                                                                      |
+| Removed  | After the pull request is opened, or when the work fails.                          | When the task ends.                                                                                                                                        |
+| Used for | The engine writes the work, and the merger merges the branches of the final tasks. | The job of the task, by a worker, a person or an AI.                                                                                                       |
 
 The folders of the worktrees are runtime data, so they are under
 `.superteam/.r`. The folder of a task is not inside the folder of its work: a
 folder inside a worktree would show up there as an untracked file.
 
+The worktree of a work also holds the tasks of the work, in its own
+`.superteam/.r/tasks/`. They are not committed, because `.superteam/.r/` is in
+the `.gitignore`, and they are removed with the worktree.
+
 The branch of a worktree is kept after the worktree is removed, because it is
-merged later. All the branches of a work, its own and the branches of its tasks,
-are deleted when the work ends.
+merged later, or because it is the trace of a work that failed or was rejected
+(see "Branches").

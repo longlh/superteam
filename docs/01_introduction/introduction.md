@@ -30,7 +30,8 @@ and each one points to the document where its design is.
    and the decision itself is not stored (see `0001-approval-is-the-merge.md`).
 5. **A failed or a rejected work is final.** A task is not run again. When a
    task fails, the whole work fails, and the other jobs of the work are stopped.
-   To try again, a new work is assigned (see `0002-final-work.md`).
+   To try again, a new work is assigned (see
+   `0011-work-lives-on-its-branch.md`).
 6. **Follow a work.** The client gets the state of a work, and the list of the
    works. The status of a work is `OPEN`, `IN_PROGRESS`, `DONE` or `FAILED`, and
    its approval status is `DRAFT`, `PROPOSED`, `APPROVED` or `REJECTED` (see
@@ -51,3 +52,6 @@ and each one points to the document where its design is.
 12. **One engine for a workspace.** The engine runs on its own, with no UI, and
     only one engine runs for a workspace. Its API listens on localhost only (see
     `engine.md` and `http-api.md`).
+13. **Archive a work.** A work that failed or was rejected stays listed until
+    the client archives it. Archiving deletes its branch, and the pull request
+    of a rejected work stays closed on the forge (see `http-api.md`).

@@ -14,5 +14,6 @@ give back the answer of the API.
 | --------------------------- | --------------------------- |
 | `POST /works`               | Assigns a work.             |
 | `POST /works/{id}/decision` | Approves or rejects a work. |
+| `POST /works/{id}/archive`  | Archives a work.            |
 | `GET /works/{id}`           | Gets the state of a work.   |
 | `GET /works`                | Lists the works.            |

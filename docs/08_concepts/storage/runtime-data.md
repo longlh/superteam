@@ -5,25 +5,25 @@ versioned.
 
 ## Component
 
-| Folder                                         | Holds                                                                                       |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `.superteam/.r/works/{id}.json`                | The record of a work.                                                                       |
-| `.superteam/.r/tasks/{work_id}/{task_id}.json` | A task, and its progress.                                                                   |
-| `.superteam/.r/agents/{pid}.pid`               | The pid of an agent process, with its job, one file for each agent.                         |
-| `.superteam/.r/worktrees/`                     | The folders of the worktrees (see "Worktrees" in `git-adapter.md`).                         |
-| `.superteam/.r/engineloop/`                    | The queue, the claim, the DLQ and the tmp folders of the engine loop (see `engineloop.md`). |
+| Folder                                                          | Holds                                                                                       |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `.superteam/.r/tasks/{task_id}.json`, in the worktree of a work | A task of the work, and its progress.                                                       |
+| `.superteam/.r/agents/{pid}.pid`                                | The pid of an agent process, with its job, one file for each agent.                         |
+| `.superteam/.r/worktrees/`                                      | The folders of the worktrees (see "Worktrees" in `git-adapter.md`).                         |
+| `.superteam/.r/engineloop/`                                     | The queue, the claim, the DLQ and the tmp folders of the engine loop (see `engineloop.md`). |
 
-- **The record of a work** holds the work as the client assigned it (title,
-  description, DOD, workflow), so that the engine can build the prompts of the
-  workers and survive a restart. The record of a work that is rejected or failed
-  stays here: the engine creates it at the time it rejects the work, because a
-  rejected work is never merged, and so never reaches `.p`.
+- **The work itself** is not runtime data. The engine writes it in
+  `.superteam/.p/works/{id}.json` of the worktree of the work, and reads it
+  there to build the prompts of the workers and to survive a restart (see
+  `persistence-data.md`).
 - **A task** is a step on the way to a work. It can be done again, and its
-  history is not kept, because a work is handed over clean.
+  history is not kept, because a work is handed over clean. It is in the runtime
+  of the worktree of its work, so it is never merged, and it is removed with the
+  worktree.
 - **The pids**, with the jobs, are used at the start of the agent manager to
   kill the agents that are left (see "Code" in `agent-manager.md`).
 
-The engine writes the runtime files of the works, the tasks and the worktrees,
-from its handlers, one event at a time, so there is no race between two writes.
-The agent manager writes the pids. A worktree can read the runtime data of the
-root branch, by reading the path in the root workspace.
+The engine writes the runtime files of the tasks and the worktrees, from its
+handlers, one event at a time, so there is no race between two writes. The agent
+manager writes the pids. A worktree can read the runtime data of the root
+branch, by reading the path in the root workspace.

@@ -93,3 +93,16 @@ else (reject)
 endif
 @enduml
 ```
+
+## UC3. Archive a work
+
+- **Actor:** the person who assigns.
+- **Goal:** a work that failed or was rejected is no longer listed.
+- **Precondition:** the work is final and was not approved (UC2).
+- **Main scenario:**
+  1. The person asks the system to archive the work.
+  2. The system removes the trace of the work, and the work is no longer listed.
+- **Extension:** the work did not fail and was not rejected: the system refuses
+  it.
+- **Result:** the work is no longer listed. The pull request of a rejected work
+  stays closed on the forge.

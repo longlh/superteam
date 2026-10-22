@@ -1,6 +1,6 @@
 # ADR 2. A failed or rejected work is final
 
-- Status: Accepted
+- Status: Superseded by ADR 11
 
 ## Context
 
