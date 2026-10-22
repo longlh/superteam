@@ -1,3 +1,4 @@
+import { readFileSync, rmSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -32,5 +33,22 @@ export function processIsAlive(pid) {
     return true;
   } catch (error) {
     return error.code === "EPERM";
+  }
+}
+
+// Removes the pid file when it holds `pid`, so a stopped superteam leaves no
+// stale file. It is sync, to run in an `exit` listener.
+export function removeOwnPidFile(baseDir, pid) {
+  const file = pidFilePath(baseDir);
+  let text;
+  try {
+    text = readFileSync(file, "utf8");
+  } catch {
+    return;
+  }
+  if (text.trim() === String(pid)) {
+    rmSync(file, {
+      force: true,
+    });
   }
 }

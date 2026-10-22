@@ -30,6 +30,7 @@ let running;
 let gitLog;
 let extraBranches;
 let notes;
+let logs;
 
 beforeEach(async () => {
   h = await createHarness({});
@@ -52,9 +53,11 @@ beforeEach(async () => {
       return fn(...args);
     };
   }
+  logs = [];
   engine = createEngine({
     baseDir: h.baseDir,
     git: h.git,
+    log: (message) => logs.push(message),
     loopOptions: {
       pollIntervalMs: 5,
       maxAttempts: 2,
@@ -833,4 +836,24 @@ test("reconcile skips a work whose files cannot be read, and does the others onc
       ([topic]) => topic === "event:retry" || topic === "event:error",
     ),
   );
+  assert.equal(logs.length, 1);
+  assert.match(logs[0], /^reconcile skips the work w1: .*JSON/);
+});
+
+test("reconcile logs a work folder that has no work file", async () => {
+  await mkdir(
+    worktreeDir(h.baseDir, {
+      workId: "w1",
+    }),
+    {
+      recursive: true,
+    },
+  );
+  await start();
+  await engine.reconcile([]);
+  await waitFor(
+    () => done("engine:reconcile").length === 1,
+    "engine:reconcile",
+  );
+  assert.deepEqual(logs, ["reconcile skips the work w1: it has no work file"]);
 });

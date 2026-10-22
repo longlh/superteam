@@ -135,6 +135,38 @@ test("start rejects when the engine fails before ready", async () => {
   await assert.rejects(started, /boom/);
 });
 
+test("done rejects when the engine stops with an error after it is ready", async () => {
+  const t = setup({
+    onEngineStart: readyOnStart,
+  });
+  await t.orchestrator.start();
+  t.rejectStart(new Error("the loop broke"));
+  await assert.rejects(t.orchestrator.done, /the loop broke/);
+});
+
+test("subscribe gives a topic of the engine to a guarded callback", async () => {
+  const error = mock.method(console, "error", () => {});
+  try {
+    const t = setup();
+    const seen = [];
+    t.orchestrator.subscribe("event:error", (data) => {
+      seen.push(data);
+      throw new Error("the callback broke");
+    });
+    t.publish("event:error", {
+      error: "boom",
+    });
+    assert.deepEqual(seen, [
+      {
+        error: "boom",
+      },
+    ]);
+    assert.equal(error.mock.calls.length, 1);
+  } finally {
+    error.mock.restore();
+  }
+});
+
 test("job:run runs the agent and the end goes to engine.jobEnded", async () => {
   const t = setup({
     onEngineStart: readyOnStart,

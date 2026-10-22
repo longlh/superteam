@@ -73,6 +73,7 @@ export function createEngine({
     baseDir,
   }),
   loopOptions = {},
+  log = console.error,
 }) {
   const pubsub = createPubSub();
   const loop = createEngineLoop({
@@ -279,10 +280,12 @@ export function createEngine({
       try {
         work = await readJson(workFile(folder, workId));
         tasks = await createTaskStore(folder).list();
-      } catch {
+      } catch (error) {
+        log(`reconcile skips the work ${workId}: ${error.message}`);
         continue;
       }
       if (work === null) {
+        log(`reconcile skips the work ${workId}: it has no work file`);
         continue;
       }
       if (work.error !== undefined) {

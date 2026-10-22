@@ -52,6 +52,17 @@ export function createOrchestrator({
   }
 
   return {
+    // The end of the engine, once started: it rejects when the engine stops
+    // with an error.
+    get done() {
+      return engineDone;
+    },
+
+    // For the logs of the caller: a topic of the engine to a guarded callback.
+    subscribe(topic, fn) {
+      return engine.subscribe(topic, guarded(fn));
+    },
+
     async start() {
       validate();
 
