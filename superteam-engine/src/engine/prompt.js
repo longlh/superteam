@@ -35,6 +35,7 @@ function workerParts({ work, task, tasks, artifacts }) {
         .join("\n"),
     ),
     `To create an artifact, run: node ${ARTIFACT_SCRIPT} ${work.id} ${task.id} <content>`,
+    "Commit all your changes and artifacts on the current branch before you return.",
   ];
 }
 

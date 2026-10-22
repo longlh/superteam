@@ -87,6 +87,22 @@ test("a result completes the task, pushes its branch and removes its worktree", 
   assert.equal(existsSync(taskTree("a")), false);
 });
 
+test("what the worker left uncommitted is committed before the push", async () => {
+  await h.handlers["worker:ended"](
+    ended("a", {
+      summary: "s",
+    }),
+  );
+  const names = h.calls.map(([name]) => name);
+  const commit = h.calls[names.indexOf("commitAll")];
+  assert.deepEqual(commit.slice(0, 3), [
+    "commitAll",
+    taskTree("a"),
+    "Save the work of the task a",
+  ]);
+  assert.ok(names.indexOf("commitAll") < names.indexOf("push"));
+});
+
 test("the next ready task prompt holds the artifact the ended task committed", async () => {
   h.commitArtifact("tasks/w1/a", {
     id: "art1",

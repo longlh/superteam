@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { readJson } from "../../lib/storage/files.js";
 import { workFile, worktreeDir } from "../../lib/storage/paths.js";
 import { taskStatus } from "../../lib/storage/status.js";
@@ -64,7 +65,8 @@ export async function workerEnded(deps, event) {
   }
 }
 
-// Pushes the task branch, removes the worktree, then completes the task.
+// Commits what the worker left in its worktree (a safety net: it is told to
+// commit), pushes the task branch, removes the worktree, then completes it.
 async function completeTask({
   deps,
   workId,
@@ -78,6 +80,9 @@ async function completeTask({
     workId,
     taskId,
   });
+  if (existsSync(folder)) {
+    await deps.git.commitAll(folder, `Save the work of the task ${taskId}`);
+  }
   await deps.git.push(`tasks/${workId}/${taskId}`);
   await deps.git.removeWorktree(folder);
   const at = deps.now().toISOString();

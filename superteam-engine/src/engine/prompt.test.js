@@ -55,6 +55,10 @@ test("a worker prompt", () => {
     prompt,
     /To create an artifact, run: node \/.*artifact\.js w d <content>/,
   );
+  assert.match(
+    prompt,
+    /\nCommit all your changes and artifacts on the current branch before you return\.$/,
+  );
 });
 
 test("a task merger prompt", () => {
