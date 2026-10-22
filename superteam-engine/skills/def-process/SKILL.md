@@ -24,8 +24,13 @@ workflow file by hand.
    workspace root (the project folder, not a worktree):
 
    ```
-   echo '{"name":"feature","title":"Feature","steps":[{"name":"build","role":"developer"},{"name":"review","role":"reviewer","dependOn":["build"]}]}' | node ${CLAUDE_PLUGIN_ROOT}/src/scripts/seed.js workflow
+   node ${CLAUDE_PLUGIN_ROOT}/src/scripts/seed.js workflow <<'EOF'
+   {"name":"feature","title":"Feature","steps":[{"name":"build","role":"developer"},{"name":"review","role":"reviewer","dependOn":["build"]}]}
+   EOF
    ```
+
+   The quoted `'EOF'` passes the JSON as it is: the shell changes nothing in it,
+   even a `'` or a `$`.
 
    The script prints the path it wrote. If it refuses the workflow, it prints
    the reason: report it and fix the JSON.

@@ -23,8 +23,13 @@ file by hand.
    root (the project folder, not a worktree):
 
    ```
-   echo '{"name":"developer","description":"Writes and tests code","tools":["Read","Edit","Bash"],"model":"sonnet","instructions":"..."}' | node ${CLAUDE_PLUGIN_ROOT}/src/scripts/seed.js role
+   node ${CLAUDE_PLUGIN_ROOT}/src/scripts/seed.js role <<'EOF'
+   {"name":"developer","description":"Writes and tests code","tools":["Read","Edit","Bash"],"model":"sonnet","instructions":"..."}
+   EOF
    ```
+
+   The quoted `'EOF'` passes the JSON as it is: the shell changes nothing in it,
+   even a `'` or a `$`.
 
    The script prints the path it wrote. If it fails, report the error and fix
    the JSON.

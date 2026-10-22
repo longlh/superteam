@@ -57,14 +57,27 @@ async function createProject(t, { rootBranch = "main" } = {}) {
   const root = await mkdtemp(path.join(tmpdir(), "superteam-e2e-"));
   // The stacks are shut down first, in the reverse order of their start.
   const cleanups = [];
+  // Each one runs even when one before it fails, and the folder is always
+  // removed; the first failure is thrown at the end.
   t.after(async () => {
-    for (const cleanup of cleanups.reverse()) {
-      await cleanup();
+    const failures = [];
+    try {
+      for (const cleanup of cleanups.reverse()) {
+        try {
+          await cleanup();
+        } catch (error) {
+          failures.push(error);
+        }
+      }
+    } finally {
+      await rm(root, {
+        recursive: true,
+        force: true,
+      });
     }
-    await rm(root, {
-      recursive: true,
-      force: true,
-    });
+    if (failures.length > 0) {
+      throw failures[0];
+    }
   });
   const origin = path.join(root, "origin.git");
   const baseDir = path.join(root, "project");
