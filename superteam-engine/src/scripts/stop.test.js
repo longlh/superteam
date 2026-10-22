@@ -37,7 +37,8 @@ test("sends SIGTERM to a live pid and deletes the pid file", () =>
       const result = await stopSuperteam({
         baseDir: dir,
         kill: (pid, signal) => sent.push([pid, signal]),
-        isAlive: () => true,
+        isAlive: () => sent.length === 0,
+        sleep: async () => {},
       });
       assert.deepEqual(result, {
         stopped: true,
@@ -72,6 +73,97 @@ test("deletes a stale pid file without killing", () =>
       });
       assert.deepEqual(result, {
         stopped: false,
+      });
+      assert.equal(await exists(pidFile(dir)), false);
+    },
+    {
+      pid: 555,
+    },
+  ));
+
+for (const content of ["", "0", "-1", "abc"]) {
+  test(`never kills for the pid file ${JSON.stringify(content)}`, () =>
+    withDir(
+      async (dir) => {
+        const result = await stopSuperteam({
+          baseDir: dir,
+          kill: () => assert.fail("must not kill"),
+          isAlive: () => true,
+        });
+        assert.deepEqual(result, {
+          stopped: false,
+        });
+        assert.equal(await exists(pidFile(dir)), false);
+      },
+      {
+        pid: content,
+      },
+    ));
+}
+
+test("waits for the process to exit before deleting the pid file", () =>
+  withDir(
+    async (dir) => {
+      let polls = 0;
+      let slept = 0;
+      const result = await stopSuperteam({
+        baseDir: dir,
+        kill: () => {},
+        isAlive: () => ++polls < 4,
+        sleep: async () => {
+          slept++;
+          assert.equal(await exists(pidFile(dir)), true);
+        },
+      });
+      assert.deepEqual(result, {
+        stopped: true,
+      });
+      assert.equal(slept, 2);
+      assert.equal(await exists(pidFile(dir)), false);
+    },
+    {
+      pid: 555,
+    },
+  ));
+
+test("keeps the pid file when the process is still alive after the wait", () =>
+  withDir(
+    async (dir) => {
+      const result = await stopSuperteam({
+        baseDir: dir,
+        kill: () => {},
+        isAlive: () => true,
+        sleep: async () => {},
+        timeoutMs: 300,
+      });
+      assert.deepEqual(result, {
+        stopped: false,
+        reason: "still running",
+      });
+      assert.equal(await exists(pidFile(dir)), true);
+    },
+    {
+      pid: 555,
+    },
+  ));
+
+test("counts ESRCH from kill as stopped", () =>
+  withDir(
+    async (dir) => {
+      let dead = false;
+      const result = await stopSuperteam({
+        baseDir: dir,
+        kill: () => {
+          dead = true;
+          throw Object.assign(new Error("no such process"), {
+            code: "ESRCH",
+          });
+        },
+        isAlive: () => !dead,
+        sleep: async () => {},
+      });
+      assert.deepEqual(result, {
+        stopped: true,
       });
       assert.equal(await exists(pidFile(dir)), false);
     },

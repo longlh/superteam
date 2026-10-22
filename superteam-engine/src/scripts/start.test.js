@@ -127,3 +127,17 @@ test("replaces a stale pid file", () =>
     assert.equal(result.pid, 4321);
     assert.equal(await readFile(pidFile(dir), "utf8"), "4321");
   }));
+
+for (const content of ["", "0", "-1", "abc"]) {
+  test(`treats the pid file ${JSON.stringify(content)} as stale`, () =>
+    withDir(async (dir) => {
+      await writeFile(pidFile(dir), content);
+      const result = await startSuperteam({
+        baseDir: dir,
+        spawn: fakeSpawn([]),
+        isAlive: () => assert.fail("must not probe"),
+      });
+      assert.equal(result.pid, 4321);
+      assert.equal(await readFile(pidFile(dir), "utf8"), "4321");
+    }));
+}

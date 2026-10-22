@@ -1,44 +1,48 @@
 import fs from "node:fs";
-import { readFile, rm } from "node:fs/promises";
-import path from "node:path";
+import { rm } from "node:fs/promises";
+import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
+import { pidFilePath, processIsAlive, readPid } from "./pid-file.js";
 
-function processIsAlive(pid) {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return error.code === "EPERM";
-  }
-}
+const STEP_MS = 100;
 
 export async function stopSuperteam({
   baseDir,
   kill = process.kill,
   isAlive = processIsAlive,
+  sleep = delay,
+  timeoutMs = 10_000,
 }) {
-  const pidFile = path.join(baseDir, ".superteam/.r/superteam.pid");
-  let text;
+  const pid = await readPid(baseDir);
+  const removePidFile = () =>
+    rm(pidFilePath(baseDir), {
+      force: true,
+    });
+  if (pid === null || !isAlive(pid)) {
+    await removePidFile();
+    return {
+      stopped: false,
+    };
+  }
   try {
-    text = await readFile(pidFile, "utf8");
+    kill(pid, "SIGTERM");
   } catch (error) {
-    if (error.code === "ENOENT") {
+    if (error.code !== "ESRCH") {
+      throw error;
+    }
+  }
+  for (let waited = 0; isAlive(pid); waited += STEP_MS) {
+    if (waited >= timeoutMs) {
       return {
         stopped: false,
+        reason: "still running",
       };
     }
-    throw error;
+    await sleep(STEP_MS);
   }
-  const pid = Number(text.trim());
-  const live = Number.isInteger(pid) && isAlive(pid);
-  if (live) {
-    kill(pid, "SIGTERM");
-  }
-  await rm(pidFile, {
-    force: true,
-  });
+  await removePidFile();
   return {
-    stopped: live,
+    stopped: true,
   };
 }
 
@@ -47,10 +51,16 @@ if (
   fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)
 ) {
   try {
-    const { stopped } = await stopSuperteam({
+    const { stopped, reason } = await stopSuperteam({
       baseDir: process.cwd(),
     });
-    console.log(stopped ? "superteam stopped" : "superteam was not running");
+    console.log(
+      stopped
+        ? "superteam stopped"
+        : reason
+          ? `superteam was not stopped: ${reason}`
+          : "superteam was not running",
+    );
   } catch (error) {
     console.error(error.message);
     process.exit(1);

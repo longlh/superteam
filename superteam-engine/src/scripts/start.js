@@ -4,24 +4,16 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseEnv } from "node:util";
+import { pidFilePath, processIsAlive, readPid } from "./pid-file.js";
 
 const main = fileURLToPath(new URL("../orchestrator/main.js", import.meta.url));
 
-function processIsAlive(pid) {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return error.code === "EPERM";
-  }
-}
-
-async function readOrNull(file) {
+async function readEnvFile(file) {
   try {
     return await readFile(file, "utf8");
   } catch (error) {
     if (error.code === "ENOENT") {
-      return null;
+      return "";
     }
     throw error;
   }
@@ -33,19 +25,15 @@ export async function startSuperteam({
   isAlive = processIsAlive,
 }) {
   const env = parseEnv(
-    (await readOrNull(path.join(baseDir, ".superteam/.env"))) ?? "",
+    await readEnvFile(path.join(baseDir, ".superteam/.env")),
   );
   if (!env.SUPERTEAM_PORT) {
     throw new Error("SUPERTEAM_PORT is missing in .superteam/.env");
   }
   const runDir = path.join(baseDir, ".superteam/.r");
-  const pidFile = path.join(runDir, "superteam.pid");
-  const text = await readOrNull(pidFile);
-  if (text !== null) {
-    const pid = Number(text.trim());
-    if (Number.isInteger(pid) && isAlive(pid)) {
-      throw new Error(`superteam is already running (pid ${pid})`);
-    }
+  const existing = await readPid(baseDir);
+  if (existing !== null && isAlive(existing)) {
+    throw new Error(`superteam is already running (pid ${existing})`);
   }
   await mkdir(runDir, {
     recursive: true,
@@ -58,7 +46,7 @@ export async function startSuperteam({
       stdio: ["ignore", log, log],
     });
     child.unref();
-    await writeFile(pidFile, String(child.pid));
+    await writeFile(pidFilePath(baseDir), String(child.pid));
     return {
       pid: child.pid,
     };
