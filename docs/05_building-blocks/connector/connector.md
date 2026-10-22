@@ -7,7 +7,7 @@ has no flow of its own.
 
 - `seed-skill.md`: creates the config files of a project.
 - `operation-skill.md`: the bridge between a prompt and the MCP tools.
-- `mcp-server.md`: an interface through which actors call the engine.
+- `mcp-server.md`: an interface through which actors call the system.
 
 ```plantuml
 @startuml
@@ -15,7 +15,7 @@ has no flow of its own.
 
 Person(person, "Person or AI agent", "")
 SystemDb_Ext(config, "Config files", "Workflows, roles of Claude, .gitignore")
-System_Ext(api, "HTTP API of the engine", "")
+System_Ext(api, "HTTP API of the orchestrator", "")
 
 Container_Boundary(connector, "Connector") {
   Component(seed, "Seed Skill", "", "Creates the config files")

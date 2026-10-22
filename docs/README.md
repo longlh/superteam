@@ -34,7 +34,7 @@ The rules of the glossary:
   are named in the building blocks (`the-agent-manager.md`,
   `the-engine-loop.md`, `the-seed-skill.md`) and the orchestrator
   (`the-orchestrator.md`). A concept is not a proper name, such as
-  `claude-process.md`, `handler.md` or `job-runner.md`.
+  `claude-process.md`, `handler.md` or `job.md`.
 - A reference to a term holds the full path, such as
   `12_glossary/action-flow.md`, because a term can have the name of a document,
   such as `action-flow.md`.
@@ -43,11 +43,11 @@ The rules of the glossary:
 
 Each level zooms into one part of the level above it, and answers one question.
 
-| Level                 | Documents                               | Question                                                                                              | Does not hold                      |
-| --------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| 1. Context            | `03_context/context.md`                 | Who uses the system, and what outside the system does it depend on                                    | The parts inside the system        |
-| 2. Container          | `05_building-blocks/building-blocks.md` | What runs or keeps data (a process, a store), who talks to whom                                       | The inside of a container          |
-| 3. Component, 4. Code | See the tree in "Component and Code"    | What are the parts inside one container, what is the interface of each, and how does each work inside | The inside of the other components |
+| Level                 | Documents                                                                     | Question                                                                                              | Does not hold                      |
+| --------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| 1. Context            | `03_context/context.md`                                                       | Who uses the system, and what outside the system does it depend on                                    | The parts inside the system        |
+| 2. Container          | `05_building-blocks/building-blocks.md`, `05_building-blocks/orchestrator.md` | What runs or keeps data (a process, a store), who talks to whom                                       | The inside of a container          |
+| 3. Component, 4. Code | See the tree in "Component and Code"                                          | What are the parts inside one container, what is the interface of each, and how does each work inside | The inside of the other components |
 
 Two rules:
 
@@ -58,6 +58,7 @@ Two rules:
 ## Component and Code
 
 Each container has one document, and each of its components has one document.
+The orchestrator has one document too, `05_building-blocks/orchestrator.md`.
 Each document holds both levels:
 
 - Component: its interface, what it provides to the outside, and, for a
@@ -81,9 +82,9 @@ docs/
 │   └── solution-strategy.md     The principles of the design
 ├── 05_building-blocks/
 │   ├── building-blocks.md       The containers
+│   ├── orchestrator.md          Creates and connects the containers, and holds the HTTP API
 │   ├── engine/
 │   │   ├── engine.md            Manages the works and the worktrees
-│   │   ├── http-api.md          The only door to the engine, at the level of the work
 │   │   ├── pubsub.md            How the engine publishes its events
 │   │   ├── engineloop.md        Gives the events of the engine to the handlers, one at a time
 │   │   ├── handlers.md          Do the next step of a work, one for each type of event
@@ -92,7 +93,7 @@ docs/
 │   │   ├── connector.md         Lets people use the system through their AI tools
 │   │   ├── seed-skill.md        Only creates the config files: the workflows and the roles of Claude
 │   │   ├── operation-skill.md   The bridge between a prompt and the MCP tools
-│   │   └── mcp-server.md        An interface through which actors call the engine
+│   │   └── mcp-server.md        An interface through which actors call the system
 │   ├── agents/
 │   │   ├── agents.md            Manages the AI agents that do the work in place of people
 │   │   ├── agent-manager.md     Spawns, watches and kills the `claude` processes

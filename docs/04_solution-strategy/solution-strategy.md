@@ -29,3 +29,13 @@ The principles that the design follows.
 6. **A job can be done by a person or by an AI.** The two are interchangeable:
    one can take over from the other without interrupting the work.
 7. **A worktree can read the runtime data of the root branch.**
+8. **The containers do not call each other.** Each container works on its own,
+   and has a public interface: functions, a callback, or pub/sub. The engine is
+   active: it runs its loop, so it tells its state to the outside with pub/sub.
+   The other containers are services: they act only when they are called. The
+   orchestrator is the only consumer of the containers, and it holds no logic:
+   it decides whom to call, when, and with which input. When a container needs
+   another one, it gets a callback that runs in the context of the orchestrator,
+   and the logic stays in the container.
+9. **The system has one door.** The HTTP API is in the orchestrator, and every
+   request from the outside goes through it.

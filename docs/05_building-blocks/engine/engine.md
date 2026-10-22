@@ -8,35 +8,41 @@ the output of the work. It does four things:
 - It publishes the events of the works and the tasks, to whoever subscribes. It
   does not know who they are.
 - It reports the results, and takes the requests to approve or to reject a work.
+- It asks for the jobs to run, and takes their results.
 
 ## Component
 
-The engine provides two interfaces, and needs one. Everything else is inside:
+The engine provides two interfaces. Everything else is inside:
 
-- `http-api.md`: the only door for the requests, at the level of the work.
-- `pubsub.md`: how the engine publishes its events.
-- The job runner, which the engine needs (see "Dependencies").
+- Its functions: the requests, at the level of the work, and the end of a job
+  (see "Functions").
+- `pubsub.md`: how the engine tells its state to the outside, such as its events
+  and the jobs to run.
 
-The engine does not know who sends the requests, and it does not know who
-receives its events.
+The engine does not know who calls its functions, and it does not know who
+receives its notifications. It does not call another container.
 
-### Dependencies
+### Functions
 
-The engine does not run the jobs itself, and it does not know who does. It needs
-a **job runner**. The engine defines it as an interface, and it is given to the
-engine when the engine is created. The engine is the side that starts a job and
-waits for its result, so the result comes back by a callback: the other side
-does not need an interface to call the engine.
+| Function                     | What it does                                                                                                                                           |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `assign(body)`               | Checks the body and that the workflow exists, enqueues `work:assign`, and returns the `id` of the work and the `eventId`.                              |
+| `decide(id, decision)`       | Checks that the work is `PROPOSED`, enqueues `work:decide`, and returns the `eventId`.                                                                 |
+| `archive(id)`                | Checks that the work is `FAILED` or `REJECTED`, enqueues `work:archive`, and returns the `eventId`.                                                    |
+| `getWork(id)`                | Returns the state of a work, from the runtime state and from git, without the loop.                                                                    |
+| `listWorks()`                | Returns the list of the works, without the loop.                                                                                                       |
+| `jobEnded(result)`           | Enqueues `worker:ended` or `merger:ended`, with the result of the job.                                                                                 |
+| `reconcile(jobs)`            | At the start, takes the jobs that were killed: it fails their tasks, and publishes `job:run` again for a job that it waits for and that was never run. |
+| `subscribe(topic, callback)` | Calls the callback for each notification of the topic (see `pubsub.md`), and returns a function that unsubscribes.                                     |
+| `start()`, `shutdown()`      | Starts the engine loop, and stops it gracefully (see "Life cycle" in `engineloop.md`).                                                                 |
 
-| Function            | What the engine needs from it                                                                                                                            |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `run(job, onEnded)` | Starts the job, in the worktree that the engine gives, and returns at once. When the job ends, it calls `onEnded(result)`. The engine enqueues an event. |
-| `stopWork(workId)`  | Stops all the jobs of a work at once, such as when the work fails.                                                                                       |
-| `stopAll()`         | Stops all the jobs, at the shutdown.                                                                                                                     |
-| `recover()`         | At the start, stops the jobs that a crash left, and returns them. The engine fails their tasks.                                                          |
+A function that refuses a request says why: the body is not valid, the work or
+the workflow does not exist, the request does not fit the state of the work, or
+the engine is starting.
 
-A job has a role (the worker of a task, or the merger), the worktree where it
-runs, and what it has to do. The names and the fields are a proposal.
+A job has an id, a role (the worker of a task, or the merger), the worktree
+where it runs, and what it has to do. The names of the functions, and the fields
+of a job and of its result, are a proposal.
 
 ### Parts
 
@@ -44,29 +50,27 @@ runs, and what it has to do. The names and the fields are a proposal.
 @startuml
 !include <C4/C4_Component>
 
-System_Ext(client, "Client", "Sends the requests")
-System_Ext(subscribers, "Subscribers", "Receive the events")
-System_Ext(runner, "Job runner", "Runs the jobs")
+System_Ext(caller, "Caller", "Calls the functions")
+System_Ext(subscribers, "Subscribers", "Receive the events and the jobs")
 SystemDb_Ext(git, "Git", "Worktrees, branches, pull requests")
 
 Container_Boundary(engine, "Engine") {
-  Component(api, "HTTP API", "", "The work level")
+  Component(functions, "Functions", "", "The requests, and the end of a job")
   Component(loop, "Engine loop", "", "One event at a time")
   Component(handlers, "Handlers", "", "One for each type of event")
-  Component(pubsub, "Pub/Sub", "", "Publishes the events")
+  Component(pubsub, "Pub/Sub", "", "Publishes the events and the jobs")
   ComponentDb(runtime, "Runtime files", "", "Following the data contract")
 }
 
-Rel(client, api, "Request")
-Rel(api, loop, "Enqueue")
-Rel(api, runtime, "Query")
+Rel(caller, functions, "Calls")
+Rel(functions, loop, "Enqueue")
+Rel(functions, runtime, "Query")
 Rel(loop, handlers, "Gives the event")
 Rel(loop, pubsub, "Notifies", "async")
-Rel(pubsub, subscribers, "Events", "async")
+Rel(handlers, pubsub, "Jobs to run, to stop", "async")
+Rel(pubsub, subscribers, "Events, jobs", "async")
 Rel(handlers, runtime, "Read, write")
 Rel(handlers, git, "Worktree, merge, pull request")
-Rel(handlers, runner, "Run, stop")
-Rel(runner, loop, "onEnded: enqueue", "async")
 @enduml
 ```
 
@@ -82,6 +86,6 @@ The documents of its inner components, and of the data contract that it follows:
 - `git-adapter.md`: how the engine reaches git and the forge, and the worktrees.
 - `storage.md`: the data contract: the entities, and where the data is kept.
 
-The engine is one process, in the root workspace. There is only one engine
-instance for a workspace. It has no UI and runs on its own. The git worktrees
-created for the jobs have no engine.
+The engine runs in the root workspace. There is only one engine instance for a
+workspace. It has no UI and runs on its own. The git worktrees created for the
+jobs have no engine.

@@ -18,7 +18,7 @@ and each one points to the document where its design is.
 
 1. **Assign a work.** A client gives a work with a workflow, a title, and
    optionally a description and a DOD. The system answers at once with the `id`
-   of the work (see `http-api.md`).
+   of the work (see `orchestrator.md`).
 2. **Run the work by itself.** The system creates the tasks of the work from the
    steps of its workflow, with no other request. A task starts when it has its
    inputs (see `engine.md` and `storage.md`).
@@ -35,7 +35,7 @@ and each one points to the document where its design is.
 6. **Follow a work.** The client gets the state of a work, and the list of the
    works. The status of a work is `OPEN`, `IN_PROGRESS`, `DONE` or `FAILED`, and
    its approval status is `DRAFT`, `PROPOSED`, `APPROVED` or `REJECTED` (see
-   `http-api.md` and `storage.md`).
+   `orchestrator.md` and `storage.md`).
 7. **Work across devices.** The results and the history of the work are kept in
    git, so that people can work across devices. The unit of the history is the
    work (see `solution-strategy.md`).
@@ -50,8 +50,8 @@ and each one points to the document where its design is.
     time, 12 hours by default, is killed. The cost of one run can be limited
     (see `agent-manager.md` and `claude-process.md`).
 12. **One engine for a workspace.** The engine runs on its own, with no UI, and
-    only one engine runs for a workspace. Its API listens on localhost only (see
-    `engine.md` and `http-api.md`).
+    only one engine runs for a workspace. The HTTP API listens on localhost only
+    (see `engine.md` and `orchestrator.md`).
 13. **Archive a work.** A work that failed or was rejected stays listed until
     the client archives it. Archiving deletes its branch, and the pull request
-    of a rejected work stays closed on the forge (see `http-api.md`).
+    of a rejected work stays closed on the forge (see `orchestrator.md`).

@@ -1,6 +1,6 @@
 # ADR 7. A subscription names the Notifier
 
-- Status: Accepted
+- Status: Superseded by ADR 12
 
 ## Context
 

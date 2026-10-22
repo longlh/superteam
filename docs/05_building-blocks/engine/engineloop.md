@@ -93,7 +93,7 @@ const loop = createEngineLoop({ baseDir, maxAttempts, pollIntervalMs });
 
 loop.handle(type, handler); // registers the handler of a type
 loop.enqueue(payload); // Promise<event>: creates the event and puts it in the queue
-loop.subscribe(name, handler); // returns a function that unsubscribes
+loop.subscribe(name, subscriber); // returns a function that unsubscribes
 await loop.start(); // runs the start stage, then the loop, and resolves after shutdown
 loop.shutdown(); // sets isShuttingDown to true
 ```

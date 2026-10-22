@@ -32,6 +32,6 @@ of the work, and the runtime storage is not shared across devices.
 - A failed task is recorded as `completed` with an `error`, and a failed work
   has an `error`, so both are `FAILED` (see `storage.md`).
 - `GET /works` lists a failed or rejected work from its branch on the remote, on
-  every machine (see `http-api.md`).
+  every machine (see `orchestrator.md`).
 - The branches of the failed and rejected works pile up on the remote, until a
-  client archives them (see "Archive a work" in `http-api.md`).
+  client archives them (see "Archive a work" in `orchestrator.md`).

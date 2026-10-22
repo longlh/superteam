@@ -13,12 +13,12 @@ The documents of its components: `agent-manager.md` for the processes, and
   gives it the jobs.
 - Its functions:
 
-  | Function            | What it does                                                                                                     |
-  | ------------------- | ---------------------------------------------------------------------------------------------------------------- |
-  | `run(job, onEnded)` | Spawns the agent of the job in its worktree, and returns at once. When the job ends, it calls `onEnded(result)`. |
-  | `stopWork(workId)`  | Stops all the jobs of a work at once, to save the cost.                                                          |
-  | `stopAll()`         | Stops all the jobs, at a shutdown.                                                                               |
-  | `recover()`         | At the start, kills the processes that a crash left, and returns their jobs.                                     |
+  | Function            | What it does                                                                                                                                                                  |
+  | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `run(job, onEnded)` | Spawns the agent of the job in its worktree, and returns at once. When the job ends, it calls `onEnded(result)`. A job that already runs, with the same id, is not run again. |
+  | `stopWork(workId)`  | Stops all the jobs of a work at once, to save the cost.                                                                                                                       |
+  | `stopAll()`         | Stops all the jobs, at a shutdown.                                                                                                                                            |
+  | `recover()`         | At the start, kills the processes that a crash left, and returns their jobs.                                                                                                  |
 
 - The result of a job is the result of its agent, or the error that ended it:
   the process fails, it is killed because it runs too long, or its result does

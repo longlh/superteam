@@ -1,6 +1,6 @@
 # ADR 5. The engine defines the job runner as an interface
 
-- Status: Accepted
+- Status: Superseded by ADR 12
 
 ## Context
 

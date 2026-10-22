@@ -25,7 +25,7 @@ do not pile up as garbage. The branch of the work is deleted when the work is
 approved, because its result is then in the root branch. When the work fails or
 is rejected, the branch of the work is pushed and kept on the remote: it is the
 only trace of the work. It is deleted when the work is archived (see "Archive a
-work" in `http-api.md`).
+work" in `orchestrator.md`).
 
 ## Code
 

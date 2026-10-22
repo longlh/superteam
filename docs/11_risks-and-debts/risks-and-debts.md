@@ -35,52 +35,59 @@ These are not decided yet.
 ### MCP server (`mcp-server.md`)
 
 1. **The names and the inputs of the tools.** They follow the requests of the
-   API, whose paths and bodies are a proposal (see `http-api.md`).
+   API, whose paths and bodies are a proposal (see "HTTP API" in
+   `orchestrator.md`).
 
 ### Operation Skill (`operation-skill.md`)
 
 1. **The level of the API.** `query-data` works by entity, but the HTTP API
-   works only at the level of the work (see `http-api.md`). The skills must be
-   made to fit it: assign a work, decide on it, and get its state.
-2. **`finish`.** It supposes that a person does a task, and for now the engine
-   runs every task with its job runner, which runs AI agents (see `engine.md`
-   and `agents.md`). The decision on a work is already a request of the API.
+   works only at the level of the work (see "HTTP API" in `orchestrator.md`).
+   The skills must be made to fit it: assign a work, decide on it, and get its
+   state.
+2. **`finish`.** It supposes that a person does a task, and for now every job
+   that the engine asks for is run by the Agents, which run AI agents (see
+   `orchestrator.md` and `agents.md`). The decision on a work is already a
+   request of the API.
 
 ### Engine (`engine.md`)
 
 1. **A ready signal.** `start()` of the engine loop resolves only after the
    shutdown, and `enqueue()` is rejected before the start stage is done. The
-   engine needs a way to know that the start stage is done, to open the API at
-   the right time.
-2. **The job runner.** The names of its functions, and the fields of a job and
-   of its result, are a proposal. A `merger:ended` event has to say which job of
-   the merger has ended.
+   engine needs to give a way to know that the start stage is done, so that the
+   orchestrator opens the API at the right time.
+2. **The jobs.** The names of the functions of the engine, and the fields of a
+   job and of its result, are a proposal. A `merger:ended` event has to say
+   which job of the merger has ended.
 
-### HTTP API (`http-api.md`)
+### HTTP API (`orchestrator.md`)
 
 1. **The paths and the bodies.** Everything above is a proposal.
 2. **The id of a work.** The API answers with the `id` before the work exists,
-   so the API creates it. Its format is open (a counter, a random id, or a
-   slug), and the path of the work in the storage depends on it.
+   so `assign` of the engine creates it. Its format is open (a counter, a random
+   id, or a slug), and the path of the work in the storage depends on it.
 3. **The tasks.** A query that shows the progress of the tasks of a work, as a
    read-only view. For now the client sees only the work.
 4. **A request that is sent twice.** Assigning twice creates two works. A key
    that the client chooses could make the request safe to send again.
 
-### Pub/Sub (`pubsub.md`)
+### Orchestrator (`orchestrator.md`)
 
 1. **Where the subscriptions are kept.** `storage.md` has no entity for a
    subscription.
-2. **The topic.** In the draft schema a topic is `{entity}:{operation}`, such as
+2. **The name `addon`.** It comes from the draft schema, where the receiver was
+   an addon of the plugin. Here it names the container that the orchestrator
+   calls, such as the notifier.
+
+### Pub/Sub (`pubsub.md`)
+
+1. **The topic.** In the draft schema a topic is `{entity}:{operation}`, such as
    `_task:update`. The events of the engine have a `type` such as `work:assign`.
    What a `topic` matches is not decided.
-3. **The name `addon`.** It comes from the draft schema, where the receiver was
-   an addon of the plugin. Here the receiver is a part, such as a notifier.
 
 ### Action flow (`action-flow.md`)
 
 1. **The topic.** What a topic of a subscription matches is not decided (see
-   `pubsub.md`), so the step of the notifier that picks its topics is open.
+   `pubsub.md`), so the step where a subscription matches a topic is open.
 
 ### Data flow (`data-flow.md`)
 
