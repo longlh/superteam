@@ -5,7 +5,6 @@ import path from "node:path";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
-const ROOT_BRANCH = "main";
 
 function realRun(command, args, { cwd }) {
   return execFileAsync(command, args, {
@@ -29,8 +28,9 @@ function failure(args, stderr) {
 
 // A `run` for `createGitAdapter`: `git` is the real command, and `gh` keeps
 // the pull requests in memory. A merge is a real squash merge of the branch
-// into the root branch of `origin`.
-export function createFakeGh({ baseDir }) {
+// into the base of the pull request on `origin`: its `--base`, else the
+// default branch of the repository, as on GitHub.
+export function createFakeGh({ baseDir, defaultBranch = "main" }) {
   const pullRequests = new Map();
   let count = 0;
 
@@ -42,7 +42,7 @@ export function createFakeGh({ baseDir }) {
     return pr;
   }
 
-  async function squashMerge(branch, title) {
+  async function squashMerge(branch, base, title) {
     const { stdout } = await realRun("git", ["remote", "get-url", "origin"], {
       cwd: baseDir,
     });
@@ -65,10 +65,10 @@ export function createFakeGh({ baseDir }) {
       );
     try {
       await git(["clone", "--quiet", stdout.trim(), "."]);
-      await git(["checkout", ROOT_BRANCH]);
+      await git(["checkout", base]);
       await git(["merge", "--squash", `origin/${branch}`]);
       await git(["commit", "-m", title]);
-      await git(["push", "origin", ROOT_BRANCH]);
+      await git(["push", "origin", base]);
     } finally {
       await rm(clone, {
         recursive: true,
@@ -84,13 +84,15 @@ export function createFakeGh({ baseDir }) {
     }
     switch (action) {
       case "create": {
-        const head = args[args.indexOf("--head") + 1];
-        const title = args[args.indexOf("--title") + 1];
+        const option = (name) =>
+          args.includes(name) ? args[args.indexOf(name) + 1] : undefined;
+        const head = option("--head");
         count += 1;
         const url = `https://github.com/fake/project/pull/${count}`;
         pullRequests.set(head, {
           url,
-          title,
+          title: option("--title"),
+          base: option("--base") ?? defaultBranch,
           number: count,
           state: "OPEN",
         });
@@ -114,7 +116,7 @@ export function createFakeGh({ baseDir }) {
         if (pr.state !== "OPEN") {
           throw failure(args, `pull request #${pr.number} is not open\n`);
         }
-        await squashMerge(branch, `${pr.title} (#${pr.number})`);
+        await squashMerge(branch, pr.base, `${pr.title} (#${pr.number})`);
         pr.state = "MERGED";
         return {
           stdout: "",

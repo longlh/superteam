@@ -295,9 +295,10 @@ function fakeRun(answer) {
 }
 
 describe("gh parts (fake run)", () => {
-  test("openPullRequest runs gh pr create and returns the url", async () => {
-    const { calls, run } = fakeRun(() => ({
-      stdout: "https://github.com/o/r/pull/1\n",
+  test("openPullRequest runs gh pr create on the root branch and returns the url", async () => {
+    const { calls, run } = fakeRun((command) => ({
+      stdout:
+        command === "git" ? "develop\n" : "https://github.com/o/r/pull/1\n",
     }));
     const adapter = createGitAdapter({
       baseDir: "/base",
@@ -311,10 +312,17 @@ describe("gh parts (fake run)", () => {
     assert.equal(url, "https://github.com/o/r/pull/1");
     assert.deepEqual(calls, [
       {
+        command: "git",
+        args: ["branch", "--show-current"],
+        cwd: "/base",
+      },
+      {
         command: "gh",
         args: [
           "pr",
           "create",
+          "--base",
+          "develop",
           "--head",
           "works/a",
           "--title",

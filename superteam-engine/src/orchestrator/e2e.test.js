@@ -50,8 +50,10 @@ const git = (cwd, args) =>
     cwd,
   });
 
-// A root workspace as the Seed Skill leaves it, with a bare `origin`.
-async function createProject(t) {
+// A root workspace as the Seed Skill leaves it, with a bare `origin` whose
+// default branch is `main`. With another `rootBranch`, the root workspace is on
+// that branch, pushed to `origin` too.
+async function createProject(t, { rootBranch = "main" } = {}) {
   const root = await mkdtemp(path.join(tmpdir(), "superteam-e2e-"));
   // The stacks are shut down first, in the reverse order of their start.
   const cleanups = [];
@@ -88,6 +90,10 @@ async function createProject(t) {
   await git(baseDir, ["commit", "-m", "Seed superteam"]);
   await git(baseDir, ["remote", "add", "origin", origin]);
   await git(baseDir, ["push", "--set-upstream", "origin", "main"]);
+  if (rootBranch !== "main") {
+    await git(baseDir, ["checkout", "-q", "-b", rootBranch]);
+    await git(baseDir, ["push", "--set-upstream", "origin", rootBranch]);
+  }
   return {
     baseDir,
     origin,
@@ -288,6 +294,38 @@ test("a work is assigned, run, proposed and approved", async (t) => {
   }
   assert.ok(await listed(stack, "first"), "the work first is listed");
   assert.deepEqual(await remoteBranches(origin), ["main"]);
+});
+
+test("an approved work lands on the root branch, not on the default branch", async (t) => {
+  const project = await createProject(t, {
+    rootBranch: "develop",
+  });
+  const { baseDir, origin } = project;
+  const stack = await startStack(project);
+
+  await assign(stack, "on-develop");
+  await waitForWork(
+    stack,
+    "on-develop",
+    (work) => work.approvalStatus === "PROPOSED",
+    "the work on-develop is PROPOSED",
+  );
+  const decided = await stack.request("POST", "/works/on-develop/decision", {
+    decision: "approve",
+  });
+  assert.equal(decided.status, 202);
+  await waitFor(
+    async () => (await remoteBranches(origin)).join() === "develop,main",
+    "the branches of on-develop are deleted from origin",
+  );
+  await waitFor(
+    () => existsSync(workFile(baseDir, "on-develop")),
+    "the work file is pulled in the root workspace",
+  );
+  const file = ".superteam/.p/works/on-develop.json";
+  const { stdout } = await git(origin, ["show", `develop:${file}`]);
+  assert.equal(JSON.parse(stdout).id, "on-develop");
+  await assert.rejects(git(origin, ["show", `main:${file}`]));
 });
 
 test("a rejected work keeps its branch until it is archived", async (t) => {

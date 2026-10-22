@@ -57,11 +57,13 @@ export function createGitAdapter({ baseDir, run = defaultRun }) {
   const hasLocal = (branch) => refExists(`refs/heads/${branch}`);
   const hasRemote = (branch) => refExists(`refs/remotes/origin/${branch}`);
 
+  async function rootBranch() {
+    const { stdout } = await git(["branch", "--show-current"]);
+    return stdout.trim();
+  }
+
   return {
-    async rootBranch() {
-      const { stdout } = await git(["branch", "--show-current"]);
-      return stdout.trim();
-    },
+    rootBranch,
 
     fetch: oneAtATime(async () => {
       await git(["fetch", "--prune", "origin"]);
@@ -196,10 +198,15 @@ export function createGitAdapter({ baseDir, run = defaultRun }) {
       };
     },
 
+    // On the root branch: without `--base`, gh would target the default
+    // branch of the repository.
     async openPullRequest({ branch, title, body }) {
+      const base = await rootBranch();
       const { stdout } = await gh([
         "pr",
         "create",
+        "--base",
+        base,
         "--head",
         branch,
         "--title",
