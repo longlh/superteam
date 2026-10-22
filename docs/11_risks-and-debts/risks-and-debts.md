@@ -5,17 +5,15 @@ Each item comes from the document of the part that it is about.
 
 ## Known issues
 
-### Engine (`engine.md`)
-
-- One event is processed at a time, for all the works. A handler that works
-  slowly makes all the works wait.
-
 ### Engine loop (`engineloop.md`)
 
 The loop is made for an internal tool. These limits are known and accepted:
 
-- One event is processed at a time, for all the works. While a handler works,
-  the others wait. The queue is also blocked while the loop waits for a retry.
+- One event is processed at a time, for all the works. A handler does not wait
+  for a long job, but its own steps, such as a git command or a request to the
+  forge, are done one event at a time. A slow step, such as a push or a pull
+  request, makes the other works wait for it. The queue is also blocked while
+  the loop waits for a retry.
 - `order` has a maximum of `999999`. Creating an event above it throws: it is
   not supported.
 - An error of the file system inside the loop is not caught (fail fast): the

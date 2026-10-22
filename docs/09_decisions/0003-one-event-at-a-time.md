@@ -18,6 +18,6 @@ a time, in order, for all the works (see `engineloop.md`).
   state at the same time.
 - A handler does not wait for a long job, and it can be done again, because the
   queue gives an event at least once (see `handlers.md`).
-- A handler that works slowly makes all the works wait. This is a known issue
-  that is accepted, because the loop is made for an internal tool (see
-  `risks-and-debts.md`).
+- A slow step of a handler, such as a push or a pull request, makes the other
+  works wait for it. This is a known issue that is accepted, because the loop is
+  made for an internal tool (see `risks-and-debts.md`).
