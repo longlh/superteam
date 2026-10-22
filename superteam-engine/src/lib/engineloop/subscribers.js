@@ -1,14 +1,14 @@
 // The subscribers of the notifications of the loop.
 export function createSubscribers() {
-  // Each entry is { name, handler }, kept in the order of the subscription.
+  // Each entry is { name, subscriber }, kept in the order of the subscription.
   let entries = [];
 
   return {
-    // Returns a function that unsubscribes the handler.
-    subscribe(name, handler) {
+    // Returns a function that unsubscribes the subscriber.
+    subscribe(name, subscriber) {
       const entry = {
         name,
-        handler,
+        subscriber,
       };
       entries.push(entry);
       return () => {
@@ -16,15 +16,15 @@ export function createSubscribers() {
       };
     },
 
-    // Calls the handlers in order and does not wait for them. The try and catch
-    // only keeps a failing handler from stopping the loop or the other
-    // handlers: handling its error is not the job of the loop.
+    // Calls the subscribers in order and does not wait for them. The try and
+    // catch only keeps a failing subscriber from stopping the loop or the other
+    // subscribers: handling its error is not the job of the loop.
     emit(name, data) {
       for (const entry of entries.filter((e) => e.name === name)) {
         try {
-          Promise.resolve(entry.handler(data)).catch(() => {});
+          Promise.resolve(entry.subscriber(data)).catch(() => {});
         } catch {
-          // A synchronous error of a handler is isolated here.
+          // A synchronous error of a subscriber is isolated here.
         }
       }
     },
