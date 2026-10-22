@@ -4,7 +4,12 @@ import path from "node:path";
 import { readJson, writeJson } from "../lib/storage/files.js";
 import { processCommand } from "../lib/process-command.js";
 import { agentsDir } from "../lib/storage/paths.js";
-import { buildCommand, CLAUDE, parseResult } from "./claude-process.js";
+import {
+  buildCommand,
+  CLAUDE,
+  parseResult,
+  STDERR_TAIL,
+} from "./claude-process.js";
 
 function isAlive(pid) {
   try {
@@ -114,8 +119,12 @@ export function createAgentManager({
     child.stdout?.on("data", (chunk) => {
       stdout += chunk;
     });
+    // Only the end of the stderr is kept, for the error of the job.
+    let stderr = "";
     child.stderr?.setEncoding("utf8");
-    child.stderr?.resume();
+    child.stderr?.on("data", (chunk) => {
+      stderr = (stderr + chunk).slice(-STDERR_TAIL);
+    });
 
     const pidWritten =
       child.pid === undefined
@@ -182,7 +191,7 @@ export function createAgentManager({
         });
         return;
       }
-      settle(parseResult(stdout, code, signal));
+      settle(parseResult(stdout, code, signal, stderr));
     });
     if (entry.stopped) {
       killGroup(child.pid);

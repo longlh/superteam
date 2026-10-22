@@ -69,6 +69,33 @@ describe("parseResult", () => {
     assert.match(parseResult(ok, 3).error, /exit code 3/);
   });
 
+  it("keeps the last 2000 characters of the stderr in the error of an exit or a signal", () => {
+    const stderr = `${"x".repeat(3000)}the real reason\n`;
+    for (const error of [
+      parseResult(ok, 3, null, stderr).error,
+      parseResult("", null, "SIGTERM", stderr).error,
+    ]) {
+      assert.match(error, /the real reason$/);
+      assert.ok(error.length < 2100, String(error.length));
+    }
+    assert.equal(
+      parseResult(ok, 3, null, "  \n").error,
+      "the agent exited with exit code 3",
+    );
+  });
+
+  it("keeps the result text of an is_error output", () => {
+    const out = JSON.stringify({
+      is_error: true,
+      subtype: "success",
+      result: "Credit balance is too low",
+    });
+    assert.equal(
+      parseResult(out, 0).error,
+      "the agent reported an error (success): Credit balance is too low",
+    );
+  });
+
   it("errors on text that is not JSON", () => {
     assert.match(parseResult("nope", 0).error, /not JSON/);
   });

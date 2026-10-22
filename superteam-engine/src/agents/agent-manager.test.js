@@ -156,6 +156,14 @@ describe("agent manager run", () => {
     }
   });
 
+  it("keeps the stderr of a failed agent in its error", async () => {
+    const manager = make("fail");
+    const seen = ended();
+    await manager.run(job(), seen.onEnded);
+    await until(() => seen.results.length === 1);
+    assert.match(seen.results[0].error, /exit code 1: fake claude failed/);
+  });
+
   it("never loses the end of an agent that exits at once", async () => {
     const manager = make("fail");
     const seen = ended();

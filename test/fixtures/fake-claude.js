@@ -104,6 +104,7 @@ switch (mode) {
     console.log(JSON.stringify(result));
     break;
   case "fail":
+    console.error("fake claude failed on purpose");
     process.exit(1);
     break;
   case "null-output":

@@ -23,15 +23,25 @@ export function buildCommand(job, { maxBudgetUsd } = {}) {
   };
 }
 
-export function parseResult(stdout, exitCode, signal) {
+export const STDERR_TAIL = 2000;
+
+// The reason with the end of the stderr, when there is one: it says why.
+function withStderr(reason, stderr) {
+  const tail = String(stderr ?? "")
+    .slice(-STDERR_TAIL)
+    .trim();
+  return tail === "" ? reason : `${reason}: ${tail}`;
+}
+
+export function parseResult(stdout, exitCode, signal, stderr = "") {
   if (exitCode === null) {
     return {
-      error: `the agent was killed by the signal ${signal}`,
+      error: withStderr(`the agent was killed by the signal ${signal}`, stderr),
     };
   }
   if (exitCode !== 0) {
     return {
-      error: `the agent exited with exit code ${exitCode}`,
+      error: withStderr(`the agent exited with exit code ${exitCode}`, stderr),
     };
   }
   let output;
@@ -44,7 +54,11 @@ export function parseResult(stdout, exitCode, signal) {
   }
   if (output?.is_error === true) {
     return {
-      error: `the agent reported an error (${output.subtype ?? "unknown"})`,
+      error: `the agent reported an error (${output.subtype ?? "unknown"})${
+        typeof output.result === "string" && output.result.trim() !== ""
+          ? `: ${output.result.trim().slice(0, STDERR_TAIL)}`
+          : ""
+      }`,
     };
   }
   const structured = output?.structured_output;
