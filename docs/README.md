@@ -95,6 +95,7 @@ docs/
 │   │   └── git-adapter.md       How the engine reaches git and the forge, through `gh` for now
 │   ├── connector/
 │   │   ├── connector.md         Lets people use the system through their AI tools
+│   │   ├── control-skill.md     Starts and stops the process of superteam
 │   │   ├── seed-skill.md        Only creates the config files: the workflows and the roles of Claude
 │   │   ├── operation-skill.md   The bridge between a prompt and the MCP tools
 │   │   └── mcp-server.md        An interface through which actors call the system

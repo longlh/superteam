@@ -34,7 +34,7 @@ receives its notifications. It does not call another container.
 | `jobEnded(result)`           | Enqueues `worker:ended`, `task-merger:ended` or `work-merger:ended`, from the kind in the id of the job, with the result of the job.                                      |
 | `reconcile(jobs)`            | At the start, takes the jobs that were killed: it fails their tasks, and publishes `job:run` again for a job that it waits for and that was never run.                    |
 | `subscribe(topic, callback)` | Calls the callback for each notification of the topic (see `pubsub.md`), and returns a function that unsubscribes.                                                        |
-| `start()`, `shutdown()`      | Starts the engine loop, and stops it gracefully (see "Life cycle" in `engineloop.md`).                                                                                    |
+| `start()`, `shutdown()`      | Starts the engine loop, and stops it gracefully (see "Life cycle" in `engineloop.md`). When the start stage is done, the engine publishes `engine:ready`.                 |
 
 A function that refuses a request says why: the body is not valid, the work or
 the workflow does not exist, the request does not fit the state of the work, or

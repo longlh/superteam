@@ -23,9 +23,9 @@ Each use case is realized by one or more scenarios of
 - **Main scenario:**
   1. The person asks the system to create the roles of Claude, and the workflows
      of the project.
-  2. The system writes the agent files and the workflows, and adds the runtime
-     folder and the file of the environment variables to the `.gitignore` of the
-     project. It writes nothing else.
+  2. The system writes the agent files, the workflows and the port of the API,
+     and adds the runtime folder and the file of the environment variables to
+     the `.gitignore` of the project. It writes nothing else.
 - **Extension:** the person runs it again when the data of the project changes.
   A line of the `.gitignore` is added only if it is missing, so running it again
   changes nothing else.
@@ -36,7 +36,8 @@ Each use case is realized by one or more scenarios of
 
 - **Actor:** the person who assigns, and the approver.
 - **Goal:** a work is done, and its result is in the root branch.
-- **Precondition:** the project is set up (UC1).
+- **Precondition:** the project is set up (UC1), and superteam is started with
+  `/superteam:start`.
 - **Main scenario:**
   1. The person assigns a work with a workflow, a title, and optionally an id, a
      description and a DOD. The system answers with the `id` of the work.

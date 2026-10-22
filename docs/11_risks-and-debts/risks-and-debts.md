@@ -51,11 +51,7 @@ These are not decided yet.
 
 ### Engine (`engine.md`)
 
-1. **A ready signal.** `start()` of the engine loop resolves only after the
-   shutdown, and `enqueue()` is rejected before the start stage is done. The
-   engine needs to give a way to know that the start stage is done, so that the
-   orchestrator opens the API at the right time.
-2. **The names.** The names of the functions of the engine are a proposal.
+1. **The names.** The names of the functions of the engine are a proposal.
 
 ### HTTP API (`orchestrator.md`)
 

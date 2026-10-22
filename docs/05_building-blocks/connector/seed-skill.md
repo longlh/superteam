@@ -1,7 +1,7 @@
 # Seed Skill
 
-It only creates the config files of a project: the workflows of the engine, and
-the roles of Claude. It writes nothing else.
+It only creates the config files of a project: the workflows of the engine, the
+roles of Claude, and the port of the API. It writes nothing else.
 
 ## Component
 
@@ -28,3 +28,6 @@ the roles of Claude. It writes nothing else.
   project, because the runtime data and the values of the environment variables
   are not kept in git (see `solution-strategy.md` and `constraints.md`). A line
   is added only if it is missing, so running the skill again changes nothing.
+- It writes `SUPERTEAM_PORT` in `.superteam/.env`, with a free port, when it is
+  missing, so that each workspace has its own port. A value that is there is
+  kept.

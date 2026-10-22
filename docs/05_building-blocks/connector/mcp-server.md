@@ -3,7 +3,8 @@
 An interface through which actors call the system. It starts with the session of
 the AI tool, and it is only a client of the HTTP API of the orchestrator: it has
 no logic or state of its own, and it does not work when the orchestrator is not
-running.
+running. It reads the port of the API, `SUPERTEAM_PORT`, from `.superteam/.env`
+of the workspace of the session.
 
 ## Component
 

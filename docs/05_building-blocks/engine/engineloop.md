@@ -75,11 +75,12 @@ loop, and the loop calls its subscribers when the notification fires. The loop
 does not know who its subscribers are. These notifications are not the events of
 the queue.
 
-| Notification  | Fired when                                                                  |
-| ------------- | --------------------------------------------------------------------------- |
-| `event:done`  | The handler of an event has succeeded (step 4 of "Loop").                   |
-| `event:retry` | The handler has failed, and the event is enqueued again (step 4 of "Loop"). |
-| `event:error` | The event has failed for good, and it goes to the DLQ.                      |
+| Notification  | Fired when                                                                   |
+| ------------- | ---------------------------------------------------------------------------- |
+| `event:done`  | The handler of an event has succeeded (step 4 of "Loop").                    |
+| `event:retry` | The handler has failed, and the event is enqueued again (step 4 of "Loop").  |
+| `event:error` | The event has failed for good, and it goes to the DLQ.                       |
+| `loop:ready`  | The start stage is done, and `enqueue()` can be called. It carries no event. |
 
 Every notification carries the event. For a failed event (`event:retry` and
 `event:error`) it is the event with the error of this attempt added to `errors`,

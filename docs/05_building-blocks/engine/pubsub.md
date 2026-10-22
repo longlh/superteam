@@ -5,13 +5,15 @@ engine does not know who the subscribers are.
 
 ## Component
 
-- It publishes two kinds of notification:
+- It publishes three kinds of notification:
   - The notifications of the engine loop (see `engineloop.md`): `event:done`,
     `event:retry` and `event:error`. Each one carries the event, so a subscriber
     reads what happened from the `payload` of the event, such as its `type`.
   - The notifications of the handlers (see `handlers.md`): `job:run`, which
     carries the job to run, and `job:stop`, which carries the `workId` of the
     jobs to stop.
+  - The notification of the engine itself: `engine:ready`, when the start stage
+    of the engine loop is done, so the engine can take requests.
 - A subscriber subscribes with a topic, with `subscribe(topic, callback)`, and
   the engine matches the topic: it calls the callback for each notification of
   the topic. Nothing is returned to the engine.

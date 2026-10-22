@@ -17,7 +17,8 @@ The data in git holds only the names of the environment variables (see
 "Subscriptions" in `orchestrator.md`). One engine runs for a workspace, so the
 workspace holds their values, in `.superteam/.env`. The orchestrator loads the
 file at the start, and the Seed Skill adds it to the `.gitignore` of the
-project.
+project. It also holds `SUPERTEAM_PORT`, the port of the HTTP API, which the
+Seed Skill writes.
 
 ## Organizational constraints
 

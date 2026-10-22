@@ -5,6 +5,7 @@ has no flow of its own.
 
 ## Component
 
+- `control-skill.md`: starts and stops the process of superteam.
 - `seed-skill.md`: creates the config files of a project.
 - `operation-skill.md`: the bridge between a prompt and the MCP tools.
 - `mcp-server.md`: an interface through which actors call the system.
@@ -18,11 +19,13 @@ SystemDb_Ext(config, "Config files", "Workflows, roles of Claude, .gitignore")
 System_Ext(api, "HTTP API of the orchestrator", "")
 
 Container_Boundary(connector, "Connector") {
+  Component(control, "Control Skill", "", "Starts and stops the process of superteam")
   Component(seed, "Seed Skill", "", "Creates the config files")
   Component(operation, "Operation Skill", "", "Bridge between a prompt and the MCP tools")
   Component(mcp, "MCP server", "", "One tool for each request of the API")
 }
 
+Rel(person, control, "Runs")
 Rel(person, seed, "Runs")
 Rel(person, operation, "Runs")
 Rel(person, mcp, "Calls")

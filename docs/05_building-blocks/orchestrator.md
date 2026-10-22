@@ -47,7 +47,8 @@ stored, never their values, because the data is versioned in git.
 
 The HTTP API is the only door of the system. A client is anything that sends a
 request, such as the MCP server, and the API does not know which one it is. The
-API listens on localhost only.
+API listens on localhost only, on the port `SUPERTEAM_PORT` of
+`.superteam/.env`.
 
 The API works only at the level of the work. The tasks and the worktrees are the
 business of the Engine, and the client has no request for them.
@@ -220,10 +221,12 @@ come from the API: the engine enqueues them when the orchestrator calls
 
 ### Start
 
+The process is started by `/superteam:start` (see `control-skill.md`).
+
 1. Load `.superteam/.env` into the environment, and create the Engine, the
    Agents and the Notifier.
-2. Subscribe to the Engine: `job:run`, `job:stop`, and the topic of each
-   subscription. It is done first, so that no job to run is lost.
+2. Subscribe to the Engine: `engine:ready`, `job:run`, `job:stop`, and the topic
+   of each subscription. It is done first, so that no job to run is lost.
 3. Start the Engine. Its loop recovers the events that were left (see
    `engineloop.md`).
 4. Call `agents.recover()`, which kills the agents that a crash left, and give
@@ -231,11 +234,12 @@ come from the API: the engine enqueues them when the orchestrator calls
    tasks of these jobs, and publishes `job:run` again for a job that it waits
    for and that was never run. This step handles a crash and a shutdown in the
    same way.
-5. Open the HTTP API, when the Engine is ready (see `risks-and-debts.md`).
+5. Open the HTTP API when the Engine publishes `engine:ready`.
 
 ### Shutdown
 
-On `SIGINT` or `SIGTERM`, the orchestrator closes the HTTP API, calls
-`agents.stopAll()`, and shuts the Engine down. The jobs that were stopped are
-failed at the next start, by `engine.reconcile(jobs)`. A second signal is a
-force quit, and the next start recovers from it.
+On `SIGINT` or `SIGTERM`, such as from `/superteam:stop`, the orchestrator
+closes the HTTP API, calls `agents.stopAll()`, and shuts the Engine down. The
+jobs that were stopped are failed at the next start, by
+`engine.reconcile(jobs)`. A second signal is a force quit, and the next start
+recovers from it.
