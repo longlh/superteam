@@ -40,9 +40,9 @@ export async function assign(deps, event) {
   await deps.git.commitAll(folder, `Assign the work ${id}`);
 
   const store = createTaskStore(folder);
-  if ((await store.list()).length === 0) {
-    const work = await readJson(workFile(folder, id));
-    for (const task of createTasks(work, workflow, deps.now())) {
+  const work = await readJson(workFile(folder, id));
+  for (const task of createTasks(work, workflow, deps.now())) {
+    if ((await store.get(task.id)) === null) {
       await store.put(task);
     }
   }

@@ -8,6 +8,7 @@ import { readJson } from "../../lib/storage/files.js";
 import { workFile, worktreeDir } from "../../lib/storage/paths.js";
 import { createTaskStore } from "../tasks.js";
 import { createEngineHandlers } from "./index.js";
+import { startReady } from "./start-ready.js";
 
 const now = new Date("2026-01-02T03:04:05.000Z");
 const linear = {
@@ -204,7 +205,6 @@ test("a step with two dependencies starts a task merger first", async () => {
     });
   }
   published.length = 0;
-  const { startReady } = await import("./start-ready.js");
   await startReady({
     deps: {
       baseDir,
@@ -305,6 +305,32 @@ test("a crash after the work file and before the tasks is repaired", async () =>
   await handlers["work:assign"](e);
   assert.equal((await createTaskStore(workTree).list()).length, 2);
   assert.equal(published.length, 1);
+  assert.equal(
+    created().filter(([, args]) => args.folder === workTree).length,
+    0,
+  );
+});
+
+test("a half-written task set gets its missing task and keeps the other", async () => {
+  const e = event({
+    id: "w1",
+    workflow: "linear",
+    title: "T",
+  });
+  await handlers["work:assign"](e);
+  const workTree = worktreeDir(baseDir, {
+    workId: "w1",
+  });
+  const store = createTaskStore(workTree);
+  const a = {
+    ...(await store.get("a")),
+    summary: "kept",
+  };
+  await store.put(a);
+  await rm(path.join(workTree, ".superteam", ".r", "tasks", "b.json"));
+  await handlers["work:assign"](e);
+  assert.deepEqual(await store.get("a"), a);
+  assert.equal((await store.get("b")).id, "b");
 });
 
 test("an unknown workflow throws a non retryable error", async () => {
