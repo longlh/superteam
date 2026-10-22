@@ -70,9 +70,33 @@ test("failing twice commits the error once and still cleans up", async () => {
   });
   assert.equal(existsSync(workTree), false);
   const commits = h.named("commitAll");
-  assert.equal(commits.length, 1);
-  assert.equal(commits[0][3].works[0].error, "first");
+  assert.equal(commits.length, 2);
+  for (const commit of commits) {
+    assert.equal(commit[3].works[0].error, "first");
+  }
   assert.deepEqual(h.named("deleteBranch"), [["deleteBranch", "tasks/w1/a"]]);
+});
+
+test("a throw of the commit after the error is written is retried: the retry commits it", async () => {
+  h.failOnce("commitAll");
+  await assert.rejects(
+    failWork({
+      deps,
+      workId: "w1",
+      error: "first",
+    }),
+    /offline/,
+  );
+  await failWork({
+    deps,
+    workId: "w1",
+    error: "second",
+  });
+  const commits = h.named("commitAll");
+  assert.equal(commits.length, 1);
+  assert.equal(commits[0][2], "Fail the work w1");
+  assert.equal(commits[0][3].works[0].error, "first");
+  assert.deepEqual(h.named("push"), [["push", "works/w1"]]);
 });
 
 test("a work whose worktree is gone does nothing", async () => {

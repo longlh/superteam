@@ -121,6 +121,14 @@ export async function createHarness(workflows) {
     pullRequests,
     branchFiles,
     named: (name) => calls.filter(([n]) => n === name),
+    // The next call of the git method `name` throws, the calls after it work.
+    failOnce(name, message = "offline") {
+      const original = git[name];
+      git[name] = async () => {
+        git[name] = original;
+        throw new Error(message);
+      };
+    },
     cleanup: () =>
       rm(baseDir, {
         recursive: true,

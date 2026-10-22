@@ -1,22 +1,23 @@
 import { readJson, writeJson } from "../../lib/storage/files.js";
 import { workFile } from "../../lib/storage/paths.js";
 import { createTaskStore } from "../tasks.js";
-import { readEndedWorkMerger } from "./ended-job.js";
+import { failureOf, readEndedWorkMerger } from "./ended-job.js";
 import { failWork } from "./fail-work.js";
 import { renderPullRequestBody } from "./pull-request-body.js";
 
 export async function workMergerEnded(deps, event) {
   const { jobId, summary, data, error } = event.payload.data;
-  const ended = readEndedWorkMerger(deps, jobId);
+  const ended = await readEndedWorkMerger(deps, jobId);
   if (ended === null) {
     return;
   }
   const { workId, workFolder } = ended;
-  if (error !== undefined) {
+  const failure = failureOf(ended) ?? error;
+  if (failure !== undefined) {
     await failWork({
       deps,
       workId,
-      error,
+      error: failure,
     });
     return;
   }

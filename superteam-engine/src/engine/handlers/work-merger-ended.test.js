@@ -126,6 +126,36 @@ test("an error fails the work", async () => {
   assert.equal(existsSync(workTree), false);
 });
 
+test("a throw while the work fails is retried: the retry cleans up", async () => {
+  const event = {
+    jobId: "w1/work-merger",
+    error: "boom",
+  };
+  h.failOnce("push");
+  await assert.rejects(ended(event), /offline/);
+  assert.equal(existsSync(workTree), true);
+  await ended(event);
+  assert.equal(existsSync(workTree), false);
+  assert.deepEqual(h.named("push"), [["push", "works/w1"]]);
+});
+
+test("a throw before the pull request is open is retried: the retry opens it", async () => {
+  h.failOnce("push");
+  await assert.rejects(
+    ended({
+      jobId: "w1/work-merger",
+      summary: "S",
+    }),
+    /offline/,
+  );
+  await ended({
+    jobId: "w1/work-merger",
+    summary: "S",
+  });
+  assert.equal(h.named("openPullRequest").length, 1);
+  assert.equal(existsSync(workTree), false);
+});
+
 test("is ignored for a bad id, a task id, or a gone worktree", async () => {
   for (const jobId of [
     undefined,

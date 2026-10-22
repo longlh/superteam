@@ -50,6 +50,8 @@ export async function taskJob({ deps, work, task, tasks }) {
   });
 }
 
+// Starts every task that is IN_PROGRESS and has no worktree yet: creates its
+// worktree and publishes its job. Returns the ids of the jobs it published.
 export async function startReady({ deps, workId }) {
   const workFolder = worktreeDir(deps.baseDir, {
     workId,
@@ -57,6 +59,7 @@ export async function startReady({ deps, workId }) {
   const work = await readJson(workFile(workFolder, workId));
   const tasks = await createTaskStore(workFolder).list();
   const rootBranch = await deps.git.rootBranch();
+  const started = [];
 
   for (const task of tasks) {
     const folder = worktreeDir(deps.baseDir, {
@@ -72,14 +75,22 @@ export async function startReady({ deps, workId }) {
       branch: `tasks/${workId}/${task.id}`,
       base: first === undefined ? rootBranch : `tasks/${workId}/${first}`,
     });
-    deps.publish(
-      "job:run",
-      await taskJob({
+    // The job needs the worktree (for the artifacts). If it cannot be built,
+    // the worktree is removed again, so the retry starts the task.
+    let job;
+    try {
+      job = await taskJob({
         deps,
         work,
         task,
         tasks,
-      }),
-    );
+      });
+      deps.publish("job:run", job);
+    } catch (error) {
+      await deps.git.removeWorktree(folder);
+      throw error;
+    }
+    started.push(job.id);
   }
+  return started;
 }

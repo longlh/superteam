@@ -44,8 +44,10 @@ export async function failWork({ deps, workId, error }) {
       error,
       updatedAt: deps.now().toISOString(),
     });
-    await deps.git.commitAll(workFolder, `Fail the work ${workId}`);
   }
+  // Always: a commit that failed after the write is done by the retry, and a
+  // clean worktree makes it a no-op.
+  await deps.git.commitAll(workFolder, `Fail the work ${workId}`);
   await deps.git.push(`works/${workId}`);
 
   for (const task of await createTaskStore(workFolder).list()) {

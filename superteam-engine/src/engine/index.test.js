@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
@@ -652,6 +653,73 @@ test("reconcile ends the killed jobs it waits for, and publishes job:run again f
     jobId: "w3/work-merger",
     error: KILLED,
   });
+});
+
+test("reconcile finishes the failure of a failed work whose worktree is left", async () => {
+  await inWorktree(
+    work("w1", {
+      error: "boom",
+    }),
+    [
+      task("w1", "a", {
+        completed: true,
+        error: "boom",
+      }),
+    ],
+  );
+  await taskFolder("w1", "a");
+  await start();
+  await engine.reconcile([]);
+  await waitFor(
+    () => done("engine:reconcile").length === 1,
+    "engine:reconcile",
+  );
+  assert.deepEqual(h.named("push"), [["push", "works/w1"]]);
+  for (const folder of [
+    worktreeDir(h.baseDir, {
+      workId: "w1",
+    }),
+    worktreeDir(h.baseDir, {
+      workId: "w1",
+      taskId: "a",
+    }),
+  ]) {
+    assert.equal(existsSync(folder), false);
+  }
+  assert.ok(
+    notes.some(([topic, data]) => topic === "job:stop" && data.workId === "w1"),
+  );
+});
+
+test("reconcile starts a ready task whose worktree was never created", async () => {
+  await inWorktree(work("w1"), [
+    task("w1", "a", {
+      completed: true,
+      summary: "s",
+    }),
+    task("w1", "b", {
+      dependOn: ["a"],
+    }),
+  ]);
+  await start();
+  await engine.reconcile([]);
+  await waitFor(
+    () => done("engine:reconcile").length === 1,
+    "engine:reconcile",
+  );
+  assert.deepEqual(
+    notes.filter(([topic]) => topic === "job:run").map(([, job]) => job.id),
+    ["w1/b/worker"],
+  );
+  assert.equal(
+    existsSync(
+      worktreeDir(h.baseDir, {
+        workId: "w1",
+        taskId: "b",
+      }),
+    ),
+    true,
+  );
 });
 
 test("engine:ready is published once the loop is ready", async () => {

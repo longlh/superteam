@@ -171,6 +171,82 @@ test("the same worker:ended twice does nothing the second time", async () => {
   assert.equal(h.calls.length, calls);
 });
 
+test("the same worker:ended of the last task twice changes no state the second time", async () => {
+  await h.handlers["worker:ended"](
+    ended("a", {
+      summary: "s",
+    }),
+  );
+  const event = ended("b", {
+    summary: "s",
+  });
+  await h.handlers["worker:ended"](event);
+  const task = await store.get("b");
+  const calls = h.calls.length;
+  await h.handlers["worker:ended"](event);
+  assert.deepEqual(await store.get("b"), task);
+  assert.equal(h.calls.length, calls);
+  // The job of the work merger is published again: the Agents dedupe it.
+  const mergers = h.published.filter(([, job]) => job.role === "work-merger");
+  assert.deepEqual(
+    mergers.map(([, job]) => job.id),
+    ["w1/work-merger", "w1/work-merger"],
+  );
+});
+
+test("a throw while the next task starts is retried: the retry starts it", async () => {
+  const event = ended("a", {
+    summary: "s",
+  });
+  h.failOnce("createWorktree");
+  await assert.rejects(h.handlers["worker:ended"](event), /offline/);
+  assert.equal((await store.get("a")).completed, true);
+  assert.equal(h.published.length, 0);
+  await h.handlers["worker:ended"](event);
+  assert.deepEqual(
+    h.published.map(([topic, job]) => [topic, job.id]),
+    [["job:run", "w1/b/worker"]],
+  );
+  assert.equal(existsSync(taskTree("b")), true);
+  assert.deepEqual(h.named("push"), [["push", "tasks/w1/a"]]);
+});
+
+test("a throw after the last task is done is retried: the retry publishes the work merger", async () => {
+  await h.handlers["worker:ended"](
+    ended("a", {
+      summary: "s",
+    }),
+  );
+  h.published.length = 0;
+  const event = ended("b", {
+    summary: "s",
+  });
+  h.failOnce("rootBranch");
+  await assert.rejects(h.handlers["worker:ended"](event), /offline/);
+  assert.equal(h.published.length, 0);
+  await h.handlers["worker:ended"](event);
+  assert.deepEqual(
+    h.published.map(([topic, job]) => [topic, job.id]),
+    [["job:run", "w1/work-merger"]],
+  );
+});
+
+test("a throw while the work fails is retried: the retry pushes the work and cleans up", async () => {
+  const event = ended("a", {
+    error: "boom",
+  });
+  h.failOnce("push");
+  await assert.rejects(h.handlers["worker:ended"](event), /offline/);
+  assert.equal(existsSync(workTree), true);
+  await h.handlers["worker:ended"](event);
+  assert.deepEqual(h.named("push"), [["push", "works/w1"]]);
+  assert.deepEqual(h.named("deleteBranch"), [["deleteBranch", "tasks/w1/a"]]);
+  assert.equal(existsSync(workTree), false);
+  for (const [, , , state] of h.named("commitAll")) {
+    assert.equal(state.works[0].error, "boom");
+  }
+});
+
 test("a worker:ended for a work whose worktree is gone is ignored", async () => {
   await h.handlers["worker:ended"](
     ended("a", {
