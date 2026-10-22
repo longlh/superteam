@@ -54,6 +54,9 @@ export async function ensurePort(baseDir) {
   const text = await readText(file);
   const existing = parseEnv(text).SUPERTEAM_PORT;
   if (existing) {
+    if (!/^\d+$/.test(existing)) {
+      throw new Error(`SUPERTEAM_PORT is not a number: ${existing}`);
+    }
     return Number(existing);
   }
   const port = await freePort();
@@ -76,11 +79,27 @@ export async function writeRole(
       `${name} is a role of the engine, it ships with the plugin`,
     );
   }
-  if (typeof description !== "string" || description === "") {
+  if (typeof description !== "string" || description.trim() === "") {
     throw new Error("description must be a non-empty string");
   }
-  const header = [`name: ${name}`, `description: ${description}`];
+  if (/[\r\n]/.test(description)) {
+    throw new Error("description must be one line");
+  }
+  if (model && !/^[A-Za-z0-9._-]+$/.test(model)) {
+    throw new Error("model must be letters, digits, '.', '_' or '-'");
+  }
+  const header = [
+    `name: ${name}`,
+    `description: ${JSON.stringify(description.trim())}`,
+  ];
   if (Array.isArray(tools) && tools.length > 0) {
+    for (const tool of tools) {
+      if (typeof tool !== "string" || !/^[^,\r\n]+$/.test(tool.trim())) {
+        throw new Error(
+          "each tool must be a non-empty string with no comma or newline",
+        );
+      }
+    }
     const list = tools.includes("StructuredOutput")
       ? tools
       : [...tools, "StructuredOutput"];

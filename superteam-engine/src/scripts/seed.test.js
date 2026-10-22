@@ -131,7 +131,7 @@ test("writeRole adds StructuredOutput to the tools", async () => {
     assert.equal(file, path.join(dir, ".claude/agents/dev.md"));
     assert.equal(
       await readFile(file, "utf8"),
-      "---\nname: dev\ndescription: Writes code\ntools: Read, Edit, StructuredOutput\nmodel: sonnet\n---\n\nDo the work.\n",
+      '---\nname: dev\ndescription: "Writes code"\ntools: Read, Edit, StructuredOutput\nmodel: sonnet\n---\n\nDo the work.\n',
     );
   });
 });
@@ -162,7 +162,7 @@ test("writeRole with no tools writes no tools or model line", async () => {
       });
       assert.equal(
         await readFile(file, "utf8"),
-        "---\nname: dev\ndescription: d\n---\n\nx\n",
+        '---\nname: dev\ndescription: "d"\n---\n\nx\n',
       );
     }
   });
@@ -180,7 +180,7 @@ test("writeRole overwrites an existing role file", async () => {
       description: "two",
       instructions: "y",
     });
-    assert.match(await readFile(file, "utf8"), /description: two/);
+    assert.match(await readFile(file, "utf8"), /description: "two"/);
   });
 });
 
@@ -214,6 +214,63 @@ test("writeRole refuses bad input and engine roles", async () => {
       );
     }
     assert.deepEqual(await listFiles(dir), []);
+  });
+});
+
+test("writeRole keeps the header safe", async () => {
+  await withDir(async (dir) => {
+    const base = {
+      name: "dev",
+      instructions: "x",
+    };
+    for (const description of [
+      "a\nmodel: opus",
+      "a\n---\nx",
+      "---\nb",
+      "   ",
+    ]) {
+      await assert.rejects(
+        writeRole(dir, {
+          ...base,
+          description,
+        }),
+        /description/,
+      );
+    }
+    await assert.rejects(
+      writeRole(dir, {
+        ...base,
+        description: "d",
+        model: "opus\nx: y",
+      }),
+      /model/,
+    );
+    for (const tools of [["Read\nx"], ["a,b"], [""], [5], ["  "]]) {
+      await assert.rejects(
+        writeRole(dir, {
+          ...base,
+          description: "d",
+          tools,
+        }),
+        /tool/,
+      );
+    }
+    assert.deepEqual(await listFiles(dir), []);
+    const file = await writeRole(dir, {
+      ...base,
+      description: "Writes code: fast",
+    });
+    const text = await readFile(file, "utf8");
+    assert.match(text, /description: "Writes code: fast"\n/);
+    assert.equal(text.split("\n").filter((l) => l === "---").length, 2);
+  });
+});
+
+test("ensurePort refuses a non-numeric port", async () => {
+  await withDir(async (dir) => {
+    await mkdir(path.join(dir, ".superteam"));
+    await writeFile(path.join(dir, ".superteam/.env"), "SUPERTEAM_PORT=abc\n");
+    await assert.rejects(ensurePort(dir), /not a number/);
   });
 });
 

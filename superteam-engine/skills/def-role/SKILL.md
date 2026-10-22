@@ -41,7 +41,7 @@ file by hand.
 ## Rules
 
 - `name` is a slug: lowercase letters and digits joined by `-`, up to 63
-  characters. `description` is required.
+  characters. `description` is required and is one line.
 - `tools` is a list of tool names. The script always adds `StructuredOutput` to
   it, so that the result of the worker is validated. You do not have to list it.
   With no `tools`, the role has no `tools` line.
