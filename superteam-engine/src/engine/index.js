@@ -23,7 +23,7 @@ import {
 import { EngineError } from "./errors.js";
 import { createGitAdapter } from "./git-adapter.js";
 import { createEngineHandlers } from "./handlers/index.js";
-import { workerJob } from "./handlers/start-ready.js";
+import { taskJob } from "./handlers/start-ready.js";
 import { buildJob } from "./jobs.js";
 import { createPubSub } from "./pubsub.js";
 import { createTaskStore } from "./tasks.js";
@@ -53,6 +53,19 @@ async function listNames(dir, keep) {
 
 const branchOf = (id) => `works/${id}`;
 
+// The work file of a branch, or null when it is missing or is not valid JSON:
+// a corrupt file counts as not found on that source.
+function parseWork(text) {
+  if (text === null) {
+    return null;
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
 export function createEngine({
   baseDir,
   git = createGitAdapter({
@@ -76,6 +89,10 @@ export function createEngine({
   for (const [type, handler] of Object.entries(createEngineHandlers(deps))) {
     loop.handle(type, handler);
   }
+  // Its own event, so the events left in the queue are processed first.
+  loop.handle("engine:reconcile", (event) =>
+    reconcileJobs(event.payload.data.killed),
+  );
 
   let ready = false;
   loop.subscribe("loop:ready", () => {
@@ -120,9 +137,10 @@ export function createEngine({
       branchOf(id),
       path.relative(baseDir, workFile(baseDir, id)),
     );
-    if (text !== null) {
+    const onBranch = parseWork(text);
+    if (onBranch !== null) {
       return {
-        work: JSON.parse(text),
+        work: onBranch,
         tasks: [],
         root: false,
       };
@@ -239,20 +257,12 @@ export function createEngine({
           continue;
         }
         jobs.push(
-          task.dependOn.length > 1 && task.summary === undefined
-            ? buildJob({
-                kind: "task-merger",
-                work,
-                task,
-                tasks,
-                workdir,
-              })
-            : await workerJob({
-                deps,
-                work,
-                task,
-                tasks,
-              }),
+          await taskJob({
+            deps,
+            work,
+            task,
+            tasks,
+          }),
         );
       }
       if (
@@ -271,6 +281,22 @@ export function createEngine({
       }
     }
     return jobs;
+  }
+
+  // A waiting job that was killed ends with an error; any other waiting job
+  // is published again. A killed job that is not waited for is ignored.
+  async function reconcileJobs(killedIds) {
+    const killed = new Set(killedIds);
+    for (const job of await waitingJobs()) {
+      if (killed.has(job.id)) {
+        await enqueue(`${parseJobId(job.id).kind}:ended`, {
+          jobId: job.id,
+          error: KILLED,
+        });
+      } else {
+        pubsub.publish("job:run", job);
+      }
+    }
   }
 
   return {
@@ -329,6 +355,9 @@ export function createEngine({
 
     async archive(id) {
       ensureReady();
+      if (!isSlug(id)) {
+        throw new EngineError("invalid", `invalid id ${id}`);
+      }
       const state = await getWork(id);
       if (state.status !== "FAILED" && state.approvalStatus !== "REJECTED") {
         throw new EngineError(
@@ -370,19 +399,15 @@ export function createEngine({
 
     jobEnded,
 
+    // Enqueues `engine:reconcile`: its handler runs after every event left in
+    // the queue, so a job whose end is still queued is not published again.
     async reconcile(jobs) {
       ensureReady();
-      const killed = new Set((jobs ?? []).map((job) => job?.id));
-      for (const job of await waitingJobs()) {
-        if (killed.has(job.id)) {
-          await enqueue(`${parseJobId(job.id).kind}:ended`, {
-            jobId: job.id,
-            error: KILLED,
-          });
-        } else {
-          pubsub.publish("job:run", job);
-        }
-      }
+      await enqueue("engine:reconcile", {
+        killed: (jobs ?? [])
+          .map((job) => job?.id)
+          .filter((id) => typeof id === "string"),
+      });
     },
 
     subscribe: pubsub.subscribe,

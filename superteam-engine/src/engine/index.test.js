@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
+import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { waitFor } from "../lib/engineloop/testkit.js";
 import { writeJson } from "../lib/storage/files.js";
@@ -349,6 +350,12 @@ test("decide enqueues work:decide for a work whose pull request is open", async 
   });
 });
 
+test("archive refuses an id that is not a slug, and never reaches git", async () => {
+  await start();
+  await assert.rejects(engine.archive("../x"), code("invalid"));
+  assert.deepEqual(gitLog, []);
+});
+
 test("archive refuses an unknown work, and a work that is not failed or rejected", async () => {
   await start();
   await assert.rejects(engine.archive("w1"), code("not-found"));
@@ -453,6 +460,14 @@ test("getWork reads an approved work from the root workspace", async () => {
     approvalStatus: "APPROVED",
     pullRequest: "https://example.test/works/w1",
   });
+});
+
+test("getWork treats a corrupt work file on the branch as not found there", async () => {
+  extraBranches.add("works/w1");
+  h.branchFiles.set("works/w1:.superteam/.p/works/w1.json", "{ not json");
+  await assert.rejects(engine.getWork("w1"), code("not-found"));
+  await inRoot(work("w1"));
+  assert.equal((await engine.getWork("w1")).approvalStatus, "APPROVED");
 });
 
 test("getWork gives not-found for an unknown id, and for an id that is not a slug", async () => {
@@ -597,6 +612,10 @@ test("reconcile ends the killed jobs it waits for, and publishes job:run again f
       id: "zz/q/worker",
     },
   ]);
+  await waitFor(
+    () => done("engine:reconcile").length === 1,
+    "engine:reconcile",
+  );
 
   const runs = notes
     .filter(([topic]) => topic === "job:run")
@@ -663,4 +682,48 @@ test("the retry and the error of an event are relayed", async () => {
     ["event:retry", "work:decide", "boom"],
     ["event:error", "work:decide", "boom"],
   ]);
+});
+
+test("reconcile runs after the events left in the queue, so an ended job is not published again", async () => {
+  await inWorktree(work("w1"), [task("w1", "a")]);
+  await taskFolder("w1", "a");
+  // A worker:ended left in the queue by the last run, not processed yet.
+  await writeJson(
+    path.join(
+      h.baseDir,
+      ".superteam",
+      ".r",
+      "engineloop",
+      "queue",
+      "000001.json",
+    ),
+    {
+      order: 1,
+      id: "left-in-the-queue",
+      payload: {
+        type: "worker:ended",
+        data: {
+          jobId: "w1/a/worker",
+          summary: "did it",
+        },
+      },
+      createdAt: "2026-01-01T00:00:00.000Z",
+      attempts: 0,
+      errors: [],
+    },
+  );
+  await start();
+  await engine.reconcile([]);
+  await waitFor(
+    () => done("engine:reconcile").length === 1,
+    "engine:reconcile",
+  );
+  const types = notes
+    .filter(([topic]) => topic === "event:done")
+    .map(([, data]) => data.event.payload.type);
+  assert.deepEqual(types, ["worker:ended", "engine:reconcile"]);
+  const runs = notes
+    .filter(([topic]) => topic === "job:run")
+    .map(([, job]) => job.id);
+  assert.ok(!runs.includes("w1/a/worker"));
 });

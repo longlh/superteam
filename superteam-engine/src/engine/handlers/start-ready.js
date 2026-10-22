@@ -27,6 +27,29 @@ export async function workerJob({ deps, work, task, tasks }) {
   });
 }
 
+// The job of a started task: its task merger while it has more than one
+// dependency and the merge has no summary yet, else its worker.
+export async function taskJob({ deps, work, task, tasks }) {
+  if (task.dependOn.length > 1 && task.summary === undefined) {
+    return buildJob({
+      kind: "task-merger",
+      work,
+      task,
+      tasks,
+      workdir: worktreeDir(deps.baseDir, {
+        workId: work.id,
+        taskId: task.id,
+      }),
+    });
+  }
+  return workerJob({
+    deps,
+    work,
+    task,
+    tasks,
+  });
+}
+
 export async function startReady({ deps, workId }) {
   const workFolder = worktreeDir(deps.baseDir, {
     workId,
@@ -49,21 +72,14 @@ export async function startReady({ deps, workId }) {
       branch: `tasks/${workId}/${task.id}`,
       base: first === undefined ? rootBranch : `tasks/${workId}/${first}`,
     });
-    const job =
-      task.dependOn.length > 1
-        ? buildJob({
-            kind: "task-merger",
-            work,
-            task,
-            tasks,
-            workdir: folder,
-          })
-        : await workerJob({
-            deps,
-            work,
-            task,
-            tasks,
-          });
-    deps.publish("job:run", job);
+    deps.publish(
+      "job:run",
+      await taskJob({
+        deps,
+        work,
+        task,
+        tasks,
+      }),
+    );
   }
 }
