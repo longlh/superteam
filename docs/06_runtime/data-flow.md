@@ -25,28 +25,50 @@ documents of the parts, and it does not describe a part.
 
 The engine does not create persistence data directly (see the principles in
 `solution-strategy.md`). It is created in a worktree, kept on a branch, and it
-reaches the root branch only when the pull request of the work is merged.
+reaches the root branch only when the pull request of the work is merged. The
+diagram is an activity diagram of UML: each lane is a place where the data is
+kept.
 
 ```plantuml
 @startuml
-left to right direction
-rectangle "Event work:assign" as ev
-rectangle "Branch of the work\n.p/works/{id}.json" as wb
-rectangle "Worker, in the worktree of its task\n.p/artifacts/..." as worker
-rectangle "Branch of the task" as tb
-hexagon "Pull request" as pr
-database "Root branch\n.p" as root
-rectangle "Branch of the work, kept on the remote\nnothing reaches .p" as kept
-rectangle "Only the closed pull request\nis left on the forge" as gone
-
-ev --> wb : the engine writes
-worker --> tb : commits
-tb --> wb : the merger merges\nthe final tasks
-wb --> pr : push, open\nthe pull request
-pr --> root : approve: merge
-wb --> kept : fail: push
-pr --> kept : reject: close
-kept --> gone : archive: delete
+|Event|
+start
+:work:assign holds the work;
+|Branch of the work|
+:The engine writes .p/works/{id}.json,
+and commits;
+|Branch of a task|
+:The worker of each task writes
+.p/artifacts/..., and commits;
+|Branch of the work|
+if (A job fails?) then (yes)
+  :The engine writes the error, commits,
+  and pushes the branch;
+else (no)
+  :The merger merges the branches
+  of the final tasks;
+  |Forge|
+  :The engine pushes the branch,
+  and opens the pull request;
+  if (Decision?) then (approve)
+    |Root branch|
+    :The engine merges the pull request:
+    .p/works/{id}.json and .p/artifacts/...
+    reach .p;
+    stop
+  else (reject)
+    |Forge|
+    :The engine closes the pull request;
+  endif
+endif
+|Forge|
+:The branch of the work is kept on the remote,
+and nothing reaches .p;
+if (Archived?) then (yes)
+  :The engine deletes the branch. Only the
+  closed pull request of a rejected work is left;
+endif
+stop
 @enduml
 ```
 
