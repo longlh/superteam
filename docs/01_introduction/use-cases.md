@@ -24,11 +24,13 @@ Each use case is realized by one or more scenarios of
   1. The person asks the system to create the roles of Claude, and the workflows
      of the project.
   2. The system writes the agent files and the workflows, and adds the runtime
-     folder to the `.gitignore` of the project. It writes nothing else.
+     folder and the file of the environment variables to the `.gitignore` of the
+     project. It writes nothing else.
 - **Extension:** the person runs it again when the data of the project changes.
   A line of the `.gitignore` is added only if it is missing, so running it again
   changes nothing else.
-- **Result:** the workflows are kept in git, and the runtime data is not.
+- **Result:** the workflows are kept in git, and the runtime data and the values
+  of the environment variables are not.
 
 ## UC2. Give a work and get the result
 

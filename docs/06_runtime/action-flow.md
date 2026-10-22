@@ -211,7 +211,8 @@ Passes through: the orchestrator, the engine functions, the engine loop, and the
 Agents (see "Recover" and "Shutdown" in `agent-manager.md`).
 
 1. **Start:** the orchestrator:
-   1. Creates the Engine, the Agents and the Notifier.
+   1. Loads `.superteam/.env` into the environment, and creates the Engine, the
+      Agents and the Notifier.
    2. Subscribes to the engine: `job:run`, `job:stop`, and the topic of each
       subscription. It does it first, so that no job to run is lost.
    3. Starts the engine loop, with the handlers registered. Its start stage

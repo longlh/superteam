@@ -15,6 +15,9 @@ principles in `solution-strategy.md`), and each kind has one folder:
 
 An entity is one JSON file, and its path comes from its identity.
 
+The file `.superteam/.env` is not data: it holds the values of the environment
+variables, and it is not kept in git (see `constraints.md`).
+
 The persistence data is in `persistence-data.md`, and the runtime data is in
 `runtime-data.md`.
 

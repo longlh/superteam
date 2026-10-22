@@ -218,7 +218,8 @@ engine enqueues them when the orchestrator calls `engine.jobEnded(result)` (see
 
 ### Start
 
-1. Create the Engine, the Agents and the Notifier.
+1. Load `.superteam/.env` into the environment, and create the Engine, the
+   Agents and the Notifier.
 2. Subscribe to the Engine: `job:run`, `job:stop`, and the topic of each
    subscription. It is done first, so that no job to run is lost.
 3. Start the Engine. Its loop recovers the events that were left (see

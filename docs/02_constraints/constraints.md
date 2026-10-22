@@ -2,6 +2,28 @@
 
 The constraints that the design and the documents follow.
 
+## Technical constraints
+
+| Constraint                                                                                                     | See                 |
+| -------------------------------------------------------------------------------------------------------------- | ------------------- |
+| The agents run with the `claude` command, signed in with the account of the user, so no API key is needed.     | `claude-process.md` |
+| The forge is GitHub, reached through the `gh` command. It is the only forge that is supported for now.         | `git-adapter.md`    |
+| One engine runs for a workspace, in its root workspace, and it has no UI.                                      | `engine.md`         |
+| The HTTP API listens on localhost only.                                                                        | `orchestrator.md`   |
+| The data is files: one JSON file for each entity, under `.superteam/`.                                         | `storage.md`        |
+| The values of the environment variables are in `.superteam/.env`, one file for the workspace, not kept in git. | `seed-skill.md`     |
+
+The data in git holds only the names of the environment variables (see
+"Subscriptions" in `orchestrator.md`). One engine runs for a workspace, so the
+workspace holds their values, in `.superteam/.env`. The orchestrator loads the
+file at the start, and the Seed Skill adds it to the `.gitignore` of the
+project.
+
+## Organizational constraints
+
+- The system is made for an internal tool, so some limits are accepted (see
+  `risks-and-debts.md`).
+
 ## Conventions
 
 ### The method of the documents

@@ -20,6 +20,7 @@ the roles of Claude. It writes nothing else.
   the result of the worker is validated (see `claude-process.md`).
 - It does not create the agent file of the merger. The merger is a role of the
   engine, and its agent file comes with the plugin (see `agents.md`).
-- It adds `.superteam/.r/` to the `.gitignore` of the project, because the
-  runtime data is not kept in git (see `solution-strategy.md`). A line is added
-  only if it is missing, so running the skill again changes nothing.
+- It adds `.superteam/.r/` and `.superteam/.env` to the `.gitignore` of the
+  project, because the runtime data and the values of the environment variables
+  are not kept in git (see `solution-strategy.md` and `constraints.md`). A line
+  is added only if it is missing, so running the skill again changes nothing.

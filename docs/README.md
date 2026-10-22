@@ -16,7 +16,7 @@ they are not migrated.
 | 4. Solution strategy | `04_solution-strategy/` | The principles of the design                                    |
 | 5. Building blocks   | `05_building-blocks/`   | The structure: the containers, and the components inside        |
 | 6. Runtime           | `06_runtime/`           | What happens over time: the action flow and the data flow       |
-| 7. Deployment        | `07_deployment/`        | Not written yet                                                 |
+| 7. Deployment        | `07_deployment/`        | Where the parts run, and what a workspace must hold             |
 | 8. Concepts          | `08_concepts/`          | The data contract that the containers follow                    |
 | 9. Decisions         | `09_decisions/`         | The decisions of the architecture, one ADR for each             |
 | 10. Quality          | `10_quality/`           | Not written yet                                                 |
@@ -110,6 +110,7 @@ docs/
 │   ├── action-flow.md           The order of the actions of the parts, for each scenario
 │   └── data-flow.md             Where the data is created and read, and how it moves
 ├── 07_deployment/
+│   └── deployment.md            Where the parts run, and what a workspace must hold
 ├── 08_concepts/
 │   └── storage/
 │       ├── storage.md           The data contract: the paths and the entities
