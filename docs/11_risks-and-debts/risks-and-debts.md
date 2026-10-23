@@ -37,6 +37,10 @@ The loop is made for an internal tool. These limits are known and accepted:
   from the upstream of the root branch. When neither has its file, for example
   when that branch was deleted before it was merged on, the work is no longer
   listed and cannot be queried, but its id stays used.
+- The ids of the assigns that are accepted and not processed yet are kept in
+  memory. After a restart, while an assign left in the queue is not processed, a
+  second assign with the same id is accepted, and the engine creates the work
+  once, from the first one.
 
 ### Handlers (`handlers.md`)
 

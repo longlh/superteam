@@ -176,6 +176,21 @@ export function createEngine({
 
   const worksFolder = path.join(r(baseDir), "worktrees", "works");
 
+  // The assigns that are accepted and not processed yet, by id: an id is used
+  // from the moment its request is checked, so a second request with it is
+  // refused. The data of the event answers a query until the event is done.
+  // An id checked but not accepted yet maps to null.
+  const pending = new Map();
+  const conflict = (id) => new EngineError("conflict", `the id ${id} is used`);
+  for (const topic of ["event:done", "event:error"]) {
+    loop.subscribe(topic, (data) => {
+      const payload = data?.event?.payload;
+      if (payload?.type === "work:assign") {
+        pending.delete(payload.data?.id);
+      }
+    });
+  }
+
   // The work of an id from the first source that has it: the work worktree
   // (with its tasks), the branch of the work, then the branch on which its pull
   // request was merged, else the upstream of the root branch (the branch it was
@@ -228,6 +243,23 @@ export function createEngine({
 
   // The state of a work, or null. It does not fetch: the caller does.
   async function readWork(id) {
+    const waiting = pending.get(id);
+    if (
+      waiting &&
+      !existsSync(
+        worktreeDir(baseDir, {
+          workId: id,
+        }),
+      )
+    ) {
+      return {
+        id,
+        title: waiting.title,
+        workflow: waiting.workflow,
+        status: "OPEN",
+        approvalStatus: "DRAFT",
+      };
+    }
     const found = await findWork(id);
     if (found === null) {
       return null;
@@ -287,12 +319,26 @@ export function createEngine({
     );
   }
 
+  // A new id, reserved in `pending` before it is checked.
   async function newId() {
-    let id;
-    do {
-      id = newWorkId();
-    } while (await isUsed(id));
-    return id;
+    for (;;) {
+      const id = newWorkId();
+      if (pending.has(id)) {
+        continue;
+      }
+      pending.set(id, null);
+      let used;
+      try {
+        used = await isUsed(id);
+      } catch (error) {
+        pending.delete(id);
+        throw error;
+      }
+      if (!used) {
+        return id;
+      }
+      pending.delete(id);
+    }
   }
 
   async function jobEnded(result) {
@@ -417,6 +463,58 @@ export function createEngine({
     }
   }
 
+  // The checks and the enqueue of an assign whose id, when given, is reserved.
+  async function accept(body, reserved) {
+    let id = reserved.id;
+    // A work starts from the latest upstream: offline, it is refused.
+    await remote.fetch();
+    if ((await remote.rootBranch()) === "") {
+      throw new EngineError(
+        "unavailable",
+        "HEAD is detached: check out the root branch first",
+      );
+    }
+    const base = await remote.rootUpstream();
+    if (base === null) {
+      throw new EngineError(
+        "unavailable",
+        "the root branch tracks no branch on origin: set its upstream with `git push --set-upstream origin HEAD`",
+      );
+    }
+    let workflow;
+    try {
+      workflow = await workflowLoader(remote)(body.workflow, base);
+    } catch (error) {
+      if (error.corrupted) {
+        throw new EngineError("invalid", error.message);
+      }
+      throw error;
+    }
+    if (workflow === null) {
+      throw new EngineError("not-found", `no workflow ${body.workflow}`);
+    }
+    const refusal = validateWorkflow(workflow);
+    if (refusal !== null) {
+      throw new EngineError("invalid", `workflow ${body.workflow}: ${refusal}`);
+    }
+    if (id === undefined) {
+      id = await newId();
+      reserved.id = id;
+    } else if (await isUsed(id)) {
+      throw conflict(id);
+    }
+    const data = {
+      ...body,
+      id,
+      base,
+    };
+    pending.set(id, data);
+    return {
+      id,
+      eventId: await enqueue("work:assign", data),
+    };
+  }
+
   return {
     async assign(body) {
       ensureReady();
@@ -424,55 +522,25 @@ export function createEngine({
       if (reason !== null) {
         throw new EngineError("invalid", reason);
       }
-      // A work starts from the latest upstream: offline, it is refused.
-      await remote.fetch();
-      if ((await remote.rootBranch()) === "") {
-        throw new EngineError(
-          "unavailable",
-          "HEAD is detached: check out the root branch first",
-        );
+      // The id that this request holds in `pending`: given, or set by
+      // `accept` when it creates one. A refused request gives it back.
+      const reserved = {
+        id: body.id,
+      };
+      if (reserved.id !== undefined) {
+        if (pending.has(reserved.id)) {
+          throw conflict(reserved.id);
+        }
+        pending.set(reserved.id, null);
       }
-      const base = await remote.rootUpstream();
-      if (base === null) {
-        throw new EngineError(
-          "unavailable",
-          "the root branch tracks no branch on origin: set its upstream with `git push --set-upstream origin HEAD`",
-        );
-      }
-      let workflow;
       try {
-        workflow = await workflowLoader(remote)(body.workflow, base);
+        return await accept(body, reserved);
       } catch (error) {
-        if (error.corrupted) {
-          throw new EngineError("invalid", error.message);
+        if (reserved.id !== undefined) {
+          pending.delete(reserved.id);
         }
         throw error;
       }
-      if (workflow === null) {
-        throw new EngineError("not-found", `no workflow ${body.workflow}`);
-      }
-      const refusal = validateWorkflow(workflow);
-      if (refusal !== null) {
-        throw new EngineError(
-          "invalid",
-          `workflow ${body.workflow}: ${refusal}`,
-        );
-      }
-      let id = body.id;
-      if (id === undefined) {
-        id = await newId();
-      } else if (await isUsed(id)) {
-        throw new EngineError("conflict", `the id ${id} is used`);
-      }
-      const eventId = await enqueue("work:assign", {
-        ...body,
-        id,
-        base,
-      });
-      return {
-        id,
-        eventId,
-      };
     },
 
     async decide(id, decision) {
@@ -519,6 +587,7 @@ export function createEngine({
     async listWorks() {
       await fetchOrWarn();
       const ids = [
+        ...[...pending].filter(([, data]) => data !== null).map(([id]) => id),
         ...(await listNames(worksFolder, (entry) => entry.isDirectory())),
         ...(await remote.listBranches("works/")).map((branch) =>
           branch.slice("works/".length),

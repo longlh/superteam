@@ -96,9 +96,12 @@ Answer `202 Accepted`:
 | `eventId` | string | The id of the event that was created.                                              |
 
 The engine checks that the body is valid, that the workflow exists, and that the
-id is not used yet. Then it creates the event `work:assign`. So a work that is
-sent twice with the same id is created once, and the request is safe to send
-again. The work is in the status `OPEN` until the engine has created its tasks.
+id is not used yet. Then it creates the event `work:assign`. An id is used from
+the moment its request is accepted: a second request with the same id, even
+before the event is processed, is refused with `409 Conflict`. So a work that is
+sent twice with the same id is created once, and the second request says so.
+Until the event is processed, the work is `OPEN`, and a query answers it from
+the request.
 
 #### Approve or reject a work
 

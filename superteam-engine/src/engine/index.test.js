@@ -400,6 +400,102 @@ test("assign enqueues work:assign with the given id, and the work runs", async (
   assert.equal(state.approvalStatus, "DRAFT");
 });
 
+test("an id is used from its accepted assign: a second one is refused, and a query answers it from the request", async () => {
+  await saveWorkflow(flow);
+  await start();
+  // The handler waits, so the event is not processed yet.
+  let open;
+  const gate = new Promise((resolve) => {
+    open = resolve;
+  });
+  const createWorktree = h.git.createWorktree;
+  h.git.createWorktree = async (args) => {
+    await gate;
+    return createWorktree(args);
+  };
+  await engine.assign(
+    body({
+      id: "w1",
+    }),
+  );
+  await assert.rejects(
+    engine.assign(
+      body({
+        id: "w1",
+        title: "Second",
+      }),
+    ),
+    (error) => code("conflict")(error) && error.message === "the id w1 is used",
+  );
+  assert.deepEqual(await engine.getWork("w1"), {
+    id: "w1",
+    title: "Add the login page",
+    workflow: "flow",
+    status: "OPEN",
+    approvalStatus: "DRAFT",
+  });
+  assert.deepEqual(
+    (await engine.listWorks()).map((w) => [w.id, w.status]),
+    [["w1", "OPEN"]],
+  );
+  open();
+  await waitFor(() => done("work:assign").length === 1, "work:assign");
+  assert.equal(done("work:assign")[0].data.title, "Add the login page");
+  await assert.rejects(
+    engine.assign(
+      body({
+        id: "w1",
+      }),
+    ),
+    code("conflict"),
+  );
+});
+
+test("two assigns of the same id at the same time: one is accepted", async () => {
+  await saveWorkflow(flow);
+  await start();
+  const results = await Promise.allSettled([
+    engine.assign(
+      body({
+        id: "w1",
+      }),
+    ),
+    engine.assign(
+      body({
+        id: "w1",
+      }),
+    ),
+  ]);
+  assert.deepEqual(
+    results.map((r) => r.status),
+    ["fulfilled", "rejected"],
+  );
+  assert.ok(code("conflict")(results[1].reason));
+});
+
+test("a refused assign gives its id back", async () => {
+  await start();
+  await assert.rejects(
+    engine.assign(
+      body({
+        id: "w1",
+      }),
+    ),
+    code("not-found"),
+  );
+  await saveWorkflow(flow);
+  assert.equal(
+    (
+      await engine.assign(
+        body({
+          id: "w1",
+        }),
+      )
+    ).id,
+    "w1",
+  );
+});
+
 test("assign creates a new slug when the body has no id", async () => {
   await saveWorkflow(flow);
   await start();
