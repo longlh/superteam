@@ -50,6 +50,12 @@ The loop is made for an internal tool. These limits are known and accepted:
   interval, or a webhook of GitHub forwarded to this machine (such as with the
   `gh webhook forward` extension), could finish it at once.
 
+### Workflows (`storage.md`)
+
+- A loop group cannot hold another loop group, and its steps are a straight
+  chain: two steps of a round cannot run side by side (see ADR 19).
+- A loop group is limited by its number of rounds only, not by time.
+
 ### Handlers (`handlers.md`)
 
 - If the engine stops between the opening of the pull request of a work and the

@@ -15,6 +15,11 @@ The behavior below was checked with `claude` 2.1.300, and the behavior of
   dependencies.
 - The prompt of a worker asks for `data.dodChecklist`: exactly one boolean for
   each item of the DOD of the task, in order.
+- The prompt of the first task of a round after the first, in a loop group,
+  holds the issues of the gates of the round before: the items of their DOD that
+  are false, and their `summary` (see ADR 19).
+- The prompt of a task that depends on a loop group, and the prompt of the work
+  merger, hold the limitations of the work, when a loop group left some.
 - The process runs with the agent of the role (`.claude/agents/{role}.md`, or
   the agent files of the mergers, which come with the plugin), and the tools of
   the role (the `tools` line of its agent file) are allowed with

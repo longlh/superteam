@@ -14,9 +14,10 @@ the works with `/superteam:works`.
 1. Call the MCP tool `get_work` of superteam with the id.
 2. If its `approvalStatus` is not `PROPOSED`, say so with its state, and stop:
    only a proposed work can be decided.
-3. Show its title and the URL of its pull request. Ask the user to review the
-   pull request there, then to answer: approve or reject. Say that a merge or a
-   close of the pull request on GitHub is the same decision.
+3. Show its title, the URL of its pull request, and its `limitations` when it
+   has some. Ask the user to review the pull request there, then to answer:
+   approve or reject. Say that a merge or a close of the pull request on GitHub
+   is the same decision.
 4. Wait for the answer. Call the MCP tool `decide_work` only with the answer of
    the user, `approve` or `reject`. Never decide by yourself.
 5. Report the answer of the tool: the decision is accepted, and the engine

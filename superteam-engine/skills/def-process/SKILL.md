@@ -104,5 +104,34 @@ workflow file by hand.
 - `role` names a role of `.claude/agents/`. It is a slug.
 - Do not use the roles `task-merger` and `work-merger`, and do not create them.
   They belong to the engine.
+- A step can also be a loop group, whose steps repeat until a gate passes:
+
+  ```
+  {
+    "name": "build",
+    "dependOn": ["spec"],
+    "loop": {
+      "maxRounds": 3,
+      "steps": [
+        { "name": "test", "role": "tester", "gate": true, "dod": ["no test fails"] },
+        { "name": "fix", "role": "developer", "dependOn": ["test"] },
+        { "name": "verify", "role": "tester", "dependOn": ["fix"], "gate": true, "dod": ["no test fails"] }
+      ]
+    }
+  }
+  ```
+
+  A loop group has `name`, an optional `dependOn`, and `loop`, and no `role`,
+  `instruction`, `dod` or `timeout`. `maxRounds` is a whole number from 1 to 10.
+  `loop.steps` is a straight chain: the first step has no `dependOn`, and each
+  other step depends on exactly one step of the group. At least one step is a
+  gate, `"gate": true`, with a non-empty `dod`; the gate passes when every item
+  of its DOD is met. Other steps depend on the group by its name, never on a
+  step inside it. The name of a step inside a group is unique in the whole
+  workflow. Its tasks are named `{group}-{step}-{round}`, which must be a slug
+  of at most 63 characters and must not be the name of another step or task, so
+  keep the names short. Do not put `gate` on a step outside a group, or a group
+  inside a group.
+
 - Running the skill again overwrites a workflow file of the same name.
 - Write nothing else: no other file of the project.

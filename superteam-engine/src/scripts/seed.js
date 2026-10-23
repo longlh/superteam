@@ -190,8 +190,12 @@ export async function checkPushed(
     await compare(file);
     try {
       const workflow = JSON.parse(await readText(path.join(baseDir, file)));
+      // The steps inside a loop group name roles too (see ADR 19).
       for (const step of workflow.steps ?? []) {
         roles.add(step.role);
+        for (const inner of step.loop?.steps ?? []) {
+          roles.add(inner.role);
+        }
       }
     } catch {
       problems.push(`not valid JSON: ${file}`);

@@ -422,6 +422,36 @@ test("check finds a role that a workflow names and that is on no side", async ()
   });
 });
 
+test("check finds a role that a step inside a loop group names", async () => {
+  await withProject(async (dir) => {
+    await writeWorkflow(dir, {
+      name: "fix",
+      title: "Fix",
+      steps: [
+        {
+          name: "build",
+          loop: {
+            maxRounds: 2,
+            steps: [
+              {
+                name: "test",
+                role: "tester",
+                gate: true,
+                dod: ["no test fails"],
+              },
+            ],
+          },
+        },
+      ],
+    });
+    pushSetup(dir);
+    await assert.rejects(checkPushed(dir), (error) => {
+      assert.match(error.message, /\n- missing: .claude\/agents\/tester.md$/);
+      return true;
+    });
+  });
+});
+
 test("check finds a role file with no tools line", async () => {
   await withProject(async (dir) => {
     await writeFile(

@@ -45,9 +45,11 @@ class WORKFLOW_STEP <<entity>> {
   dod : string[]
   description : string
   instruction : string
-  * role : string - slug
+  role : string - slug, required except for a loop group
   timeout : int - minutes, from 1 to 35791, 720 when it is absent
   dependOn : workflowStepId[]
+  loop : object - a loop group: { maxRounds, steps }
+  gate : boolean - a gate of a loop group
 }
 
 class WORK <<entity>> {
@@ -62,6 +64,7 @@ class WORK <<entity>> {
   dodChecklist : boolean[]
   error : string - why the work failed
   errorCause : string - agent or engine
+  limitations : object[] - what a loop group left (see ADR 19)
 }
 
 class TASK <<entity>> {
@@ -81,6 +84,10 @@ class TASK <<entity>> {
   completed : boolean
   completedAt : datetime
   error : string - why the task failed
+  gate : boolean - the task of a gate of a loop group
+  group : string - the loop group of the task
+  round : int - the round of the task in its group
+  skipped : boolean - done with no run, after a gate passed
 }
 
 class ARTIFACT <<entity>> {
@@ -113,7 +120,7 @@ same entity.
 | Entity   | `id`                                                                                                                                                                                                               |
 | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | WORK     | A slug, such as `add-login-page`: lowercase letters and digits, in words joined by `-`, up to 63 characters. The client can give it. Otherwise the engine creates a random one, of 8 lowercase letters and digits. |
-| TASK     | The `name` of its step. A step makes one task in a work, so the name is unique in the work. So the name of a step is a slug too.                                                                                   |
+| TASK     | The `name` of its step, or `{group}-{step}-{round}` for a step of a loop group (see ADR 19). It is unique in the work, and a slug of at most 63 characters.                                                        |
 | ARTIFACT | A hash (see "The id of an artifact" in `persistence-data.md`).                                                                                                                                                     |
 
 The `id` of a work is in the name of its branch, in the path of its file and in
@@ -139,6 +146,32 @@ A role names a job. There are two kinds of role (see the principles in
 The fields `WORKFLOW_STEP.role`, `TASK.assignee` and `WORKFLOW.canApprove` hold
 the names of roles. A job of a role can be done by a person or by an AI. So the
 approver is a person or a bot.
+
+### Loop groups
+
+A step of a workflow can be a loop group (see ADR 19):
+`{ name, dependOn, loop: { maxRounds, steps } }`, with no `role`, `instruction`,
+`dod` or `timeout`. Its rules:
+
+- `maxRounds` is an integer from 1 to 10.
+- `loop.steps` is a straight chain: one step has no `dependOn`, each other step
+  depends on exactly one step of the group, and no step is depended on by two.
+- At least one step is a gate, `"gate": true`, and a gate has a non-empty `dod`.
+  A gate outside a group, and a group inside a group, are refused.
+- The name of a step of a group is unique in the whole workflow. A step outside
+  the group names the group in its `dependOn`, never a step inside it.
+- When the work is assigned, the group is unrolled into the tasks
+  `{group}-{step}-{round}`. The first task of round 1 depends on the `dependOn`
+  of the group, the first task of round `n > 1` on the last task of round
+  `n - 1`, and a step that depends on the group on the last task of the last
+  round.
+- A task of a group is `skipped` when a gate before it in the group has passed,
+  that is, its `dodChecklist` is all true. A skipped task is `completed`, so it
+  is `DONE`, with no run and no branch. It stands for the task that ran before
+  it.
+- When the last round ends with no gate passed, the `limitations` of the work
+  hold, for the group, the issues of the gates of the last round:
+  `{ group, rounds, issues }`, where each issue is `{ gate, failed, summary }`.
 
 ### Derived status
 

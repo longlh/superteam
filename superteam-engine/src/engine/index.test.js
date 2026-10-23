@@ -737,6 +737,29 @@ test("getWork reads a failed or a rejected work from its branch", async () => {
   });
 });
 
+test("getWork returns the limitations written in the work", async () => {
+  const limitations = [
+    {
+      group: "build",
+      rounds: 2,
+      issues: [
+        {
+          gate: "build-verify-2",
+          failed: ["no test fails"],
+          summary: "2 tests fail",
+        },
+      ],
+    },
+  ];
+  onBranch(
+    work("limited", {
+      limitations,
+    }),
+  );
+  pullRequest("limited", "open");
+  assert.deepEqual((await engine.getWork("limited")).limitations, limitations);
+});
+
 test("getWork reads an approved work from the branch its pull request was merged on", async () => {
   await writeJson(
     workFile(h.baseDir, "w1"),
@@ -1042,6 +1065,53 @@ test("reconcile starts a ready task whose worktree was never created", async () 
       }),
     ),
     true,
+  );
+});
+
+test("reconcile finishes the skips of a passed gate and runs the work merger", async () => {
+  // The gate passed and was stored, but the run stopped before the next task
+  // of its group, the last step of the work, was skipped.
+  await inWorktree(work("w1"), [
+    task("w1", "a", {
+      completed: true,
+      summary: "s",
+    }),
+    task("w1", "build-test-1", {
+      dependOn: ["a"],
+      gate: true,
+      group: "build",
+      round: 1,
+      dod: ["no test fails"],
+      dodChecklist: [true],
+      completed: true,
+      summary: "pass",
+    }),
+    task("w1", "build-verify-1", {
+      dependOn: ["build-test-1"],
+      gate: true,
+      group: "build",
+      round: 1,
+      dod: ["no test fails"],
+    }),
+  ]);
+  await start();
+  await engine.reconcile([]);
+  await waitFor(
+    () => done("engine:reconcile").length === 1,
+    "engine:reconcile",
+  );
+  assert.deepEqual(
+    notes.filter(([topic]) => topic === "job:run").map(([, job]) => job.id),
+    ["w1/work-merger"],
+  );
+  assert.equal(
+    existsSync(
+      worktreeDir(h.baseDir, {
+        workId: "w1",
+        taskId: "build-verify-1",
+      }),
+    ),
+    false,
   );
 });
 

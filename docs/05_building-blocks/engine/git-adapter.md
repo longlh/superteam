@@ -87,6 +87,10 @@ The branch of a worktree is kept after the worktree is removed, because it is
 merged later, or because it is the trace of a work that failed or was rejected
 (see "Branches").
 
+A task of a loop group that is skipped has no worktree and no branch (see ADR
+19). Wherever its branch is needed, as the base of the next task or in a merge,
+the branch of the task that ran before it is used.
+
 ### Calls at the same time
 
 A query and a handler can run git at the same time. When two calls update the

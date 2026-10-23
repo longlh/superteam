@@ -378,6 +378,11 @@ export function createEngine({
         : {
             pullRequest: pr.url,
           }),
+      ...(work.limitations === undefined
+        ? {}
+        : {
+            limitations: work.limitations,
+          }),
       ...(await errorOf(id, work)),
     };
   }
@@ -538,6 +543,8 @@ export function createEngine({
         deps,
         workId,
       });
+      // startReady can complete the skipped tasks of a loop group (see ADR 19).
+      tasks = await createTaskStore(folder).list();
       for (const job of await startedJobs(work, tasks)) {
         if (!started.includes(job.id)) {
           jobs.push(job);

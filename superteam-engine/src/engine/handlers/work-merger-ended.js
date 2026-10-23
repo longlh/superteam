@@ -1,5 +1,6 @@
 import { readJson, writeJson } from "../../lib/storage/files.js";
 import { workFile } from "../../lib/storage/paths.js";
+import { limitationsOf } from "../loops.js";
 import { createTaskStore } from "../tasks.js";
 import { failureOf, readEndedWorkMerger } from "./ended-job.js";
 import { failWork } from "./fail-work.js";
@@ -26,9 +27,16 @@ export async function workMergerEnded(deps, event) {
   const branch = deps.branches.work(workId);
   if ((await deps.git.getPullRequest(branch)) === null) {
     const file = workFile(workFolder, workId);
+    const tasks = await createTaskStore(workFolder).list();
+    const limitations = limitationsOf(tasks);
     const work = {
       ...(await readJson(file)),
       dodChecklist: data?.dodChecklist,
+      ...(limitations.length > 0
+        ? {
+            limitations,
+          }
+        : {}),
       updatedAt: deps.now().toISOString(),
     };
     await writeJson(file, work);
@@ -41,7 +49,7 @@ export async function workMergerEnded(deps, event) {
       body: renderPullRequestBody({
         summary: summary ?? "",
         work,
-        tasks: await createTaskStore(workFolder).list(),
+        tasks,
       }),
     });
   }

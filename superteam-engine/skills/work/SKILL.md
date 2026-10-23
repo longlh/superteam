@@ -13,7 +13,9 @@ the works with `/superteam:works`.
 Call the MCP tool `get_work` of superteam with the id.
 
 Show its title, `status`, `approvalStatus`, the URL of its pull request when it
-has one, and its `error` when it has one. With an error:
+has one, its `limitations` when it has some (what a loop group left: for each
+gate that did not pass, its failed items and its summary), and its `error` when
+it has one. With an error:
 
 - When `errorCause` is `agent`, say that an agent failed, and that the work is
   final: to try again, a new work is assigned.

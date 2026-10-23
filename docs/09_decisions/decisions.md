@@ -24,3 +24,4 @@ consequences. A decision that is replaced is not deleted: its status changes.
 | [16](0016-engine-errors-are-retried.md)         | An error of the engine is retried, an error of an agent is final                      |
 | [17](0017-decision-on-github.md)                | A decision can be made on GitHub                                                      |
 | [18](0018-branch-prefix.md)                     | The branches of superteam have a prefix that the project sets                         |
+| [19](0019-workflow-loops.md)                    | A workflow can repeat a group of steps until a gate passes                            |

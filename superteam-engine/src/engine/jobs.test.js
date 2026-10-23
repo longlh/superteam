@@ -104,3 +104,34 @@ test("an unknown kind is refused", () => {
     }),
   );
 });
+
+test("a task merger job targets the task that ran for a skipped one", () => {
+  const group = [
+    {
+      id: "build-test-1",
+      completed: true,
+      group: "build",
+    },
+    {
+      id: "build-verify-1",
+      dependOn: ["build-test-1"],
+      completed: true,
+      skipped: true,
+      group: "build",
+    },
+    {
+      id: "e",
+      assignee: "dev",
+      timeout: 30,
+      dependOn: ["a", "build-verify-1"],
+    },
+  ];
+  const job = buildJob({
+    kind: "task-merger",
+    work,
+    task: group[2],
+    tasks: [...tasks, ...group],
+    workdir: "/wt",
+  });
+  assert.deepEqual(job.instruction.targetIds, ["build-test-1"]);
+});

@@ -45,6 +45,54 @@ const WORKFLOW = {
   ],
 };
 
+// A workflow with a loop group: the code is tested and fixed, up to two
+// rounds, until a gate passes (see ADR 19).
+const LOOP_WORKFLOW = {
+  name: "fix",
+  title: "Fix until the tests pass",
+  steps: [
+    {
+      name: "code",
+      role: "developer",
+    },
+    {
+      name: "build",
+      dependOn: ["code"],
+      loop: {
+        maxRounds: 2,
+        steps: [
+          {
+            name: "test",
+            role: "tester",
+            gate: true,
+            dod: ["no test fails"],
+          },
+          {
+            name: "fix",
+            role: "developer",
+            dependOn: ["test"],
+          },
+          {
+            name: "verify",
+            role: "tester",
+            dependOn: ["fix"],
+            gate: true,
+            dod: ["no test fails"],
+          },
+        ],
+      },
+    },
+  ],
+};
+const LOOP_TASKS = [
+  "build-test-1",
+  "build-fix-1",
+  "build-verify-1",
+  "build-test-2",
+  "build-fix-2",
+  "build-verify-2",
+];
+
 const git = (cwd, args) =>
   execFileAsync("git", args, {
     cwd,
@@ -99,10 +147,12 @@ async function createProject(
   await mkdir(workflows, {
     recursive: true,
   });
-  await writeFile(
-    path.join(workflows, "build.json"),
-    `${JSON.stringify(WORKFLOW, null, 2)}\n`,
-  );
+  for (const workflow of [WORKFLOW, LOOP_WORKFLOW]) {
+    await writeFile(
+      path.join(workflows, `${workflow.name}.json`),
+      `${JSON.stringify(workflow, null, 2)}\n`,
+    );
+  }
   // The agent files of the roles, committed so every worktree has them.
   const roles = path.join(baseDir, ".claude", "agents");
   await mkdir(roles, {
@@ -281,9 +331,9 @@ const pidFiles = async (baseDir) =>
     name.endsWith(".pid"),
   );
 
-async function assign(stack, id) {
+async function assign(stack, id, workflow = "build") {
   const { status, body } = await stack.request("POST", "/works", {
-    workflow: "build",
+    workflow,
     title: `The work ${id}`,
     id,
     dod: DOD,
@@ -355,6 +405,81 @@ test("a work is assigned, run, proposed and approved", async (t) => {
   assert.equal(existsSync(workFile(baseDir, "first")), false);
   assert.ok(await listed(stack, "first"), "the work first is listed");
   assert.deepEqual(await remoteBranches(origin), ["main"]);
+});
+
+test("a gate that passes in round 1 skips the rest of its loop group", async (t) => {
+  const project = await createProject(t);
+  const stack = await startStack(project);
+
+  await assign(stack, "loop1", "fix");
+  const proposed = await waitForWork(
+    stack,
+    "loop1",
+    (work) => work.status === "DONE" && work.approvalStatus === "PROPOSED",
+    "the work loop1 is PROPOSED",
+  );
+  assert.equal("limitations" in proposed, false);
+  assert.doesNotMatch(
+    project.run.pullRequests.get("superteam-work/loop1").body,
+    /## Limitations/,
+  );
+  assert.ok(stack.pids.has("code"));
+  assert.ok(stack.pids.has("build-test-1"));
+  for (const task of LOOP_TASKS.slice(1)) {
+    assert.equal(stack.pids.has(task), false, `no agent ran for ${task}`);
+  }
+});
+
+test("a loop group whose gates never pass gives the work its limitations", async (t) => {
+  const project = await createProject(t);
+  const { origin } = project;
+  const gates = LOOP_TASKS.filter((task) => !task.includes("-fix-"));
+  const stack = await startStack(
+    project,
+    Object.fromEntries(gates.map((gate) => [gate, "fail-dod"])),
+  );
+
+  await assign(stack, "loop2", "fix");
+  const proposed = await waitForWork(
+    stack,
+    "loop2",
+    (work) => work.status === "DONE" && work.approvalStatus === "PROPOSED",
+    "the work loop2 is PROPOSED",
+  );
+  const limitations = [
+    {
+      group: "build",
+      rounds: 2,
+      issues: ["build-test-2", "build-verify-2"].map((gate) => ({
+        gate,
+        failed: ["no test fails"],
+        summary: "done",
+      })),
+    },
+  ];
+  assert.deepEqual(proposed.limitations, limitations);
+  assert.match(
+    project.run.pullRequests.get("superteam-work/loop2").body,
+    /\n## Limitations\n\n`build` stopped after 2 rounds with no gate passed\.\n\nThe gate `build-test-2` did not pass:\n\n- \[ \] no test fails\n\nSummary: done\n/,
+  );
+  for (const task of LOOP_TASKS) {
+    assert.ok(stack.pids.has(task), `an agent ran for ${task}`);
+  }
+
+  await approve(stack, "loop2");
+  await waitForWork(
+    stack,
+    "loop2",
+    (work) => work.approvalStatus === "APPROVED",
+    "the work loop2 is APPROVED",
+  );
+  const work = JSON.parse(
+    await waitFor(
+      () => onOrigin(origin, "main", ".superteam/.p/works/loop2.json"),
+      "the work loop2 is on main",
+    ),
+  );
+  assert.deepEqual(work.limitations, limitations);
 });
 
 test("a commit of the root branch that is not pushed stays out of the work, and the root workspace is not changed", async (t) => {

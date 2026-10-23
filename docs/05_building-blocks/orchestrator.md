@@ -176,17 +176,18 @@ GET /works/{id}
 
 Answer `200 OK`:
 
-| Field            | Type    | Description                                                                                      |
-| ---------------- | ------- | ------------------------------------------------------------------------------------------------ |
-| `id`             | string  | The id of the work.                                                                              |
-| `title`          | string  | The title of the work.                                                                           |
-| `workflow`       | string  | The name of its workflow.                                                                        |
-| `status`         | string  | `OPEN`, `IN_PROGRESS`, `DONE` or `FAILED` (see "Derived status" in `storage.md`).                |
-| `approvalStatus` | string  | `DRAFT`, `PROPOSED`, `APPROVED` or `REJECTED`. Derived from the pull request.                    |
-| `pullRequest`    | string  | The URL of the pull request, once the work is proposed. Otherwise absent.                        |
-| `error`          | string  | Why the work failed, or why its last step failed in the engine. Otherwise absent.                |
-| `errorCause`     | string  | `agent` or `engine`, with `error` (see ADR 16). Otherwise absent.                                |
-| `retryable`      | boolean | With `error`: true when the work can be retried with `POST /works/{id}/retry`. Otherwise absent. |
+| Field            | Type     | Description                                                                                                                                                                                           |
+| ---------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`             | string   | The id of the work.                                                                                                                                                                                   |
+| `title`          | string   | The title of the work.                                                                                                                                                                                |
+| `workflow`       | string   | The name of its workflow.                                                                                                                                                                             |
+| `status`         | string   | `OPEN`, `IN_PROGRESS`, `DONE` or `FAILED` (see "Derived status" in `storage.md`).                                                                                                                     |
+| `approvalStatus` | string   | `DRAFT`, `PROPOSED`, `APPROVED` or `REJECTED`. Derived from the pull request.                                                                                                                         |
+| `pullRequest`    | string   | The URL of the pull request, once the work is proposed. Otherwise absent.                                                                                                                             |
+| `limitations`    | object[] | What a loop group left, when its last round ended with no gate passed: `{ group, rounds, issues }`, each issue `{ gate, failed, summary }` (see ADR 19). Once the work is proposed. Otherwise absent. |
+| `error`          | string   | Why the work failed, or why its last step failed in the engine. Otherwise absent.                                                                                                                     |
+| `errorCause`     | string   | `agent` or `engine`, with `error` (see ADR 16). Otherwise absent.                                                                                                                                     |
+| `retryable`      | boolean  | With `error`: true when the work can be retried with `POST /works/{id}/retry`. Otherwise absent.                                                                                                      |
 
 The `status` and the `approvalStatus` are not stored: the engine derives them
 when it answers.

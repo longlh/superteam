@@ -98,6 +98,7 @@ export function createFakeGh({ baseDir, defaultBranch = "main" }) {
         pullRequests.set(head, {
           url,
           title: option("--title"),
+          body: option("--body"),
           base: option("--base") ?? defaultBranch,
           number: count,
           state: "OPEN",
@@ -158,6 +159,9 @@ export function createFakeGh({ baseDir, defaultBranch = "main" }) {
     }
   }
 
-  return (command, args, options) =>
+  // A test reads the pull requests, by their head branch.
+  const run = (command, args, options) =>
     command === "gh" ? gh(args) : realRun(command, args, options);
+  run.pullRequests = pullRequests;
+  return run;
 }

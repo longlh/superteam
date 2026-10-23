@@ -48,6 +48,54 @@ test("createTasks makes one task for each step", () => {
   assert.equal(b.description, "desc b");
 });
 
+test("createTasks unrolls a loop group and keeps gate, group and round", () => {
+  const tasks = createTasks(
+    work,
+    {
+      name: "wf",
+      steps: [
+        {
+          name: "build",
+          loop: {
+            maxRounds: 2,
+            steps: [
+              {
+                name: "fix",
+                role: "developer",
+              },
+              {
+                name: "test",
+                role: "tester",
+                dependOn: ["fix"],
+                gate: true,
+                dod: ["no test fails"],
+              },
+            ],
+          },
+        },
+      ],
+    },
+    now,
+  );
+  const test2 = tasks.find((t) => t.id === "build-test-2");
+  assert.equal(test2.gate, true);
+  assert.equal(test2.group, "build");
+  assert.equal(test2.round, 2);
+  assert.equal(test2.assignee, "tester");
+  assert.deepEqual(test2.dependOn, ["build-fix-2"]);
+  assert.deepEqual(
+    tasks.map((t) => t.id),
+    ["build-fix-1", "build-test-1", "build-fix-2", "build-test-2"],
+  );
+});
+
+test("createTasks adds no gate, group or round to a step outside a group", () => {
+  const [a] = createTasks(work, workflow, now);
+  for (const field of ["gate", "group", "round"]) {
+    assert.equal(field in a, false);
+  }
+});
+
 test("taskStatus of b is PENDING until a is completed", () => {
   const tasks = createTasks(work, workflow, now);
   assert.equal(taskStatus(tasks[1], tasks), "PENDING");

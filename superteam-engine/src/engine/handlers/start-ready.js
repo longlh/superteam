@@ -7,6 +7,7 @@ import {
 } from "../../lib/storage/paths.js";
 import { taskStatus } from "../../lib/storage/status.js";
 import { buildJob } from "../jobs.js";
+import { ranId, skips } from "../loops.js";
 import { createTaskStore } from "../tasks.js";
 
 export async function workerJob({ deps, work, task, tasks }) {
@@ -14,8 +15,9 @@ export async function workerJob({ deps, work, task, tasks }) {
     workId: work.id,
     taskId: task.id,
   });
+  const dependOn = task.dependOn.map((id) => ranId(id, tasks));
   const artifacts = (await listJson(artifactsDir(workdir, work.id))).filter(
-    (artifact) => task.dependOn.includes(artifact.task),
+    (artifact) => dependOn.includes(artifact.task),
   );
   return buildJob({
     kind: "worker",
@@ -52,6 +54,28 @@ export async function taskJob({ deps, work, task, tasks }) {
   });
 }
 
+// Marks skipped, one after the other, the ready tasks of a group that come
+// after a passed gate (see ADR 19). A skipped task has no worktree and no job.
+async function skipReady({ deps, store }) {
+  for (;;) {
+    const tasks = await store.list();
+    const task = tasks.find(
+      (t) => taskStatus(t, tasks) === "IN_PROGRESS" && skips(t, tasks),
+    );
+    if (task === undefined) {
+      return tasks;
+    }
+    const at = deps.now().toISOString();
+    await store.put({
+      ...task,
+      completed: true,
+      skipped: true,
+      completedAt: at,
+      updatedAt: at,
+    });
+  }
+}
+
 // Starts every task that is IN_PROGRESS and has no worktree yet: creates its
 // worktree and publishes its job. Returns the ids of the jobs it published.
 export async function startReady({ deps, workId }) {
@@ -59,7 +83,10 @@ export async function startReady({ deps, workId }) {
     workId,
   });
   const work = await readJson(workFile(workFolder, workId));
-  const tasks = await createTaskStore(workFolder).list();
+  const tasks = await skipReady({
+    deps,
+    store: createTaskStore(workFolder),
+  });
   const started = [];
 
   for (const task of tasks) {
@@ -72,7 +99,7 @@ export async function startReady({ deps, workId }) {
     }
     // A task with no dependency starts from the branch of its work, so all
     // the tasks of a work start from the same commit.
-    const [first] = task.dependOn;
+    const [first] = task.dependOn.map((id) => ranId(id, tasks));
     await deps.git.createWorktree({
       folder,
       branch: deps.branches.task(workId, task.id),

@@ -69,6 +69,7 @@ test("commits the checklist, pushes, opens the pull request, removes the worktre
   assert.equal(commit[2], "Propose the work w1");
   assert.deepEqual(commit[3].works[0].dodChecklist, dodChecklist);
   assert.equal(commit[3].works[0].extra, undefined);
+  assert.equal("limitations" in commit[3].works[0], false);
   assert.equal(commit[3].works[0].updatedAt, now.toISOString());
   assert.deepEqual(h.named("push"), [["push", "superteam-work/w1"]]);
   assert.deepEqual(h.named("openPullRequest"), [
@@ -212,4 +213,79 @@ test("the folder of the tasks is kept while a task folder is left in it", async 
     },
   });
   assert.equal(existsSync(path.join(tasksFolder(), "left")), true);
+});
+
+test("writes the limitations of a group in the work and the pull request", async () => {
+  const g = await createHarness({
+    loopy: {
+      name: "loopy",
+      title: "Loopy",
+      steps: [
+        {
+          name: "build",
+          loop: {
+            maxRounds: 1,
+            steps: [
+              {
+                name: "test",
+                role: "tester",
+                gate: true,
+                dod: ["no test fails"],
+              },
+            ],
+          },
+        },
+      ],
+    },
+  });
+  try {
+    await g.handlers["work:assign"](
+      assignEvent({
+        id: "w2",
+        workflow: "loopy",
+        title: "Loop",
+      }),
+    );
+    await g.handlers["worker:ended"](
+      endedEvent("worker:ended", {
+        jobId: "w2/build-test-1/worker",
+        summary: "1 test fails",
+        data: {
+          dodChecklist: [false],
+        },
+      }),
+    );
+    await g.handlers["work-merger:ended"](
+      endedEvent("work-merger:ended", {
+        jobId: "w2/work-merger",
+        summary: "S",
+        data: {
+          dodChecklist: [],
+        },
+      }),
+    );
+    const [commit] = g
+      .named("commitAll")
+      .filter(([, , message]) => message.startsWith("Propose"));
+    assert.deepEqual(commit[3].works[0].limitations, [
+      {
+        group: "build",
+        rounds: 1,
+        issues: [
+          {
+            gate: "build-test-1",
+            failed: ["no test fails"],
+            summary: "1 test fails",
+          },
+        ],
+      },
+    ]);
+    const [[, pr]] = g.named("openPullRequest");
+    assert.match(
+      pr.body,
+      /## Limitations\n\n`build` stopped after 1 round with no gate passed\.\n/,
+    );
+  } finally {
+    await g.cleanup();
+  }
 });

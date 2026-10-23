@@ -63,7 +63,9 @@ the Agents with the Claude process.
    request on the `base` of the work, so the work is `PROPOSED`. The description
    of the pull request is a Markdown text that holds the `summary` of the work
    merger, the DOD checklist of the work, and the DOD checklists of the tasks,
-   because the tasks are removed with the worktree of the work.
+   except the skipped ones, because the tasks are removed with the worktree of
+   the work, and a section `## Limitations` when a loop group left some (see ADR
+   19).
 
 ```plantuml
 @startuml
@@ -110,6 +112,25 @@ Handler -> Git : push, create pull request
 Handler -> Git : remove worktree of the work
 @enduml
 ```
+
+## Loop a group of steps
+
+Realizes: a workflow whose steps repeat until a gate passes (see ADR 19).
+
+Passes through: the handlers, the git adapter and the Agents, as in "Assign and
+run a work".
+
+1. **Unroll.** When the work is assigned, its loop group is unrolled into the
+   tasks of each round, `{group}-{step}-{round}`, in one chain.
+2. **Round.** The tasks of a round run one after the other, as any task. The
+   first task of a round after the first gets the issues of the gates of the
+   round before, and works on its branch.
+3. **Gate.** A gate passes when its DOD checklist is all true. Then the next
+   tasks of the group are skipped: they are done with no agent, and the steps
+   after the group run on the branch of the task that ran last.
+4. **Limit.** When the last round ends with no gate passed, the work goes on
+   with limitations. The steps after the group and the work merger get them in
+   their prompt, and the pull request and the API show them.
 
 ## Decide a work
 

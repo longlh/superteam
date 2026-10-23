@@ -1,10 +1,11 @@
 import { jobSchema } from "../lib/storage/schemas.js";
 import { jobId } from "../lib/storage/ids.js";
+import { ranId } from "./loops.js";
 import { buildPrompt } from "./prompt.js";
 
 const MERGER_TIMEOUT = 720;
 
-function describe({ kind, work, task }) {
+function describe({ kind, work, task, tasks }) {
   switch (kind) {
     case "worker":
       return {
@@ -20,7 +21,7 @@ function describe({ kind, work, task }) {
         timeout: MERGER_TIMEOUT,
         schema: jobSchema("TASK"),
         target: "merge",
-        targetIds: (task.dependOn ?? []).slice(1),
+        targetIds: (task.dependOn ?? []).slice(1).map((id) => ranId(id, tasks)),
       };
     case "work-merger":
       return {
@@ -48,6 +49,7 @@ export function buildJob({
     kind,
     work,
     task,
+    tasks,
   });
   return {
     id: jobId({

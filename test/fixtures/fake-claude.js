@@ -46,9 +46,27 @@ function hasLocal(branch) {
   }
 }
 
+// The number of the numbered items under the line `title`.
+function itemsUnder(lines, title) {
+  const at = lines.indexOf(title);
+  if (at === -1) {
+    return 0;
+  }
+  let count = 0;
+  for (const line of lines.slice(at + 1)) {
+    if (!/^\d+\. /.test(line)) {
+      break;
+    }
+    count += 1;
+  }
+  return count;
+}
+
 // Does the job of the prompt: merges the branches it names, or writes a file
-// named after the role and commits it. Returns the DOD checklist.
-function work(prompt) {
+// named after the role and commits it. Returns the DOD checklist: for a
+// merger, true for each item of the DOD of the work; for a worker, `met` for
+// each item of the DOD of the task.
+function work(prompt, met) {
   const lines = prompt.split("\n");
   const merge = lines.find((line) => line.startsWith("Branches to merge: "));
   if (merge !== undefined) {
@@ -69,18 +87,9 @@ function work(prompt) {
     git(["add", "--", name]);
     git(["commit", "-m", `Write ${name}`]);
   }
-  const dod = lines.indexOf("DOD of the work:");
-  if (merge === undefined || dod === -1) {
-    return [];
-  }
-  const items = [];
-  for (const line of lines.slice(dod + 1)) {
-    if (!/^\d+\. /.test(line)) {
-      break;
-    }
-    items.push(true);
-  }
-  return items;
+  return merge === undefined
+    ? Array(itemsUnder(lines, "DOD of the task:")).fill(met)
+    : Array(itemsUnder(lines, "DOD of the work:")).fill(true);
 }
 
 const mode = modeOf(process.cwd());
@@ -105,9 +114,14 @@ const result = {
 };
 
 switch (mode) {
+  // fail-dod does the job as ok, but meets no item of the DOD of its task.
   case "ok":
+  case "fail-dod":
     if (isWorktree()) {
-      result.structured_output.data.dodChecklist = work(arg("-p") ?? "");
+      result.structured_output.data.dodChecklist = work(
+        arg("-p") ?? "",
+        mode === "ok",
+      );
     }
     console.log(JSON.stringify(result));
     break;

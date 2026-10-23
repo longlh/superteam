@@ -1,12 +1,13 @@
 import { listJson, readJson, writeJson } from "../lib/storage/files.js";
 import { r, taskFile } from "../lib/storage/paths.js";
+import { unrollSteps } from "./loops.js";
 import path from "node:path";
 
 const DEFAULT_TIMEOUT = 720;
 
 export function createTasks(work, workflow, now) {
   const at = now.toISOString();
-  return workflow.steps.map((step) => ({
+  return unrollSteps(workflow.steps).map((step) => ({
     id: step.name,
     title: step.name,
     assignee: step.role,
@@ -18,6 +19,13 @@ export function createTasks(work, workflow, now) {
     work: work.id,
     createdAt: at,
     updatedAt: at,
+    ...(step.group === undefined
+      ? {}
+      : {
+          gate: step.gate === true,
+          group: step.group,
+          round: step.round,
+        }),
   }));
 }
 

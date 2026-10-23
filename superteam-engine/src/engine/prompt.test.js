@@ -92,3 +92,201 @@ test("the work merger prompt", () => {
   assert.match(prompt, /1\. ship/);
   assert.match(prompt, /2\. test/);
 });
+
+// The group build ran build-test-1, which passed, so its next tasks were
+// skipped.
+const looped = [
+  {
+    id: "docs",
+    completed: true,
+  },
+  {
+    id: "build-test-1",
+    completed: true,
+    gate: true,
+    group: "build",
+    round: 1,
+    dodChecklist: [true],
+  },
+  {
+    id: "build-fixbug-1",
+    dependOn: ["build-test-1"],
+    completed: true,
+    skipped: true,
+    group: "build",
+    round: 1,
+  },
+  {
+    id: "build-verify-1",
+    dependOn: ["build-fixbug-1"],
+    completed: true,
+    skipped: true,
+    group: "build",
+    round: 1,
+  },
+];
+
+test("a task merger prompt names the task that ran for a skipped one", () => {
+  const task = {
+    id: "release-note",
+    dependOn: ["docs", "build-verify-1"],
+  };
+  const prompt = buildPrompt({
+    kind: "task-merger",
+    work,
+    task,
+    tasks: [...looped, task],
+  });
+  assert.match(prompt, /Branches to merge: superteam-task\/w\/build-test-1$/m);
+});
+
+test("the work merger prompt names the task that ran for a skipped final task", () => {
+  const prompt = buildPrompt({
+    kind: "work-merger",
+    work,
+    tasks: looped.filter((t) => t.id !== "docs"),
+  });
+  assert.match(prompt, /Branches to merge: superteam-task\/w\/build-test-1\n/);
+});
+
+test("a worker prompt has the artifacts of the task that ran for a skipped one", () => {
+  const task = {
+    id: "release-note",
+    dependOn: ["build-verify-1"],
+  };
+  const prompt = buildPrompt({
+    kind: "worker",
+    work,
+    task,
+    tasks: [...looped, task],
+    artifacts: [
+      {
+        id: "1",
+        task: "build-test-1",
+        work: "w",
+        createdAt: "x",
+        content: "all tests pass",
+      },
+    ],
+  });
+  assert.match(prompt, /- from build-test-1: all tests pass/);
+});
+
+// The group build had one round with no gate passed, and release-note
+// depends on it.
+const gate = (id, round, extra = {}) => ({
+  id,
+  completed: true,
+  gate: true,
+  group: "build",
+  round,
+  dod: ["it builds", "no test fails"],
+  dodChecklist: [true, false],
+  summary: `2 tests fail in ${id}`,
+  ...extra,
+});
+const oneRound = [
+  gate("build-test-1", 1),
+  {
+    id: "build-fixbug-1",
+    dependOn: ["build-test-1"],
+    completed: true,
+    gate: false,
+    group: "build",
+    round: 1,
+  },
+  gate("build-verify-1", 1, {
+    dependOn: ["build-fixbug-1"],
+  }),
+];
+const releaseNote = {
+  id: "release-note",
+  dependOn: ["build-verify-1"],
+};
+
+test("the first task of a round has the issues of the gates of the round before", () => {
+  const task = {
+    id: "build-test-2",
+    dependOn: ["build-verify-1"],
+    gate: true,
+    group: "build",
+    round: 2,
+  };
+  const prompt = buildPrompt({
+    kind: "worker",
+    work,
+    task,
+    tasks: [...oneRound, task],
+  });
+  assert.match(
+    prompt,
+    /\nIssues of the gates of the round before:\n- build-test-1: not met: no test fails\n {2}Summary: 2 tests fail in build-test-1\n- build-verify-1: not met: no test fails\n {2}Summary: 2 tests fail in build-verify-1\n/,
+  );
+});
+
+test("a task of a round that is not its first has no issues", () => {
+  const first = gate("build-test-2", 2, {
+    dependOn: ["build-verify-1"],
+  });
+  const task = {
+    id: "build-fixbug-2",
+    dependOn: ["build-test-2"],
+    group: "build",
+    round: 2,
+  };
+  const prompt = buildPrompt({
+    kind: "worker",
+    work,
+    task,
+    tasks: [...oneRound, first, task],
+  });
+  assert.doesNotMatch(prompt, /Issues of the gates/);
+});
+
+test("a task that depends on a group has its limitations", () => {
+  const prompt = buildPrompt({
+    kind: "worker",
+    work,
+    task: releaseNote,
+    tasks: [...oneRound, releaseNote],
+  });
+  assert.match(
+    prompt,
+    /\nLimitations:\n- build stopped after 1 round; the gate build-test-1 did not pass: no test fails\n {2}Summary: 2 tests fail in build-test-1\n- build stopped after 1 round; the gate build-verify-1 did not pass: no test fails\n {2}Summary: 2 tests fail in build-verify-1\n/,
+  );
+});
+
+test("the work merger prompt has the limitations", () => {
+  const prompt = buildPrompt({
+    kind: "work-merger",
+    work,
+    tasks: [...oneRound, releaseNote],
+  });
+  assert.match(
+    prompt,
+    /\nLimitations:\n- build stopped after 1 round; the gate build-test-1 did not pass: no test fails\n/,
+  );
+});
+
+test("no limitations when a gate of the group passed", () => {
+  const passed = oneRound.map((t) =>
+    t.id === "build-verify-1"
+      ? {
+          ...t,
+          dodChecklist: [true, true],
+        }
+      : t,
+  );
+  for (const [kind, task] of [
+    ["worker", releaseNote],
+    ["work-merger", undefined],
+  ]) {
+    const prompt = buildPrompt({
+      kind,
+      work,
+      task,
+      tasks: [...passed, releaseNote],
+    });
+    assert.doesNotMatch(prompt, /Limitations:/);
+  }
+});
