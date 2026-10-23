@@ -16,6 +16,20 @@ project's own workflow.
   - Never ask for approval and edit in the same turn.
   - When the user has decided something, do exactly that. Do not reopen it with
     new options.
+- Skills: before a step, load the superpowers skill that fits it, with the Skill
+  tool. The rule on changes above comes first: a skill never allows an edit that
+  the user has not approved.
+  - Review: after a change, `superpowers:requesting-code-review`. When the
+    findings come back, `superpowers:receiving-code-review`: verify each one in
+    the code before you propose a fix.
+  - Bug: `superpowers:systematic-debugging` while its cause is not known.
+  - Fix or feature: `superpowers:test-driven-development`: write the test, see
+    it fail, then write the code.
+  - Before you say that something is done:
+    `superpowers:verification-before-completion`.
+  - Many independent fixes: `superpowers:writing-plans`, then
+    `superpowers:executing-plans`.
+  - Before a merge into `main`: `superpowers:finishing-a-development-branch`.
 - When you rewrite, trim or move text in a file, make sure no information is
   lost. Before you remove a piece of text, check that it is still said somewhere
   else. If it is not, keep it or move it to the right place.
