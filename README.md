@@ -137,6 +137,9 @@ The approval flow happens when the workflow ends. An **approver** evaluates the
 whole output of the work, then either approves or rejects it. The workflow says
 which roles can be the approver.
 
+The approver decides in the pull request of the work on GitHub, by merging or
+closing it, or with `/superteam:decide`.
+
 Normally an approval flow is independent from the workflow and has many steps of
 its own. It is not the main target of the engine, so it is kept simple here.
 

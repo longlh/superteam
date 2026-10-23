@@ -126,6 +126,10 @@ request and the event.
   tasks of the work. The branch of the work is kept on the remote, so the work
   is still listed (see "List the works"). A rejected work is final.
 
+The approver can also merge or close the pull request on GitHub. The engine
+takes it as the same decision, and finishes it when the work is next read, or at
+the next start (see ADR 17).
+
 The decision itself is not stored (see "Decide a work" in `action-flow.md`): the
 result is in the pull request, and the git history keeps it.
 

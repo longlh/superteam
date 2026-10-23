@@ -230,13 +230,48 @@ export function createEngine({
   // An id checked but not accepted yet maps to null.
   const pending = new Map();
   const conflict = (id) => new EngineError("conflict", `the id ${id} is used`);
+  // The decisions made on GitHub that are enqueued and not processed yet.
+  const finishing = new Set();
   for (const topic of ["event:done", "event:error"]) {
     loop.subscribe(topic, (data) => {
       const payload = data?.event?.payload;
       if (payload?.type === "work:assign") {
         pending.delete(payload.data?.id);
       }
+      if (payload?.type === "work:decide") {
+        finishing.delete(payload.data?.id);
+      }
     });
+  }
+
+  // A merge or a close of the pull request on GitHub is a decision. When the
+  // branches that it deletes are left, `work:decide` finishes it, once
+  // (see ADR 17).
+  async function finishDecision(id, pr) {
+    if (
+      !ready ||
+      finishing.has(id) ||
+      (pr?.state !== "merged" && pr?.state !== "closed")
+    ) {
+      return;
+    }
+    finishing.add(id);
+    try {
+      const left =
+        (await remote.listBranches(`tasks/${id}/`)).length > 0 ||
+        (pr.state === "merged" && (await remote.branchExists(branchOf(id))));
+      if (!left) {
+        finishing.delete(id);
+        return;
+      }
+      await enqueue("work:decide", {
+        id,
+        decision: pr.state === "merged" ? "approve" : "reject",
+      });
+    } catch (error) {
+      finishing.delete(id);
+      throw error;
+    }
   }
 
   // The work of an id from the first source that has it: the work worktree
@@ -319,6 +354,7 @@ export function createEngine({
     }
     const { work, tasks, root } = found;
     const pr = root ? found.pr : await remote.getPullRequest(branchOf(id));
+    await finishDecision(id, pr);
     return {
       id,
       title: work.title,
@@ -529,6 +565,18 @@ export function createEngine({
         });
       } else {
         pubsub.publish("job:run", job);
+      }
+    }
+    // The decisions made on GitHub while superteam did not run.
+    const ids = new Set(
+      [
+        ...(await git.listBranches("works/")),
+        ...(await git.listBranches("tasks/")),
+      ].map((branch) => branch.split("/")[1]),
+    );
+    for (const id of ids) {
+      if (isSlug(id)) {
+        await finishDecision(id, await git.getPullRequest(branchOf(id)));
       }
     }
   }

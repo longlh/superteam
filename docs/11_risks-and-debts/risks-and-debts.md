@@ -44,6 +44,11 @@ The loop is made for an internal tool. These limits are known and accepted:
   memory. After a restart, while an assign left in the queue is not processed, a
   second assign with the same id is accepted, and the engine creates the work
   once, from the first one.
+- A decision made on GitHub, a merge or a close of the pull request, is finished
+  when the work is next read, or at the next start (see ADR 17). Until then the
+  branches of its tasks are left. A check of the proposed works at a fixed
+  interval, or a webhook of GitHub forwarded to this machine (such as with the
+  `gh webhook forward` extension), could finish it at once.
 
 ### Handlers (`handlers.md`)
 

@@ -51,6 +51,11 @@ beforeEach(async () => {
       ]),
     ].sort();
   h.git.fetch = async () => {};
+  const { deleteBranch } = h.git;
+  h.git.deleteBranch = async (branch) => {
+    extraBranches.delete(branch);
+    return deleteBranch(branch);
+  };
   gitLog = [];
   for (const [name, fn] of Object.entries(h.git)) {
     h.git[name] = (...args) => {
@@ -1312,4 +1317,76 @@ test("a work:fail that goes to the DLQ makes no other work:fail", async () => {
   assert.equal(state.status, "FAILED");
   assert.equal(state.errorCause, "engine");
   assert.equal(state.retryable, false);
+});
+
+test("a query of a work merged on GitHub finishes the decision, once", async () => {
+  await start();
+  onBranch(work("w1"));
+  extraBranches.add("tasks/w1/a");
+  pullRequest("w1", "merged");
+  // The handler waits, so both queries see the decision as not finished.
+  let open;
+  const gate = new Promise((resolve) => {
+    open = resolve;
+  });
+  const deleteBranch = h.git.deleteBranch;
+  h.git.deleteBranch = async (branch) => {
+    await gate;
+    return deleteBranch(branch);
+  };
+  try {
+    assert.equal((await engine.getWork("w1")).approvalStatus, "APPROVED");
+    await engine.listWorks();
+  } finally {
+    open();
+  }
+  await waitFor(() => done("work:decide").length === 1, "work:decide");
+  assert.deepEqual(done("work:decide")[0].data, {
+    id: "w1",
+    decision: "approve",
+  });
+  assert.deepEqual([...extraBranches], []);
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(done("work:decide").length, 1);
+});
+
+test("a query of a work closed on GitHub finishes the reject", async () => {
+  await start();
+  onBranch(work("w1"));
+  extraBranches.add("tasks/w1/a");
+  pullRequest("w1", "closed");
+  assert.equal((await engine.getWork("w1")).approvalStatus, "REJECTED");
+  await waitFor(() => done("work:decide").length === 1, "work:decide");
+  assert.deepEqual(done("work:decide")[0].data, {
+    id: "w1",
+    decision: "reject",
+  });
+  assert.deepEqual([...extraBranches], ["works/w1"]);
+});
+
+test("a query of a decided work with no branch left enqueues nothing", async () => {
+  await start();
+  approved(work("w1"));
+  assert.equal((await engine.getWork("w1")).approvalStatus, "APPROVED");
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(
+    notes.filter(
+      ([topic, data]) =>
+        topic === "event:done" && data.event.payload.type === "work:decide",
+    ).length,
+    0,
+  );
+});
+
+test("the reconcile of the start finishes a decision made on GitHub", async () => {
+  onBranch(work("w1"));
+  extraBranches.add("tasks/w1/a");
+  pullRequest("w1", "merged");
+  await start();
+  await engine.reconcile([]);
+  await waitFor(() => done("work:decide").length === 1, "work:decide");
+  assert.deepEqual(done("work:decide")[0].data, {
+    id: "w1",
+    decision: "approve",
+  });
 });
