@@ -25,6 +25,6 @@ the views that it needs, such as the behavior over time, the states or the data.
 
 - A chapter that has no content yet is an empty folder with a `.gitkeep`.
 - The known issues and the open questions are gathered in `11_risks-and-debts/`.
-- `docs/draft/` is legacy, and it is not migrated.
+- The legacy documents of `docs/draft/` are not migrated, and they are removed.
 - The diagrams of the C4 model and of UML are both written in PlantUML (see ADR
   10).

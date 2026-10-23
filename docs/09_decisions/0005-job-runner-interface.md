@@ -18,5 +18,4 @@ back by a callback (`onEnded`).
 
 - The other side does not need an interface to call the engine.
 - The engine enqueues an event when a job ends.
-- The names and the fields of the interface are still a proposal (see
-  `risks-and-debts.md`).
+- The names and the fields of the interface are the ones of `agents.md`.

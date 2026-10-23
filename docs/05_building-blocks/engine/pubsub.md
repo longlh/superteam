@@ -15,8 +15,9 @@ engine does not know who the subscribers are.
   - The notification of the engine itself: `engine:ready`, when the start stage
     of the engine loop is done, so the engine can take requests.
 - A subscriber subscribes with a topic, with `subscribe(topic, callback)`, and
-  the engine matches the topic: it calls the callback for each notification of
-  the topic. Nothing is returned to the engine.
+  the engine matches the topic exactly: it calls the callback for each
+  notification whose name is the topic, such as `job:run` or `event:error`.
+  Nothing is returned to the engine.
 - A subscriber is called in the order of its subscription, and the engine does
   not wait for it. An error of a subscriber does not stop the loop or the other
   subscribers.

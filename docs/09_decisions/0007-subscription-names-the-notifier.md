@@ -18,4 +18,5 @@ data is versioned in git.
 ## Consequences
 
 - The Notifier is the only part that knows the topics and the channels.
-- What a `topic` matches is not decided yet (see `risks-and-debts.md`).
+- A `topic` matches the name of a notification exactly, such as `event:error`
+  (see `pubsub.md`).

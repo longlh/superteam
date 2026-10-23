@@ -28,7 +28,10 @@ The loop is made for an internal tool. These limits are known and accepted:
 - `reconcile(jobs)` can publish a job again when its own event,
   `engine:reconcile`, is retried. So an agent can run one more time.
 - A failure of the remote in one work fails the event `engine:reconcile`, so it
-  fails for all the works, not only for that one.
+  fails for all the works, not only for that one. When it goes to the DLQ, no
+  work shows the error, because the event belongs to no work: only the log has
+  it. The killed jobs of that start are not failed, and the jobs that the engine
+  waits for are not published again, until the next start.
 - `listWorks()` finds the approved works in the last 1000 merged pull requests
   of the repository, and keeps those of the branches `works/*`. In a busy
   repository, an old approved work is not listed, but its state can still be
@@ -45,8 +48,10 @@ The loop is made for an internal tool. These limits are known and accepted:
 ### Handlers (`handlers.md`)
 
 - If the engine stops between the opening of the pull request of a work and the
-  removal of the worktree of the work, and the event is not processed again, the
-  worktree of the work is left. Reconcile does not remove it.
+  removal of the worktree of the work, the event is processed again at the next
+  start, and the worktree is removed. When that event goes to the DLQ instead,
+  the worktree is left until the work is retried (see ADR 16). Reconcile does
+  not remove it.
 
 ### Git adapter (`git-adapter.md`)
 
@@ -72,16 +77,23 @@ The loop is made for an internal tool. These limits are known and accepted:
   `claude` processes together, each with the MCP servers of its session, and
   spend the usage limit or the money faster. A limit in `.superteam/.env`, with
   a queue in the Agents, can be added later without a change of the engine.
-- The pid of a leftover file is checked only by the name of its command, by
-  `recover()` (see `agent-manager.md`) and by `/superteam:stop` (see
-  `control-skill.md`). Another process whose command holds the same name can be
-  killed or stopped.
+- The pid of a leftover file is checked only by the name of its command:
+  `claude` for an agent, by `recover()` and `killLeftovers()` (see
+  `agent-manager.md`), and `main.js` for superteam, by `/superteam:start`,
+  `/superteam:stop` and the lock (see `control-skill.md`, and "Start" in
+  `orchestrator.md`). Another process whose command holds the same name can be
+  killed or stopped, or can keep superteam from starting.
 
 ### Claude process (`claude-process.md`)
 
 - The prompt is passed as an argument of the command. A very large prompt can go
   over the limit of the length of the arguments of the operating system, and the
   agent does not start.
+- An agent runs in a worktree inside the root workspace
+  (`.superteam/.r/worktrees/`). `claude` reads the `CLAUDE.md` files of the
+  folders above it, so an agent may load the `CLAUDE.md` of the root workspace,
+  even one that is not pushed, which goes against ADR 15. It is not checked with
+  a real run yet.
 
 ## Open questions
 
@@ -91,56 +103,17 @@ These are not decided yet.
 
 1. **The worker as a person.** Every task is done by an AI agent, so the steps
    of a person who does a task are not defined yet.
-2. **How the person reaches the system.** The operation skills are not decided
-   (see `05_building-blocks/connector/operation-skill.md`).
-
-### MCP server (`mcp-server.md`)
-
-1. **The names and the inputs of the tools.** They follow the requests of the
-   API, whose paths and bodies are a proposal (see "HTTP API" in
-   `orchestrator.md`).
-
-### Operation Skill (`operation-skill.md`)
-
-1. **The level of the API.** `query-data` works by entity, but the HTTP API
-   works only at the level of the work (see "HTTP API" in `orchestrator.md`).
-   The skills must be made to fit it: assign a work, decide on it, and get its
-   state.
-2. **`finish`.** It supposes that a person does a task, and for now every job
-   that the engine asks for is run by the Agents, which run AI agents (see
-   `orchestrator.md` and `agents.md`). The decision on a work is already a
-   request of the API.
-
-### Engine (`engine.md`)
-
-1. **The names.** The names of the functions of the engine are a proposal.
+2. **How the person reaches the system.** The person uses the tools of the MCP
+   server from a session of the AI tool. The operation skills, which would guide
+   that, are not decided (see
+   `05_building-blocks/connector/operation-skill.md`).
 
 ### HTTP API (`orchestrator.md`)
 
-1. **The paths and the bodies.** Everything above is a proposal.
-2. **The tasks.** A query that shows the progress of the tasks of a work, as a
+1. **The tasks.** A query that shows the progress of the tasks of a work, as a
    read-only view. For now the client sees only the work.
 
 ### Orchestrator (`orchestrator.md`)
 
 1. **Where the subscriptions are kept.** `storage.md` has no entity for a
    subscription.
-2. **The name `addon`.** It comes from the draft schema, where the receiver was
-   an addon of the plugin. Here it names the container that the orchestrator
-   calls, such as the notifier.
-
-### Pub/Sub (`pubsub.md`)
-
-1. **The topic.** In the draft schema a topic is `{entity}:{operation}`, such as
-   `_task:update`. The events of the engine have a `type` such as `work:assign`.
-   What a `topic` matches is not decided.
-
-### Action flow (`action-flow.md`)
-
-1. **The topic.** What a topic of a subscription matches is not decided (see
-   `pubsub.md`), so the step where a subscription matches a topic is open.
-
-### Data flow (`data-flow.md`)
-
-1. **The artifacts and the tasks.** An artifact in git refers to a task, but the
-   tasks are runtime data, and are not kept.

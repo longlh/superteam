@@ -25,8 +25,6 @@ root workspace.
 | The Engine publishes `job:stop`                  | `agents.stopWork(workId)`         | The `workId` of the notification                                                            |
 | The Engine publishes the topic of a subscription | `notifier.send(composeMessage)`   | `composeMessage` calls `notifier.composeMessage(event, { getWork })`, with `engine.getWork` |
 
-The names of the functions and of the notifications are a proposal.
-
 ### Subscriptions
 
 A subscription is a config file of the orchestrator. It says which container the
@@ -65,8 +63,6 @@ HTTP status (see "Errors"). There are two kinds of request:
   be processed. The client follows the result with a query.
 - **A query** asks for the state of a work. The Engine answers from the runtime
   state and from git, without its loop.
-
-The paths, the bodies and the names of the functions below are a proposal.
 
 #### Assign a work
 

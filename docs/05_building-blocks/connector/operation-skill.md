@@ -6,10 +6,6 @@ server.
 
 ## Component
 
-The skills that come from the draft. They are not decided: see
-`risks-and-debts.md`.
-
-| Skill      | Syntax                                | What it does                                                                                                                                                                                |
-| ---------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Query data | `/superteam:query-data <entity> [id]` | Queries the data of the project. A record by id is read directly from its data file. The other queries go through the MCP server when it is available, otherwise by listing the data files. |
-| Finish     | `/superteam:finish <task\|work> <id>` | Helps a person finish a task, or decide on a work: Claude asks for the role the person acts as and for the content, then calls the finish script. It writes nothing by itself.              |
+No operation skill is made yet: the person uses the tools of the MCP server (see
+`mcp-server.md`). Which skills are made is not decided (see
+`risks-and-debts.md`).

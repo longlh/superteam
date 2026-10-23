@@ -4,9 +4,7 @@ The documents follow four methods (see `02_constraints/constraints.md`): arc42
 gives the 12 chapters, Views and Beyond gives the views from which the system is
 seen, the C4 model gives the levels of the structure in the chapter of the
 building blocks, and UML draws the views that the C4 model does not draw. A
-chapter that has no content yet is an empty folder with a `.gitkeep`. The folder
-`draft/` holds the legacy documents: they are not part of the structure, and
-they are not migrated.
+chapter that has no content yet is an empty folder with a `.gitkeep`.
 
 | Chapter              | Folder                  | Holds                                                           |
 | -------------------- | ----------------------- | --------------------------------------------------------------- |

@@ -61,8 +61,6 @@ A job is one run of an AI agent for a work. It has these fields:
 | `schema`      | The JSON schema of the result, from the entity TASK or WORK.                                                                                                                                                                                                                                                                                                      |
 | `instruction` | `{ target, targetIds, prompt }`. `target` is `task` for a worker, with the id of its task in `targetIds`; `merge` for a task merger, with the tasks to merge; and `work` for the work merger, with the id of the work. The engine makes the `prompt`.                                                                                                             |
 
-The names of the functions are a proposal.
-
 The result of a job is the result of its agent, `{ summary, data }`, or the
 error that ended it:
 

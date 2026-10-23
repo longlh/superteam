@@ -21,11 +21,11 @@ requests.
 (already configured), `git` and `gh` command lines, `claude` command line,
 `@modelcontextprotocol/sdk` with `zod` (MCP server only).
 
-**Spec:** `docs/` (chapters 01 to 12, without `docs/draft/`). The chapter of
-each part is named in its task. The names of functions, events and paths that
-the docs call "a proposal" are decided in this plan. The source code that is
-already in `superteam-engine/src/` is outdated: this plan does not use it, and
-builds everything from the docs. Only the config files (`package.json`,
+**Spec:** `docs/` (chapters 01 to 12). The chapter of each part is named in its
+task. The names of functions, events and paths that the docs call "a proposal"
+are decided in this plan. The source code that is already in
+`superteam-engine/src/` is outdated: this plan does not use it, and builds
+everything from the docs. Only the config files (`package.json`,
 `eslint.config.mjs`, `.claude-plugin/plugin.json`) are kept.
 
 ## Global Constraints
