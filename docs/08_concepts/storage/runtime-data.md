@@ -11,6 +11,7 @@ versioned.
 | `.superteam/.r/agents/{pid}.pid`                                | The pid of an agent process, with its job, one file for each agent.                         |
 | `.superteam/.r/worktrees/`                                      | The folders of the worktrees (see "Worktrees" in `git-adapter.md`).                         |
 | `.superteam/.r/engineloop/`                                     | The queue, the claim, the DLQ and the tmp folders of the engine loop (see `engineloop.md`). |
+| `.superteam/.r/superteam.log`                                   | The log of the process of superteam (see "Start" in `orchestrator.md`).                     |
 
 - **The work itself** is not runtime data. The engine writes it in
   `.superteam/.p/works/{id}.json` of the worktree of the work, and reads it

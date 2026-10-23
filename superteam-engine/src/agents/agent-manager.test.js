@@ -169,8 +169,7 @@ describe("agent manager run", () => {
     assert.equal(args[at + 1], "Bash,Read,Write,Edit,StructuredOutput");
   });
 
-  it("runs without --allowedTools and warns when the file has no tools line", async (t) => {
-    const errors = t.mock.method(console, "error", () => {});
+  it("ends with an error, with no spawn and no pid file, when the file has no tools line", async () => {
     await putRole("developer", null);
     const argsFile = path.join(baseDir, "args.json");
     const manager = make("ok", {
@@ -181,10 +180,15 @@ describe("agent manager run", () => {
     });
     const seen = ended();
     await manager.run(job(), seen.onEnded);
-    await until(() => seen.results.length === 1);
-    assert.ok(!(await readJson(argsFile)).includes("--allowedTools"));
-    assert.equal(errors.mock.callCount(), 1);
-    assert.match(errors.mock.calls[0].arguments[0], /no tool under dontAsk/);
+    assert.deepEqual(seen.results, [
+      {
+        id: "w1/t1/worker",
+        error:
+          "the agent file of the role developer has no tools line: under dontAsk the agent would get no tool",
+      },
+    ]);
+    assert.deepEqual(await pidFiles(), []);
+    await assert.rejects(readFile(argsFile));
   });
 
   it("ends with an error, with no spawn and no pid file, when the role has no file", async () => {

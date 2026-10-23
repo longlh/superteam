@@ -184,6 +184,7 @@ test("an error with retryable false goes to the DLQ at once", async () => {
       notes.map((note) => note.name),
       ["event:error"],
     );
+    assert.equal(notes[0].file, path.join(paths.dlq, `${event.id}.json`));
   });
 });
 

@@ -1,20 +1,47 @@
 import { createEngine } from "../engine/index.js";
 import { createAgents } from "../agents/index.js";
 import { createGitAdapter } from "../engine/git-adapter.js";
+import { consoleLog } from "../lib/log.js";
+import { parseJobId } from "../lib/storage/ids.js";
 import { createNotifier } from "../notifier/index.js";
 import { fromEnv } from "../notifier/google-chat.js";
 import { createHttpApi } from "./http-api.js";
 
-// Runs a callback of a subscription: a throw or a rejection is reported, and
+// Runs a callback of a subscription: a throw or a rejection is logged, and
 // never reaches the publisher.
-function guarded(fn) {
+function guarded(fn, log) {
   return (data) => {
     try {
-      Promise.resolve(fn(data)).catch((error) => console.error(error));
+      Promise.resolve(fn(data)).catch((error) => log.error(String(error)));
     } catch (error) {
-      console.error(error);
+      log.error(String(error));
     }
   };
+}
+
+// The type and the id of the event of a notification of the engine loop.
+function eventOf(data) {
+  const event = data?.event;
+  return `${event?.payload?.type ?? "unknown"} (${event?.id ?? "no id"})`;
+}
+
+// The work of the event of a notification: its id, or the work of its job.
+function workOf(data) {
+  const payload = data?.event?.payload?.data;
+  if (typeof payload?.id === "string") {
+    return payload.id;
+  }
+  if (typeof payload?.jobId === "string") {
+    return parseJobId(payload.jobId).workId ?? "unknown";
+  }
+  return "unknown";
+}
+
+// The line of an event that goes to the DLQ: what it was, for which work,
+// how many attempts, why, and where its file is.
+export function deadEventLine(data) {
+  const attempts = data?.event?.errors?.length ?? 0;
+  return `the event ${eventOf(data)} of the work ${workOf(data)} went to the DLQ after ${attempts} attempts: ${data?.error}; file: ${data?.file}`;
 }
 
 // Connects the containers: it holds no logic, it only decides whom to call,
@@ -24,12 +51,15 @@ export function createOrchestrator({
   port,
   maxBudgetUsd,
   subscriptions = [],
+  log = consoleLog,
   engine = createEngine({
     baseDir,
+    log: (message) => log.warn(message),
   }),
   agents = createAgents({
     baseDir,
     maxBudgetUsd,
+    log,
   }),
   notifier,
   httpApi = createHttpApi({
@@ -64,7 +94,7 @@ export function createOrchestrator({
 
     // For the logs of the caller: a topic of the engine to a guarded callback.
     subscribe(topic, fn) {
-      return engine.subscribe(topic, guarded(fn));
+      return engine.subscribe(topic, guarded(fn, log));
     },
 
     async start() {
@@ -99,14 +129,36 @@ export function createOrchestrator({
           if (stopping) {
             return;
           }
-          return agents.run(job, (result) =>
-            engine.jobEnded(result).catch(report),
-          );
-        }),
+          log.info(`job ${job.id} runs, role ${job.role}`);
+          return agents.run(job, (result) => {
+            if (result?.error === undefined) {
+              log.info(`job ${result?.id} ended`);
+            } else {
+              log.warn(`job ${result?.id} failed: ${result.error}`);
+            }
+            return engine
+              .jobEnded(result)
+              .catch((error) => log.error(String(error)));
+          });
+        }, log),
       );
       engine.subscribe(
         "job:stop",
-        guarded((data) => agents.stopWork(data.workId)),
+        guarded((data) => agents.stopWork(data.workId), log),
+      );
+      engine.subscribe(
+        "event:retry",
+        guarded(
+          (data) =>
+            log.warn(
+              `the event ${eventOf(data)} of the work ${workOf(data)} failed, retried: ${data?.error}`,
+            ),
+          log,
+        ),
+      );
+      engine.subscribe(
+        "event:error",
+        guarded((data) => log.error(deadEventLine(data)), log),
       );
       for (const sub of subscriptions) {
         const target =
@@ -116,12 +168,14 @@ export function createOrchestrator({
           });
         engine.subscribe(
           sub.topic,
-          guarded((data) =>
-            target.send(() =>
-              target.composeMessage(data, {
-                getWork: engine.getWork,
-              }),
-            ),
+          guarded(
+            (data) =>
+              target.send(() =>
+                target.composeMessage(data, {
+                  getWork: engine.getWork,
+                }),
+              ),
+            log,
           ),
         );
       }
@@ -148,10 +202,6 @@ export function createOrchestrator({
       await engineDone;
     },
   };
-}
-
-function report(error) {
-  console.error(error);
 }
 
 // The first signal shuts down, the second is a force quit.

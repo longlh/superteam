@@ -1,6 +1,6 @@
 import { test, mock } from "node:test";
 import assert from "node:assert/strict";
-import { createOrchestrator, handleSignals } from "./index.js";
+import { createOrchestrator, deadEventLine, handleSignals } from "./index.js";
 
 function setup(options = {}) {
   const calls = [];
@@ -85,9 +85,16 @@ function setup(options = {}) {
       return options.forge ?? true;
     },
   };
+  const logs = [];
+  const log = {
+    info: (message) => logs.push(["INFO", message]),
+    warn: (message) => logs.push(["WARN", message]),
+    error: (message) => logs.push(["ERROR", message]),
+  };
   const orchestrator = createOrchestrator({
     baseDir: "/tmp/none",
     port: 4000,
+    log,
     engine,
     agents,
     notifier,
@@ -97,6 +104,7 @@ function setup(options = {}) {
   });
   return {
     calls,
+    logs,
     publish,
     engine,
     agents,
@@ -125,6 +133,8 @@ test("start subscribes, recovers, starts the engine, then reconciles and listens
     "subscribe:engine:ready",
     "subscribe:job:run",
     "subscribe:job:stop",
+    "subscribe:event:retry",
+    "subscribe:event:error",
     "agents.recover",
     "engine.start",
     'engine.reconcile:[{"id":"j1"}]',
@@ -221,26 +231,127 @@ test("done rejects when the engine stops with an error after it is ready", async
 });
 
 test("subscribe gives a topic of the engine to a guarded callback", async () => {
-  const error = mock.method(console, "error", () => {});
-  try {
-    const t = setup();
-    const seen = [];
-    t.orchestrator.subscribe("event:error", (data) => {
-      seen.push(data);
-      throw new Error("the callback broke");
-    });
-    t.publish("event:error", {
+  const t = setup();
+  const seen = [];
+  t.orchestrator.subscribe("event:error", (data) => {
+    seen.push(data);
+    throw new Error("the callback broke");
+  });
+  t.publish("event:error", {
+    error: "boom",
+  });
+  assert.deepEqual(seen, [
+    {
       error: "boom",
+    },
+  ]);
+  assert.deepEqual(t.logs, [["ERROR", "Error: the callback broke"]]);
+});
+
+test("a job is logged when it runs and when it ends", async () => {
+  const t = setup({
+    onEngineStart: readyOnStart,
+  });
+  await t.orchestrator.start();
+  t.agents.run = mock.fn((job, onEnded) =>
+    onEnded(
+      job.id === "w1/a/worker"
+        ? {
+            id: job.id,
+          }
+        : {
+            id: job.id,
+            error: "boom",
+          },
+    ),
+  );
+  for (const id of ["w1/a/worker", "w1/b/worker"]) {
+    t.publish("job:run", {
+      id,
+      role: "developer",
     });
-    assert.deepEqual(seen, [
-      {
-        error: "boom",
-      },
-    ]);
-    assert.equal(error.mock.calls.length, 1);
-  } finally {
-    error.mock.restore();
   }
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(t.logs, [
+    ["INFO", "job w1/a/worker runs, role developer"],
+    ["INFO", "job w1/a/worker ended"],
+    ["INFO", "job w1/b/worker runs, role developer"],
+    ["WARN", "job w1/b/worker failed: boom"],
+  ]);
+  await t.orchestrator.shutdown();
+});
+
+test("a retry is a warning, and an event in the DLQ is an error with its work, attempts and file", async () => {
+  const t = setup({
+    onEngineStart: readyOnStart,
+  });
+  await t.orchestrator.start();
+  const event = {
+    id: "e1",
+    payload: {
+      type: "work:decide",
+      data: {
+        id: "w1",
+      },
+    },
+    errors: [
+      {
+        error: "a",
+      },
+      {
+        error: "b",
+      },
+    ],
+  };
+  t.publish("event:retry", {
+    event,
+    error: "a",
+  });
+  t.publish("event:error", {
+    event,
+    error: "b",
+    file: "/p/.superteam/.r/engineloop/dlq/e1.json",
+  });
+  assert.deepEqual(t.logs, [
+    ["WARN", "the event work:decide (e1) of the work w1 failed, retried: a"],
+    [
+      "ERROR",
+      "the event work:decide (e1) of the work w1 went to the DLQ after 2 attempts: b; file: /p/.superteam/.r/engineloop/dlq/e1.json",
+    ],
+  ]);
+  await t.orchestrator.shutdown();
+});
+
+test("the line of an event in the DLQ finds the work of a job, and stands an event that is not valid", () => {
+  assert.equal(
+    deadEventLine({
+      event: {
+        id: "e2",
+        payload: {
+          type: "worker:ended",
+          data: {
+            jobId: "w2/a/worker",
+          },
+        },
+        errors: [
+          {
+            error: "x",
+          },
+        ],
+      },
+      error: "x",
+      file: "f",
+    }),
+    "the event worker:ended (e2) of the work w2 went to the DLQ after 1 attempts: x; file: f",
+  );
+  assert.equal(
+    deadEventLine({
+      event: null,
+      error: "not JSON",
+      file: "g",
+    }),
+    "the event unknown (no id) of the work unknown went to the DLQ after 0 attempts: not JSON; file: g",
+  );
 });
 
 test("job:run runs the agent and the end goes to engine.jobEnded", async () => {
@@ -308,8 +419,7 @@ test("a subscription topic sends the composed message", async () => {
 });
 
 test("errors of the callbacks are reported, not thrown", async () => {
-  const error = mock.method(console, "error", () => {});
-  try {
+  {
     const t = setup({
       onEngineStart: readyOnStart,
     });
@@ -332,13 +442,13 @@ test("errors of the callbacks are reported, not thrown", async () => {
       id: "k",
     });
     await new Promise((resolve) => setImmediate(resolve));
-    const messages = error.mock.calls.map((c) =>
-      String(c.arguments[1] ?? c.arguments[0]),
+    assert.deepEqual(
+      t.logs
+        .filter(([level]) => level === "ERROR")
+        .map(([, message]) => message),
+      ["Error: run failed", "Error: stop failed", "Error: ended failed"],
     );
-    assert.equal(error.mock.calls.length, 3, messages.join("|"));
     await t.orchestrator.shutdown();
-  } finally {
-    error.mock.restore();
   }
 });
 

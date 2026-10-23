@@ -2,6 +2,7 @@ import { spawn as nodeSpawn } from "node:child_process";
 import { readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { consoleLog } from "../lib/log.js";
 import { readJson, writeJson } from "../lib/storage/files.js";
 import { processCommand } from "../lib/process-command.js";
 import { agentsDir } from "../lib/storage/paths.js";
@@ -41,6 +42,7 @@ export function createAgentManager({
   maxBudgetUsd,
   commandOf = processCommand,
   pluginRoot = PLUGIN_ROOT,
+  log = consoleLog,
 }) {
   const dir = agentsDir(baseDir);
   const running = new Map();
@@ -107,6 +109,7 @@ export function createAgentManager({
 
     // The tools of the agent file limit what is available; dontAsk denies
     // them unless they are allowed, so they are passed with --allowedTools.
+    // With no tools line the agent would get no tool: it is not started.
     let allowedTools;
     try {
       allowedTools = await readRoleTools({
@@ -114,6 +117,11 @@ export function createAgentManager({
         role: job.role,
         pluginRoot,
       });
+      if (allowedTools === null) {
+        throw new Error(
+          `the agent file of the role ${job.role} has no tools line: under dontAsk the agent would get no tool`,
+        );
+      }
     } catch (error) {
       running.delete(job.id);
       try {
@@ -122,14 +130,9 @@ export function createAgentManager({
           error: error.message,
         });
       } catch (endError) {
-        console.error(`agent ${job.id}: onEnded failed`, endError);
+        log.error(`agent ${job.id}: onEnded failed: ${endError}`);
       }
       return;
-    }
-    if (allowedTools === null) {
-      console.error(
-        `agent ${job.id}: the agent file of the role ${job.role} has no tools line, so the agent gets no tool under dontAsk`,
-      );
     }
     if (entry.stopped) {
       running.delete(job.id);
@@ -138,7 +141,7 @@ export function createAgentManager({
 
     const built = buildCommand(job, {
       maxBudgetUsd,
-      allowedTools: allowedTools ?? undefined,
+      allowedTools,
     });
     const child = spawn(command ?? built.command, built.args, {
       cwd: job.workdir,
@@ -171,7 +174,7 @@ export function createAgentManager({
             pid: child.pid,
             job,
           }).catch((error) => {
-            console.error(`agent ${job.id}: pid file not written`, error);
+            log.error(`agent ${job.id}: pid file not written: ${error}`);
           });
     entry.pidWritten = pidWritten;
 
@@ -210,7 +213,7 @@ export function createAgentManager({
           ...result,
         });
       } catch (error) {
-        console.error(`agent ${job.id}: onEnded failed`, error);
+        log.error(`agent ${job.id}: onEnded failed: ${error}`);
       }
       if (child.pid !== undefined) {
         await removePidFile(child.pid);

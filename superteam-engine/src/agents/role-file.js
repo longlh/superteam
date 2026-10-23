@@ -23,7 +23,7 @@ async function readIfThere(file) {
 // The tools of the `tools:` line of the front matter, or null when there is
 // no such line. The front matter is read line by line, so a quoted value with
 // a colon in another line does not matter.
-function toolsOf(content) {
+export function toolsOf(content) {
   const lines = content.split(/\r?\n/);
   if (lines[0]?.trim() !== "---") {
     return null;

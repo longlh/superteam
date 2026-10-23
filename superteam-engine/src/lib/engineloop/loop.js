@@ -17,10 +17,11 @@ export function createLoop({
   now,
 }) {
   async function reject(key, content, event, reason) {
-    await queue.toDlq(key, content);
+    const file = await queue.toDlq(key, content);
     subscribers.emit("event:error", {
       event,
       error: reason,
+      file,
     });
   }
 

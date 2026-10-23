@@ -21,6 +21,8 @@ roles of Claude, and the port of the API. It writes nothing else.
   or by an AI is decided by the workflow, not by the role.
 - It always puts `StructuredOutput` in the `tools` of the agent file, so that
   the result of the worker is validated (see `claude-process.md`).
+- It refuses a role with no `tools`, because under `dontAsk` such an agent gets
+  no tool (see `claude-process.md`).
 - It does not create the agent files of the task merger and of the work merger.
   They are roles of the engine, and their agent files come with the plugin (see
   `agents.md`).
@@ -38,6 +40,6 @@ roles of Claude, and the port of the API. It writes nothing else.
 - Then they run `seed.js check`. It fetches, and checks that each workflow and
   each role of the root workspace is on the upstream of the root branch with the
   same content, that each role named by a workflow is there (except the roles of
-  the engine), and that the `.gitignore` there has its lines. Otherwise it fails
-  with the list of the files to push, so a setup that is not pushed is reported
-  at once, not when a work is assigned.
+  the engine), that each role file has a `tools` line, and that the `.gitignore`
+  there has its lines. Otherwise it fails with the list of the files to push, so
+  a setup that is not pushed is reported at once, not when a work is assigned.

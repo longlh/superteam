@@ -249,9 +249,16 @@ The process is started by `/superteam:start` (see `control-skill.md`).
    (see `engine.md`). This step handles a crash and a shutdown in the same way.
 7. Open the HTTP API.
 
-The process logs the notifications `event:retry` and `event:error`. It exits
-with the code 1 when the Engine stops with an error. On exit, it removes its pid
-file, `.superteam/.r/superteam.pid`, when the file holds its own pid.
+The process writes its log in `.superteam/.r/superteam.log`, one line for each
+entry: the time, the level (`INFO`, `WARN` or `ERROR`) and the message. It logs
+the start and the stop, each job that starts and ends, each retry of an event
+(`event:retry`), each warning, and each event that goes to the DLQ
+(`event:error`). The line of an event in the DLQ holds the type and the id of
+the event, the id of its work, its attempts, the error, and the path of its file
+in the DLQ. The stdout and the stderr of the process go to the same file, so a
+crash leaves its trace there. It exits with the code 1 when the Engine stops
+with an error. On exit, it removes its pid file, `.superteam/.r/superteam.pid`,
+when the file holds its own pid.
 
 ### Shutdown
 

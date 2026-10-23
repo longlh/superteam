@@ -71,9 +71,10 @@ file by hand.
 
 - `name` is a slug: lowercase letters and digits joined by `-`, up to 63
   characters. `description` is required and is one line.
-- `tools` is a list of tool names. The script always adds `StructuredOutput` to
-  it, so that the result of the worker is validated. You do not have to list it.
-  With no `tools`, the role has no `tools` line.
+- `tools` is a list of tool names, and it is required: the script refuses a role
+  without it, because under `dontAsk` an agent with no `tools` line gets no
+  tool. The script always adds `StructuredOutput` to it, so that the result of
+  the worker is validated. You do not have to list it.
 - A role is an AI agent. Whether a work or a task is done by a person or by an
   AI is decided by the workflow, not by the role.
 - Do not create the roles `task-merger` and `work-merger`. They belong to the

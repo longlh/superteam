@@ -49,12 +49,17 @@ The loop is made for an internal tool. These limits are known and accepted:
 - The root branch is read from the root workspace when a work is assigned. A
   work is assigned on the branch that is checked out at that time, so a person
   who has switched to another branch by mistake assigns the work on it.
+- On macOS, `/usr/bin/git` is a shim that runs `xcrun` first. It is slow when
+  many git commands run at the same time, which slows the engine and its agents.
+  The tests put the real git binary first in the `PATH`.
 
 ### Orchestrator (`orchestrator.md`)
 
 - The start checks `gh` with `gh auth status`, which fails when any host that is
   configured in `gh` has a bad token, even when the token of GitHub is good. So
   the start is refused.
+- The HTTP API has no authentication: it listens on 127.0.0.1 only, for the
+  person who runs superteam on this machine. Another local process can call it.
 
 ### Agents (`agents.md`)
 

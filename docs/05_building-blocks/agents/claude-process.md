@@ -17,8 +17,9 @@ The behavior below was checked with `claude` 2.1.300, and the behavior of
   the agent files of the mergers, which come with the plugin), and the tools of
   the role (the `tools` line of its agent file) are allowed with
   `--allowedTools`, because under `dontAsk` the `tools` line only limits the
-  tools and does not grant them. If the agent file has no `tools` line, no tool
-  is allowed, and the agent manager logs a warning. Its stdin is `/dev/null`.
+  tools and does not grant them. If the agent file has no `tools` line, the job
+  ends with an error, and the agent is not started: under `dontAsk` it would get
+  no tool, and do nothing. Its stdin is `/dev/null`.
 - The agent manager looks for the agent file of the role in
   `.claude/agents/{role}.md` of the worktree first, then in the agent files of
   the plugin. When there is none, the job ends with an error, and the agent is
@@ -32,7 +33,9 @@ The behavior below was checked with `claude` 2.1.300, and the behavior of
   the result is free text, and the exit code is 0 with `is_error` false. A
   `null` `structured_output` must be treated as a result that does not match the
   schema. A role with no `tools` line is not limited by it, and the schema is
-  applied, but under `dontAsk` its tools, such as Bash and Write, are denied.
+  applied, but under `dontAsk` its tools, such as Bash and Write, are denied. So
+  a role must have a `tools` line: the Seed Skill refuses a role without one,
+  and the agent manager ends its job with an error.
 - **The status and the cost** are in the same JSON output: `is_error`, `subtype`
   and `terminal_reason` for the status, `num_turns`, `total_cost_usd`, and
   `usage` and `modelUsage` for the tokens and the cost of each model.

@@ -4,6 +4,7 @@ import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseEnv } from "node:util";
+import { toolsOf } from "../agents/role-file.js";
 import { createGitAdapter } from "../engine/git-adapter.js";
 import { writeJson } from "../lib/storage/files.js";
 import { isSlug } from "../lib/storage/ids.js";
@@ -93,19 +94,21 @@ export async function writeRole(
     `name: ${name}`,
     `description: ${JSON.stringify(description.trim())}`,
   ];
-  if (Array.isArray(tools) && tools.length > 0) {
-    for (const tool of tools) {
-      if (typeof tool !== "string" || !/^[^,\r\n]+$/.test(tool.trim())) {
-        throw new Error(
-          "each tool must be a non-empty string with no comma or newline",
-        );
-      }
-    }
-    const list = tools.includes("StructuredOutput")
-      ? tools
-      : [...tools, "StructuredOutput"];
-    header.push(`tools: ${list.join(", ")}`);
+  // Under dontAsk, an agent with no tools line gets no tool.
+  if (!Array.isArray(tools) || tools.length === 0) {
+    throw new Error("tools must be a non-empty list");
   }
+  for (const tool of tools) {
+    if (typeof tool !== "string" || !/^[^,\r\n]+$/.test(tool.trim())) {
+      throw new Error(
+        "each tool must be a non-empty string with no comma or newline",
+      );
+    }
+  }
+  const list = tools.includes("StructuredOutput")
+    ? tools
+    : [...tools, "StructuredOutput"];
+  header.push(`tools: ${list.join(", ")}`);
   if (model) {
     header.push(`model: ${model}`);
   }
@@ -144,8 +147,9 @@ async function filesOf(dir, ext) {
 
 // Checks that the setup of the root workspace is on the upstream of the root
 // branch, where the engine and the worktrees read it: each workflow and role
-// with the same content, each role that a workflow names, and the lines of the
-// .gitignore. Returns "ok", or throws with the files to push.
+// with the same content, each role that a workflow names, a tools line in each
+// role, and the lines of the .gitignore. Returns "ok", or throws with the files
+// to push.
 export async function checkPushed(
   baseDir,
   git = createGitAdapter({
@@ -196,7 +200,11 @@ export async function checkPushed(
     path.join(baseDir, ".claude/agents"),
     ".md",
   )) {
-    await compare(path.join(".claude/agents", name));
+    const file = path.join(".claude/agents", name);
+    await compare(file);
+    if (toolsOf(await readText(path.join(baseDir, file))) === null) {
+      problems.push(`no tools line: ${file}`);
+    }
   }
   for (const role of roles) {
     const file = path.join(".claude/agents", `${role}.md`);

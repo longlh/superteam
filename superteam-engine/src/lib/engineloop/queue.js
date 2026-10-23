@@ -91,10 +91,12 @@ export function createQueue(paths) {
         typeof content === "string"
           ? content
           : JSON.stringify(content, null, 2);
-      await writeFile(path.join(paths.dlq, `${key}.json`), text);
+      const file = path.join(paths.dlq, `${key}.json`);
+      await writeFile(file, text);
       await rm(path.join(paths.claim, `${key}.json`), {
         force: true,
       });
+      return file;
     },
 
     async ensureFolders() {

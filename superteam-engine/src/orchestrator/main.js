@@ -1,10 +1,16 @@
 import { join } from "node:path";
+import { createLog } from "../lib/log.js";
 import { removeOwnPidFile } from "../scripts/pid-file.js";
 import { readConfig } from "./config.js";
 import { createOrchestrator, handleSignals } from "./index.js";
 
 const baseDir = process.cwd();
 const envFile = join(baseDir, ".superteam/.env");
+// The stdout and the stderr go to the same file (see start.js), so what is
+// written before this log, or by a crash, is kept there too.
+const log = createLog({
+  file: join(baseDir, ".superteam/.r/superteam.log"),
+});
 
 try {
   process.loadEnvFile(envFile);
@@ -28,35 +34,33 @@ const orchestrator = createOrchestrator({
   baseDir,
   port,
   maxBudgetUsd,
+  log,
 });
-const eventOf = (data) =>
-  `${data?.event?.payload?.type ?? "unknown"} (${data?.event?.id ?? "no id"})`;
-orchestrator.subscribe("event:retry", (data) =>
-  console.error(`the event ${eventOf(data)} failed, retried: ${data?.error}`),
-);
-orchestrator.subscribe("event:error", (data) =>
-  console.error(`the event ${eventOf(data)} failed for good: ${data?.error}`),
-);
 handleSignals({
-  shutdown: () =>
-    orchestrator
+  shutdown: () => {
+    log.info("superteam stops");
+    return orchestrator
       .shutdown()
-      .then(() => process.exit(0))
+      .then(() => {
+        log.info("superteam stopped");
+        process.exit(0);
+      })
       .catch((error) => {
-        console.error("the shutdown failed:", error);
+        log.error(`the shutdown failed: ${error?.stack ?? error}`);
         process.exit(1);
-      }),
+      });
+  },
 });
 
 try {
   await orchestrator.start();
-  console.log(`superteam listening on 127.0.0.1:${port}`);
+  log.info(`superteam listening on 127.0.0.1:${port}`);
 } catch (error) {
-  console.error(error);
+  log.error(error?.stack ?? String(error));
   process.exit(1);
 }
 
 orchestrator.done.catch((error) => {
-  console.error("the engine stopped:", error);
+  log.error(`the engine stopped: ${error?.stack ?? error}`);
   process.exit(1);
 });

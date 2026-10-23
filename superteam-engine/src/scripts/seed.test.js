@@ -155,20 +155,20 @@ test("writeRole does not duplicate StructuredOutput", async () => {
   });
 });
 
-test("writeRole with no tools writes no tools or model line", async () => {
+test("writeRole refuses a role with no tools, and writes no file", async () => {
   await withDir(async (dir) => {
     for (const tools of [undefined, []]) {
-      const file = await writeRole(dir, {
-        name: "dev",
-        description: "d",
-        tools,
-        instructions: "x",
-      });
-      assert.equal(
-        await readFile(file, "utf8"),
-        '---\nname: dev\ndescription: "d"\n---\n\nx\n',
+      await assert.rejects(
+        writeRole(dir, {
+          name: "dev",
+          description: "d",
+          tools,
+          instructions: "x",
+        }),
+        /tools must be a non-empty list/,
       );
     }
+    assert.deepEqual(await listFiles(dir), []);
   });
 });
 
@@ -177,11 +177,13 @@ test("writeRole overwrites an existing role file", async () => {
     await writeRole(dir, {
       name: "dev",
       description: "one",
+      tools: ["Read"],
       instructions: "x",
     });
     const file = await writeRole(dir, {
       name: "dev",
       description: "two",
+      tools: ["Read"],
       instructions: "y",
     });
     assert.match(await readFile(file, "utf8"), /description: "two"/);
@@ -225,6 +227,7 @@ test("writeRole keeps the header safe", async () => {
   await withDir(async (dir) => {
     const base = {
       name: "dev",
+      tools: ["Read"],
       instructions: "x",
     };
     for (const description of [
@@ -318,6 +321,7 @@ test("the four functions write no other file", async () => {
     await writeRole(dir, {
       name: "dev",
       description: "d",
+      tools: ["Read"],
       instructions: "x",
     });
     await writeWorkflow(dir, workflow);
@@ -356,6 +360,7 @@ async function withProject(fn) {
       await writeRole(dir, {
         name,
         description: name,
+        tools: ["Read"],
         instructions: "x",
       });
     }
@@ -396,6 +401,7 @@ test("check passes once the setup is pushed, and finds a file changed after", as
     await writeRole(dir, {
       name: "developer",
       description: "changed",
+      tools: ["Read"],
       instructions: "x",
     });
     await assert.rejects(
@@ -411,6 +417,23 @@ test("check finds a role that a workflow names and that is on no side", async ()
     pushSetup(dir);
     await assert.rejects(checkPushed(dir), (error) => {
       assert.match(error.message, /\n- missing: .claude\/agents\/reviewer.md$/);
+      return true;
+    });
+  });
+});
+
+test("check finds a role file with no tools line", async () => {
+  await withProject(async (dir) => {
+    await writeFile(
+      path.join(dir, ".claude/agents/reviewer.md"),
+      "---\nname: reviewer\ndescription: r\n---\n\nx\n",
+    );
+    pushSetup(dir);
+    await assert.rejects(checkPushed(dir), (error) => {
+      assert.match(
+        error.message,
+        /\n- no tools line: .claude\/agents\/reviewer.md$/,
+      );
       return true;
     });
   });

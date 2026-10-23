@@ -85,7 +85,8 @@ the queue.
 Every notification carries the event. For a failed event (`event:retry` and
 `event:error`) it is the event with the error of this attempt added to `errors`,
 and the notification also carries `error`, the reason as text. The `event:done`
-notification also carries `time`, the time the event was done.
+notification also carries `time`, the time the event was done, and `event:error`
+carries `file`, the path of the file of the event in the DLQ.
 
 ### Public API
 
