@@ -103,10 +103,11 @@ These are not decided yet.
 
 1. **The worker as a person.** Every task is done by an AI agent, so the steps
    of a person who does a task are not defined yet.
-2. **How the person reaches the system.** The person uses the tools of the MCP
-   server from a session of the AI tool. The operation skills, which would guide
-   that, are not decided (see
-   `05_building-blocks/connector/operation-skill.md`).
+2. **The other operation skills.** The person lists, shows and decides the works
+   with the operation skills (see
+   `05_building-blocks/connector/operation-skill.md`), and does the rest, such
+   as an assign, an archive or a retry, by asking for the tools of the MCP
+   server. Whether these get skills of their own is not decided.
 
 ### HTTP API (`orchestrator.md`)
 

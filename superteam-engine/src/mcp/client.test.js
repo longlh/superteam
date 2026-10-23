@@ -1,7 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import http from "node:http";
-import { createApiClient } from "./client.js";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { createApiClient, createWorkspaceRequest } from "./client.js";
 
 async function listen(handler) {
   const seen = [];
@@ -121,5 +124,74 @@ test("a refused connection says that the orchestrator is not running", async () 
     assert.ok(error.message.includes(String(port)));
     assert.match(error.message, /\/superteam:start/);
     return true;
+  });
+});
+
+async function withWorkspace(fn) {
+  const baseDir = await mkdtemp(path.join(tmpdir(), "mcp-workspace-"));
+  const writeEnv = async (text) => {
+    await mkdir(path.join(baseDir, ".superteam"), {
+      recursive: true,
+    });
+    await writeFile(path.join(baseDir, ".superteam", ".env"), text);
+  };
+  try {
+    await fn({
+      baseDir,
+      writeEnv,
+    });
+  } finally {
+    await rm(baseDir, {
+      recursive: true,
+      force: true,
+    });
+  }
+}
+
+const ok = (res) => {
+  res.writeHead(200, {
+    "content-type": "application/json",
+  });
+  res.end("[]");
+};
+
+test("the port is read from .env at each call, so a file written after the start works", async () => {
+  await withWorkspace(async ({ baseDir, writeEnv }) => {
+    const request = createWorkspaceRequest({
+      baseDir,
+    });
+    await assert.rejects(
+      request("GET", "/works"),
+      /SUPERTEAM_PORT is not set in \.superteam\/\.env\. Run \/superteam:def-role or \/superteam:def-process to seed it\./,
+    );
+    await writeEnv("OTHER=1\n");
+    await assert.rejects(request("GET", "/works"), /SUPERTEAM_PORT is not set/);
+    const first = await listen(ok);
+    const second = await listen(ok);
+    try {
+      await writeEnv(`SUPERTEAM_PORT=${first.port}\n`);
+      assert.equal((await request("GET", "/works")).status, 200);
+      await writeEnv(`SUPERTEAM_PORT=${second.port}\n`);
+      assert.equal((await request("GET", "/works")).status, 200);
+      assert.equal(first.seen.length, 1);
+      assert.equal(second.seen.length, 1);
+    } finally {
+      first.server.close();
+      second.server.close();
+    }
+  });
+});
+
+test("a port where nothing listens says that the orchestrator is not running", async () => {
+  await withWorkspace(async ({ baseDir, writeEnv }) => {
+    const { server, port } = await listen(ok);
+    await new Promise((resolve) => server.close(resolve));
+    await writeEnv(`SUPERTEAM_PORT=${port}\n`);
+    await assert.rejects(
+      createWorkspaceRequest({
+        baseDir,
+      })("GET", "/works"),
+      /The superteam orchestrator is not running on 127\.0\.0\.1:\d+\. Start it with \/superteam:start\./,
+    );
   });
 });
