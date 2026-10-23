@@ -15,9 +15,11 @@ list. Do this:
 
 1. Run `git status` and `git branch --show-current`. Stay on the current branch.
    Never switch branches.
-2. Run `git fetch origin`. A branch can exist only on `origin`. For each branch
-   of the line, merge the local branch when it exists. When it is missing, merge
-   `origin/<branch>`.
+2. For each branch of the line, merge the local branch: the engine creates the
+   branches in this repository, and the worktrees share them. When it is
+   missing, merge `origin/<branch>`, which the push of the engine keeps up to
+   date. Do not run `git fetch`: it writes the refs of `origin` that the engine
+   writes too, and one of the two fails.
 3. Merge the branches one after the other with `git merge --no-edit <branch>`.
 4. When a merge conflicts, resolve it yourself. Read both sides, keep the intent
    of both, edit the files so that no conflict marker is left, run `git add` on
