@@ -31,7 +31,7 @@ const open = (state = "open") =>
   });
 const names = () => h.calls.map(([n, arg]) => [n, arg].filter(Boolean));
 
-test("approve merges, pulls the root and deletes all the branches", async () => {
+test("approve merges, deletes all the branches, then fetches", async () => {
   open();
   await decide({
     id: "w1",
@@ -39,10 +39,10 @@ test("approve merges, pulls the root and deletes all the branches", async () => 
   });
   assert.deepEqual(names(), [
     ["mergePullRequest", "works/w1"],
-    ["pullRoot"],
     ["deleteBranch", "works/w1"],
     ["deleteBranch", "tasks/w1/a"],
     ["deleteBranch", "tasks/w1/b"],
+    ["fetch"],
   ]);
 });
 
@@ -53,7 +53,7 @@ test("approve of an already merged work repairs without merging", async () => {
     decision: "approve",
   });
   assert.equal(h.named("mergePullRequest").length, 0);
-  assert.equal(h.named("pullRoot").length, 1);
+  assert.equal(h.named("fetch").length, 1);
   assert.equal(h.named("deleteBranch").length, 3);
   h.calls.length = 0;
   await decide({

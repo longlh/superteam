@@ -40,28 +40,30 @@ engine loop, the handlers, the pub/sub, the git adapter, the runtime files, and
 the Agents with the Claude process.
 
 1. **Assign.** A client assigns a work to the engine with one request. The
-   engine creates the worktree of the work, based on the root branch. It writes
-   the work in it, from the request, and commits it on the branch of the work.
-   Then it creates the tasks of the work from the steps of its workflow, with no
-   other request, in the runtime of the worktree of the work.
+   engine fetches, and creates the worktree of the work, based on the upstream
+   of the root branch (see ADR 15). It writes the work in it, from the request,
+   with the name of that upstream branch in `base`, and commits it on the branch
+   of the work. Then it creates the tasks of the work from the steps of its
+   workflow, with no other request, in the runtime of the worktree of the work.
 2. **Run.** The engine runs the tasks by itself: a task starts when it has its
    inputs, which means that its status is `IN_PROGRESS` (see "Derived status" in
    `storage.md`). For each task the engine creates a worktree and a branch,
-   based on the branch of the task it depends on. If the task depends on more
-   than one task, the engine asks for the task merger first, to merge the
-   branches of the other dependencies into the new branch. Then the engine asks
-   for a worker in the worktree, with `job:run`, and the orchestrator runs it in
-   the Agents. The worker works only in its worktree, and its results are kept
-   on its branch, which is on the remote. When the worker ends, the orchestrator
-   gives the result to the engine, which records it.
+   based on the branch of the task it depends on, or on the branch of the work
+   for a task with no dependency. If the task depends on more than one task, the
+   engine asks for the task merger first, to merge the branches of the other
+   dependencies into the new branch. Then the engine asks for a worker in the
+   worktree, with `job:run`, and the orchestrator runs it in the Agents. The
+   worker works only in its worktree, and its results are kept on its branch,
+   which is on the remote. When the worker ends, the orchestrator gives the
+   result to the engine, which records it.
 3. **Propose.** When all the tasks are done, the engine asks for the work
    merger, to merge the branches of the final tasks into the worktree of the
    work. When the work merger has ended, the engine writes its DOD checklist in
    the work and commits it, pushes the branch of the work, and opens a pull
-   request, so the work is `PROPOSED`. The description of the pull request is a
-   Markdown text that holds the `summary` of the work merger, the DOD checklist
-   of the work, and the DOD checklists of the tasks, because the tasks are
-   removed with the worktree of the work.
+   request on the `base` of the work, so the work is `PROPOSED`. The description
+   of the pull request is a Markdown text that holds the `summary` of the work
+   merger, the DOD checklist of the work, and the DOD checklists of the tasks,
+   because the tasks are removed with the worktree of the work.
 
 ```plantuml
 @startuml
@@ -80,11 +82,12 @@ Orch -> Fn : assign
 Fn -> EL : enqueue work:assign
 Orch --> Client : 202 Accepted
 EL -> Handler : give work:assign
-Handler -> Git : create worktree of the work, from root
+Handler -> Git : fetch
+Handler -> Git : create worktree of the work, from the upstream of root
 Handler -> Git : write the work, commit
 Handler -> Runtime : create the task graph
 loop for each task that is ready
-  Handler -> Git : create worktree of the task, from its dependency
+  Handler -> Git : create worktree of the task, from its dependency or the work
   Handler ->> PS : job:run, the worker
   PS ->> Orch : job:run
   Orch -> Agents : run the worker
@@ -125,9 +128,11 @@ engine loop, the handlers, and the git adapter.
    A rejected work is final: to try again, a new work is assigned.
 2. **Merge.** When the work is approved, the engine merges the pull request into
    the root branch, as a squash merge. This merge is the approval. The engine
-   then pulls the root branch, so the root workspace has the result, and deletes
-   all the branches of the work (its own branch and the branches of its tasks),
-   so that they do not pile up.
+   then deletes all the branches of the work (its own branch and the branches of
+   its tasks), so that they do not pile up, and fetches, so that it reads the
+   result from the `base` of the work. It does not pull the root branch into the
+   root workspace: the person pulls it when they want the result there (see ADR
+   15).
 
 ```plantuml
 @startuml
@@ -145,8 +150,8 @@ Orch --> Approver : 202 Accepted
 EL -> Handler : give work:decide
 alt approved
   Handler -> Git : merge pull request
-  Handler -> Git : pull root
   Handler -> Git : delete branches
+  Handler -> Git : fetch
 else rejected
   Handler -> Git : close pull request
   Handler -> Git : delete branches of the tasks

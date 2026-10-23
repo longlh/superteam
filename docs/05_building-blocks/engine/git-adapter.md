@@ -21,6 +21,10 @@ needs the `gh` command line.
 The adapter also checks the setup of the project:
 
 - `hasOrigin()` says whether the project has a git remote named `origin`.
+- `rootUpstream()` returns the branch on `origin` that the root branch tracks,
+  its upstream, such as `develop`, or null when it tracks no branch on `origin`.
+  Its name can differ from the name of the root branch.
+- `hasRemoteBranch(branch)` says whether `origin/<branch>` exists.
 - `checkForge()` says whether `gh` is signed in (`gh auth status`).
 - `ensureExcluded(line)` adds a line to the exclude file of the git common dir,
   when it is missing. The exclude file is shared by all the worktrees.
@@ -29,14 +33,20 @@ The adapter also checks the setup of the project:
 
 The branches of the tasks of a work are deleted when the work ends, so that they
 do not pile up as garbage. The branch of the work is deleted when the work is
-approved, because its result is then in the root branch. When the work fails or
-is rejected, the branch of the work is pushed and kept on the remote: it is the
-only trace of the work. It is deleted when the work is archived (see "Archive a
-work" in `orchestrator.md`).
+approved, because its result is then in the `base` of the work. When the work
+fails or is rejected, the branch of the work is pushed and kept on the remote:
+it is the only trace of the work. It is deleted when the work is archived (see
+"Archive a work" in `orchestrator.md`).
 
-The pull request of a work is opened on the root branch
-(`gh pr create --base <root branch>`). Without `--base`, `gh` would open it on
-the default branch of the repository.
+The pull request of a work is opened on the `base` of the work, the upstream
+branch that the work is based on (`gh pr create --base <base>`). Without
+`--base`, `gh` would open it on the default branch of the repository.
+
+The engine reads what is committed with git, and never from the files of the
+root workspace: the workflow from the upstream of the root branch, and an
+approved work from the branch on which its pull request was merged. The approved
+works are found from the merged pull requests of the branches `works/*`. The
+engine never pulls, merges or commits into the local root branch (see ADR 15).
 
 ## Code
 
@@ -45,14 +55,14 @@ the default branch of the repository.
 A worktree is the environment where a job is done. There are two kinds, one for
 each unit of the work. The engine creates both.
 
-|          | Worktree of a work                                                                      | Worktree of a task                                                                                                                                         |
-| -------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Based on | The root branch.                                                                        | The branch of the task it depends on. A task with no dependency is based on the root branch. A task with more than one dependency is based on one of them. |
-| Branch   | `works/{work_id}`                                                                       | `tasks/{work_id}/{task_id}`                                                                                                                                |
-| Folder   | `.superteam/.r/worktrees/works/{work_id}`                                               | `.superteam/.r/worktrees/tasks/{work_id}/{task_id}`                                                                                                        |
-| Created  | When the work is assigned.                                                              | When the task starts.                                                                                                                                      |
-| Removed  | After the pull request is opened, or when the work fails.                               | When the task ends.                                                                                                                                        |
-| Used for | The engine writes the work, and the work merger merges the branches of the final tasks. | The job of the task, by a worker, a person or an AI.                                                                                                       |
+|          | Worktree of a work                                                                          | Worktree of a task                                                                                                                                                |
+| -------- | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Based on | The upstream of the root branch, after a fetch. Its name is kept in the `base` of the work. | The branch of the task it depends on. A task with no dependency is based on the branch of its work. A task with more than one dependency is based on one of them. |
+| Branch   | `works/{work_id}`                                                                           | `tasks/{work_id}/{task_id}`                                                                                                                                       |
+| Folder   | `.superteam/.r/worktrees/works/{work_id}`                                                   | `.superteam/.r/worktrees/tasks/{work_id}/{task_id}`                                                                                                               |
+| Created  | When the work is assigned.                                                                  | When the task starts.                                                                                                                                             |
+| Removed  | After the pull request is opened, or when the work fails.                                   | When the task ends.                                                                                                                                               |
+| Used for | The engine writes the work, and the work merger merges the branches of the final tasks.     | The job of the task, by a worker, a person or an AI.                                                                                                              |
 
 The folders of the worktrees are runtime data, so they are under
 `.superteam/.r`. The folder of a task is not inside the folder of its work: a
@@ -70,9 +80,9 @@ merged later, or because it is the trace of a work that failed or was rejected
 
 A query and a handler can run git at the same time. When two calls update the
 refs of the remote at the same time, git fails one with "cannot lock ref". So
-the calls that change or read the remote refs (fetch, push, delete a branch,
-pull the root branch) run one at a time, in the order of the calls. A failure of
-one call does not block the next one.
+the calls that change or read the remote refs (fetch, push, delete a branch) run
+one at a time, in the order of the calls. A failure of one call does not block
+the next one.
 
 `readFileOnBranch` treats a branch that was deleted in the meantime as a missing
 file, such as a branch deleted by an archive while the works are listed.

@@ -26,7 +26,7 @@ receives its notifications. It does not call another container.
 
 | Function                     | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `assign(body)`               | Checks the body, that the workflow exists and that the id is not used yet, enqueues `work:assign`, and returns the `id` of the work, given or created, and the `eventId`.                                                                                                                                                                                                                                                                                                                            |
+| `assign(body)`               | Checks the body, fetches, then checks that the root branch has an upstream on `origin`, that the workflow exists on it and that the id is not used yet, enqueues `work:assign` with the name of that upstream branch as `base`, and returns the `id` of the work, given or created, and the `eventId`.                                                                                                                                                                                               |
 | `decide(id, decision)`       | Checks that the work is `PROPOSED`, enqueues `work:decide`, and returns the `eventId`.                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `archive(id)`                | Checks that the work is `FAILED` or `REJECTED`, enqueues `work:archive`, and returns the `eventId`.                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `getWork(id)`                | Returns the state of a work, from the runtime state and from git, without the loop.                                                                                                                                                                                                                                                                                                                                                                                                                  |
@@ -37,10 +37,17 @@ receives its notifications. It does not call another container.
 | `start()`, `shutdown()`      | Starts the engine loop, and stops it gracefully (see "Life cycle" in `engineloop.md`). Before the loop starts, it adds `.superteam/.r/` to the exclude file of the git common dir. When the start stage is done, the engine publishes `engine:ready`.                                                                                                                                                                                                                                                |
 
 A function that refuses a request says why: the body is not valid, the work or
-the workflow does not exist, the request does not fit the state of the work, the
-engine is starting, or git or gh failed (offline, no origin, gh signed out).
-When the fetch fails, `getWork` and `listWorks` read the local refs, with a
-warning.
+the workflow does not exist, the data of the workflow is corrupted ("corrupted
+workflow data": its file is not valid JSON, or the upstream of the root branch
+is not on `origin`), the request does not fit the state of the work, the engine
+is starting, the root branch has no upstream on `origin` or HEAD is detached, or
+git or gh failed (offline, no origin, gh signed out). When the fetch fails,
+`assign` refuses the request, because a work starts from the latest upstream,
+and `getWork` and `listWorks` read the local refs, with a warning. The engine
+reads the workflows from the upstream of the root branch, and an approved work
+from the branch on which its pull request was merged, or from the upstream of
+the root branch when that branch no longer has it, never from the files of the
+root workspace (see ADR 15).
 
 A job is one run of an AI agent for a work. It has these fields:
 

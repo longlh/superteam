@@ -52,8 +52,12 @@ const git = (cwd, args) =>
 
 // A root workspace as the Seed Skill leaves it, with a bare `origin` whose
 // default branch is `main`. With another `rootBranch`, the root workspace is on
-// that branch, pushed to `origin` too.
-async function createProject(t, { rootBranch = "main" } = {}) {
+// that branch, pushed to `origin` as its `upstream`, which can have another
+// name.
+async function createProject(
+  t,
+  { rootBranch = "main", upstream = rootBranch } = {},
+) {
   const root = await mkdtemp(path.join(tmpdir(), "superteam-e2e-"));
   // The stacks are shut down first, in the reverse order of their start.
   const cleanups = [];
@@ -116,7 +120,12 @@ async function createProject(t, { rootBranch = "main" } = {}) {
   await git(baseDir, ["push", "--set-upstream", "origin", "main"]);
   if (rootBranch !== "main") {
     await git(baseDir, ["checkout", "-q", "-b", rootBranch]);
-    await git(baseDir, ["push", "--set-upstream", "origin", rootBranch]);
+    await git(baseDir, [
+      "push",
+      "--set-upstream",
+      "origin",
+      `${rootBranch}:${upstream}`,
+    ]);
   }
   return {
     baseDir,
@@ -286,6 +295,22 @@ async function assign(stack, id) {
 const listed = async (stack, id) =>
   (await stack.request("GET", "/works")).body.some((work) => work.id === id);
 
+// A file of a branch on `origin`, or null when it is not there.
+async function onOrigin(origin, branch, file) {
+  try {
+    return (await git(origin, ["show", `${branch}:${file}`])).stdout;
+  } catch {
+    return null;
+  }
+}
+
+async function approve(stack, id) {
+  const decided = await stack.request("POST", `/works/${id}/decision`, {
+    decision: "approve",
+  });
+  assert.equal(decided.status, 202);
+}
+
 test("a work is assigned, run, proposed and approved", async (t) => {
   const project = await createProject(t);
   const { baseDir, origin } = project;
@@ -310,26 +335,72 @@ test("a work is assigned, run, proposed and approved", async (t) => {
     (work) => work.approvalStatus === "APPROVED",
     "the work first is APPROVED",
   );
-  // The merge makes it APPROVED; the pull and the deletes come after it.
+  // The merge makes it APPROVED; the fetch and the deletes come after it.
   await waitFor(
     async () => (await remoteBranches(origin)).join() === "main",
     "the branches of first are deleted from origin",
   );
 
-  const work = await readJson(workFile(baseDir, "first"));
+  const work = JSON.parse(
+    await onOrigin(origin, "main", ".superteam/.p/works/first.json"),
+  );
   assert.equal(work.id, "first");
+  assert.equal(work.base, "main");
   assert.deepEqual(work.dod, DOD);
   assert.deepEqual(work.dodChecklist, [true, true]);
   for (const file of ["developer-a.txt", "developer-b.txt", "tester-c.txt"]) {
-    assert.ok(existsSync(path.join(baseDir, file)), `${file} is in the root`);
+    assert.notEqual(await onOrigin(origin, "main", file), null, file);
   }
+  // The root workspace is not pulled: the person pulls it.
+  assert.equal(existsSync(workFile(baseDir, "first")), false);
   assert.ok(await listed(stack, "first"), "the work first is listed");
   assert.deepEqual(await remoteBranches(origin), ["main"]);
 });
 
-test("an approved work lands on the root branch, not on the default branch", async (t) => {
+test("a commit of the root branch that is not pushed stays out of the work, and the root workspace is not changed", async (t) => {
+  const project = await createProject(t);
+  const { baseDir, origin } = project;
+  await writeFile(path.join(baseDir, "local.txt"), "not pushed\n");
+  await git(baseDir, ["add", "local.txt"]);
+  await git(baseDir, ["commit", "-m", "Not pushed"]);
+  const head = (await git(baseDir, ["rev-parse", "HEAD"])).stdout;
+  const stack = await startStack(project);
+
+  await assign(stack, "clean");
+  await waitForWork(
+    stack,
+    "clean",
+    (work) => work.approvalStatus === "PROPOSED",
+    "the work clean is PROPOSED",
+  );
+  await approve(stack, "clean");
+  await waitFor(
+    async () => (await remoteBranches(origin)).join() === "main",
+    "the branches of clean are deleted from origin",
+  );
+
+  assert.equal(
+    JSON.parse(await onOrigin(origin, "main", ".superteam/.p/works/clean.json"))
+      .id,
+    "clean",
+  );
+  assert.equal(await onOrigin(origin, "main", "local.txt"), null);
+  assert.equal((await git(baseDir, ["rev-parse", "HEAD"])).stdout, head);
+  assert.equal(existsSync(workFile(baseDir, "clean")), false);
+  const state = await waitForWork(
+    stack,
+    "clean",
+    (work) => work.approvalStatus === "APPROVED",
+    "the work clean is APPROVED",
+  );
+  assert.equal(state.status, "DONE");
+  assert.ok(await listed(stack, "clean"), "the work clean is listed");
+});
+
+test("an approved work lands on the upstream of the root branch, not on the default branch", async (t) => {
   const project = await createProject(t, {
-    rootBranch: "develop",
+    rootBranch: "dev",
+    upstream: "develop",
   });
   const { baseDir, origin } = project;
   const stack = await startStack(project);
@@ -341,22 +412,27 @@ test("an approved work lands on the root branch, not on the default branch", asy
     (work) => work.approvalStatus === "PROPOSED",
     "the work on-develop is PROPOSED",
   );
-  const decided = await stack.request("POST", "/works/on-develop/decision", {
-    decision: "approve",
-  });
-  assert.equal(decided.status, 202);
+  await approve(stack, "on-develop");
   await waitFor(
     async () => (await remoteBranches(origin)).join() === "develop,main",
     "the branches of on-develop are deleted from origin",
   );
-  await waitFor(
-    () => existsSync(workFile(baseDir, "on-develop")),
-    "the work file is pulled in the root workspace",
-  );
   const file = ".superteam/.p/works/on-develop.json";
-  const { stdout } = await git(origin, ["show", `develop:${file}`]);
-  assert.equal(JSON.parse(stdout).id, "on-develop");
-  await assert.rejects(git(origin, ["show", `main:${file}`]));
+  assert.equal(
+    JSON.parse(await onOrigin(origin, "develop", file)).base,
+    "develop",
+  );
+  assert.equal(await onOrigin(origin, "main", file), null);
+  // A person switches the root workspace to main: the work is still listed.
+  await git(baseDir, ["checkout", "-q", "main"]);
+  const state = await waitForWork(
+    stack,
+    "on-develop",
+    (work) => work.approvalStatus === "APPROVED",
+    "the work on-develop is APPROVED",
+  );
+  assert.equal(state.status, "DONE");
+  assert.ok(await listed(stack, "on-develop"), "the work is listed");
 });
 
 test("a rejected work keeps its branch until it is archived", async (t) => {

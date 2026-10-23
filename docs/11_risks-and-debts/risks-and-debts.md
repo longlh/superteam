@@ -29,6 +29,14 @@ The loop is made for an internal tool. These limits are known and accepted:
   `engine:reconcile`, is retried. So an agent can run one more time.
 - A failure of the remote in one work fails the event `engine:reconcile`, so it
   fails for all the works, not only for that one.
+- `listWorks()` finds the approved works in the last 1000 merged pull requests
+  of the repository, and keeps those of the branches `works/*`. In a busy
+  repository, an old approved work is not listed, but its state can still be
+  queried by its id.
+- An approved work is read from the branch its pull request was merged on, else
+  from the upstream of the root branch. When neither has its file, for example
+  when that branch was deleted before it was merged on, the work is no longer
+  listed and cannot be queried, but its id stays used.
 
 ### Handlers (`handlers.md`)
 
@@ -38,9 +46,9 @@ The loop is made for an internal tool. These limits are known and accepted:
 
 ### Git adapter (`git-adapter.md`)
 
-- The root branch is read from the root workspace at each call. If a person
-  switches the branch of the root workspace while a work runs, the later tasks
-  of the work are based on the new branch.
+- The root branch is read from the root workspace when a work is assigned. A
+  work is assigned on the branch that is checked out at that time, so a person
+  who has switched to another branch by mistake assigns the work on it.
 
 ### Orchestrator (`orchestrator.md`)
 

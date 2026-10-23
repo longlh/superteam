@@ -121,8 +121,8 @@ not, the engine refuses it, and the API answers `409 Conflict`. The check is
 made again when the event is processed, because the state can change between the
 request and the event.
 
-- `approve`: the engine merges the pull request into the root branch. This merge
-  is the approval.
+- `approve`: the engine merges the pull request into the `base` of the work, the
+  upstream branch that the work is based on. This merge is the approval.
 - `reject`: the engine closes the pull request and deletes the branches of the
   tasks of the work. The branch of the work is kept on the remote, so the work
   is still listed (see "List the works"). A rejected work is final.
@@ -183,8 +183,9 @@ Answer `200 OK`: the list of all the works. It puts together three sources:
   branches of the works on the remote. A failed or rejected work is never
   merged, so its branch is kept as its trace until it is archived (see
   "Branches" in `git-adapter.md`, and "Archive a work").
-- The works that are approved, in the persistent storage. They were merged from
-  their work branch.
+- The works that are approved, from the merged pull requests of the branches
+  `works/*`, whatever branch they were merged on. A work is read from the branch
+  on which its pull request was merged (see ADR 15).
 
 A work that is approved is kept for good, in git. On another machine, the list
 shows only the works that reached the remote, so a work that is running is not
@@ -231,7 +232,8 @@ The process is started by `/superteam:start` (see `control-skill.md`).
 1. Load `.superteam/.env` into the environment, and check `SUPERTEAM_PORT` (an
    integer from 1 to 65535) and `SUPERTEAM_MAX_BUDGET_USD` (a positive number).
    Create the Engine, the Agents and the Notifier.
-2. Check that the project has a git remote named `origin`, and that `gh` is
+2. Check that the project has a git remote named `origin`, that the root branch
+   tracks a branch on `origin` (its upstream, see ADR 15), and that `gh` is
    signed in. Otherwise refuse to start, with a message that says how to fix it.
 3. Subscribe to the Engine: `engine:ready`, `job:run`, `job:stop`, and the topic
    of each subscription. It is done first, so that no job to run is lost.

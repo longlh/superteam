@@ -30,11 +30,12 @@ export async function decide(deps, event) {
     if (state === "open") {
       await git.mergePullRequest(branch);
     }
-    await git.pullRoot();
     if (await git.branchExists(branch)) {
       await git.deleteBranch(branch);
     }
     await deleteTaskBranches(git, id);
+    // The result is read from the upstream: the root workspace is not pulled.
+    await git.fetch();
     return;
   }
 

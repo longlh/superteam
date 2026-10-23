@@ -53,6 +53,7 @@ class WORKFLOW_STEP <<entity>> {
 class WORK <<entity>> {
   * id : string <<PK>>
   * workflow : string <<FK>>
+  * base : string - the upstream branch that the work is based on
   * title : string
   description : string
   dod : string[]
@@ -116,12 +117,13 @@ same entity.
 
 The `id` of a work is in the name of its branch, in the path of its file and in
 the URL of the API, so it must be safe for all three. An `id` is used while one
-of these is left: the branch `works/{id}`, the file
-`.superteam/.p/works/{id}.json` on the root branch, or a pull request from the
-branch `works/{id}`. The engine refuses a work whose `id` is used, so a work
-that is assigned twice with the same `id` is created once. A work that failed
-and was archived leaves nothing, so its `id` can be used again. A rejected work
-leaves its closed pull request, so its `id` cannot.
+of these is left: the branch `works/{id}`, or a pull request from the branch
+`works/{id}`. An approved work, whose file is in `.superteam/.p/works/` on the
+branch it was merged on, always has its merged pull request. The engine refuses
+a work whose `id` is used, so a work that is assigned twice with the same `id`
+is created once. A work that failed and was archived leaves nothing, so its `id`
+can be used again. A rejected work leaves its closed pull request, so its `id`
+cannot.
 
 ### Roles
 
@@ -166,10 +168,10 @@ reason. So a task that depends on a failed task stays `PENDING`.
 `completed_tasks` is the tasks that are `completed`, which includes the failed
 ones. `error` is the `error` of the work, which the engine writes when a task
 fails. `proposed` means that the work has a pull request, or that its file is in
-`.superteam/.p/works/` on the root branch. The engine opens the pull request
-only when all the tasks are done and none has failed, so a proposed work is
-`DONE`, and it needs no task: the tasks are runtime data, and exist only in the
-worktree of the work, which is removed after the pull request is opened. A
+`.superteam/.p/works/` on the branch it was merged on. The engine opens the pull
+request only when all the tasks are done and none has failed, so a proposed work
+is `DONE`, and it needs no task: the tasks are runtime data, and exist only in
+the worktree of the work, which is removed after the pull request is opened. A
 failed work needs no task either, because its `error` is in the file of the
 work.
 
@@ -195,5 +197,6 @@ derived from the tasks, which are runtime data and exist only in the worktree of
 the work. A failed work is never proposed, so it has no pull request, and its
 approval status stays `DRAFT`.
 
-A work whose file is in `.superteam/.p/works/` on the root branch reached it
-only by the merge of its pull request, so it is `DONE` and `APPROVED`.
+A work whose file is in `.superteam/.p/works/` on the branch it was merged on
+reached it only by the merge of its pull request, so it is `DONE` and
+`APPROVED`.

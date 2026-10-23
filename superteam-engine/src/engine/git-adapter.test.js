@@ -211,6 +211,53 @@ describe("git parts (real git)", () => {
     assert.equal(await adapter.readFileOnBranch("works/b", "nope.txt"), null);
   });
 
+  test("readFileOnRemote reads only from origin, not from the local branch", async () => {
+    const { adapter, baseDir } = makeRepo();
+    writeIn(baseDir, "README.md", "local\n");
+    git(baseDir, "commit", "-q", "-am", "local");
+    assert.equal(
+      await adapter.readFileOnBranch("main", "README.md"),
+      "local\n",
+    );
+    assert.equal(
+      await adapter.readFileOnRemote("main", "README.md"),
+      "hello\n",
+    );
+    assert.equal(await adapter.readFileOnRemote("main", "nope.txt"), null);
+    assert.equal(await adapter.readFileOnRemote("develop", "README.md"), null);
+  });
+
+  test("createWorktree from a branch of origin does not track it", async () => {
+    const { adapter, folder } = makeRepo();
+    const dir = folder("works/c");
+    await adapter.createWorktree({
+      folder: dir,
+      branch: "works/c",
+      base: "origin/main",
+    });
+    assert.ok(existsSync(join(dir, "README.md")));
+    assert.equal(
+      git(dir, "for-each-ref", "--format=%(upstream)", "refs/heads/works/c"),
+      "",
+    );
+  });
+
+  test("rootUpstream returns the branch on origin that the root branch tracks, or null", async () => {
+    const { adapter, baseDir, origin } = makeRepo();
+    assert.equal(await adapter.rootUpstream(), "main");
+    git(baseDir, "checkout", "-q", "-b", "dev");
+    assert.equal(await adapter.rootUpstream(), null);
+    git(baseDir, "push", "-q", "origin", "dev:develop");
+    git(baseDir, "branch", "-q", "--set-upstream-to=origin/develop");
+    assert.equal(await adapter.rootUpstream(), "develop");
+    git(baseDir, "remote", "add", "other", origin);
+    git(baseDir, "fetch", "-q", "other");
+    git(baseDir, "branch", "-q", "--set-upstream-to=other/develop");
+    assert.equal(await adapter.rootUpstream(), null);
+    git(baseDir, "checkout", "-q", "--detach");
+    assert.equal(await adapter.rootUpstream(), null);
+  });
+
   test("deleteBranch removes the branch locally and on origin, and is quiet when called again", async () => {
     const { adapter, baseDir, origin, folder } = makeRepo();
     const dir = folder("works/a");
@@ -368,10 +415,9 @@ describe("preflight", () => {
 });
 
 describe("gh parts (fake run)", () => {
-  test("openPullRequest runs gh pr create on the root branch and returns the url", async () => {
-    const { calls, run } = fakeRun((command) => ({
-      stdout:
-        command === "git" ? "develop\n" : "https://github.com/o/r/pull/1\n",
+  test("openPullRequest runs gh pr create on the base and returns the url", async () => {
+    const { calls, run } = fakeRun(() => ({
+      stdout: "https://github.com/o/r/pull/1\n",
     }));
     const adapter = createGitAdapter({
       baseDir: "/base",
@@ -379,16 +425,12 @@ describe("gh parts (fake run)", () => {
     });
     const url = await adapter.openPullRequest({
       branch: "works/a",
+      base: "develop",
       title: "T",
       body: "B",
     });
     assert.equal(url, "https://github.com/o/r/pull/1");
     assert.deepEqual(calls, [
-      {
-        command: "git",
-        args: ["branch", "--show-current"],
-        cwd: "/base",
-      },
       {
         command: "gh",
         args: [
@@ -418,6 +460,7 @@ describe("gh parts (fake run)", () => {
         stdout: JSON.stringify({
           url: "U",
           state,
+          baseRefName: "develop",
         }),
       }));
       const adapter = createGitAdapter({
@@ -427,13 +470,14 @@ describe("gh parts (fake run)", () => {
       assert.deepEqual(await adapter.getPullRequest("works/a"), {
         url: "U",
         state: expected,
+        base: "develop",
       });
       assert.deepEqual(calls[0].args, [
         "pr",
         "view",
         "works/a",
         "--json",
-        "url,state",
+        "url,state,baseRefName",
       ]);
       assert.equal(calls[0].command, "gh");
     }
@@ -460,6 +504,55 @@ describe("gh parts (fake run)", () => {
       }).getPullRequest("works/a"),
       /auth failed/,
     );
+  });
+
+  test("listMergedPullRequests keeps the merged pull requests of the prefix, with their base", async () => {
+    const { calls, run } = fakeRun(() => ({
+      stdout: JSON.stringify([
+        {
+          headRefName: "works/a",
+          baseRefName: "main",
+        },
+        {
+          headRefName: "feature/x",
+          baseRefName: "main",
+        },
+        {
+          headRefName: "works/b",
+          baseRefName: "develop",
+        },
+      ]),
+    }));
+    const adapter = createGitAdapter({
+      baseDir: "/base",
+      run,
+    });
+    assert.deepEqual(await adapter.listMergedPullRequests("works/"), [
+      {
+        branch: "works/a",
+        base: "main",
+      },
+      {
+        branch: "works/b",
+        base: "develop",
+      },
+    ]);
+    assert.deepEqual(calls, [
+      {
+        command: "gh",
+        args: [
+          "pr",
+          "list",
+          "--state",
+          "merged",
+          "--limit",
+          "1000",
+          "--json",
+          "headRefName,baseRefName",
+        ],
+        cwd: "/base",
+      },
+    ]);
   });
 
   test("mergePullRequest and closePullRequest run gh", async () => {
@@ -560,7 +653,7 @@ describe("real git failures propagate", () => {
 });
 
 describe("the calls that update the refs of origin", () => {
-  test("fetch, push, deleteBranch and pullRoot run one at a time", async () => {
+  test("fetch, push and deleteBranch run one at a time", async () => {
     let running = 0;
     let most = 0;
     const run = async (command, args) => {
@@ -590,7 +683,6 @@ describe("the calls that update the refs of origin", () => {
       adapter.fetch(),
       adapter.push("works/a"),
       adapter.deleteBranch("works/a"),
-      adapter.pullRoot(),
       adapter.fetch(),
     ]);
     assert.equal(most, 1);
@@ -612,6 +704,6 @@ describe("the calls that update the refs of origin", () => {
       run,
     });
     await assert.rejects(adapter.fetch(), /cannot lock ref/);
-    await adapter.pullRoot();
+    await adapter.push("works/a");
   });
 });

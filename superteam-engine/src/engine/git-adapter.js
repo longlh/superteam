@@ -43,7 +43,7 @@ export function createGitAdapter({ baseDir, run = defaultRun }) {
     }
   }
 
-  // fetch, pull, push and the delete of a remote branch all update the refs of
+  // fetch, push and the delete of a remote branch all update the refs of
   // `origin`: run at the same time (a request and a handler), git refuses one
   // with "cannot lock ref". So they run one at a time, in the order of the
   // calls, and a failure does not block the next one.
@@ -62,6 +62,25 @@ export function createGitAdapter({ baseDir, run = defaultRun }) {
   async function rootBranch() {
     const { stdout } = await git(["branch", "--show-current"]);
     return stdout.trim();
+  }
+
+  // The content of `file` at `ref`, or null when the file is missing there.
+  async function showFile(ref, file) {
+    try {
+      const { stdout } = await git(["show", `${ref}:${file}`]);
+      return stdout;
+    } catch (error) {
+      const text = `${error.message}\n${error.stderr ?? ""}`;
+      // The last case is a branch deleted between the check and the read,
+      // such as by an archive while the works are listed.
+      if (
+        /does not exist in|exists on disk, but not in/.test(text) ||
+        text.includes(`invalid object name '${ref}'`)
+      ) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   return {
@@ -110,6 +129,26 @@ export function createGitAdapter({ baseDir, run = defaultRun }) {
       }
     },
 
+    // The branch on origin that the root branch tracks, its upstream, such as
+    // `develop`, or null when it tracks no branch on origin or HEAD is
+    // detached. Its name can differ from the name of the root branch.
+    async rootUpstream() {
+      const branch = await rootBranch();
+      if (branch === "") {
+        return null;
+      }
+      const { stdout } = await git([
+        "for-each-ref",
+        "--format=%(upstream:remotename) %(upstream:remoteref)",
+        `refs/heads/${branch}`,
+      ]);
+      const [remote, ref = ""] = stdout.trim().split(" ");
+      if (remote !== "origin" || !ref.startsWith("refs/heads/")) {
+        return null;
+      }
+      return ref.slice("refs/heads/".length);
+    },
+
     fetch: oneAtATime(async () => {
       await git(["fetch", "--prune", "origin"]);
     }),
@@ -131,7 +170,16 @@ export function createGitAdapter({ baseDir, run = defaultRun }) {
           `origin/${branch}`,
         ]);
       } else {
-        await git(["worktree", "add", "-b", branch, folder, base]);
+        // A branch made from `origin/<base>` would track it.
+        await git([
+          "worktree",
+          "add",
+          "--no-track",
+          "-b",
+          branch,
+          folder,
+          base,
+        ]);
       }
     },
 
@@ -159,6 +207,8 @@ export function createGitAdapter({ baseDir, run = defaultRun }) {
     async branchExists(branch) {
       return (await hasLocal(branch)) || (await hasRemote(branch));
     },
+
+    hasRemoteBranch: hasRemote,
 
     deleteBranch: oneAtATime(async (branch) => {
       if (await hasLocal(branch)) {
@@ -205,27 +255,28 @@ export function createGitAdapter({ baseDir, run = defaultRun }) {
       } else {
         return null;
       }
-      try {
-        const { stdout } = await git(["show", `${ref}:${file}`]);
-        return stdout;
-      } catch (error) {
-        const text = `${error.message}\n${error.stderr ?? ""}`;
-        // The last case is a branch deleted between the check and the read,
-        // such as by an archive while the works are listed.
-        if (
-          /does not exist in|exists on disk, but not in/.test(text) ||
-          text.includes(`invalid object name '${ref}'`)
-        ) {
-          return null;
-        }
-        throw error;
+      return showFile(ref, file);
+    },
+
+    // Only from origin, such as on the upstream of the root branch, whose
+    // local branch can hold commits that are not pushed.
+    async readFileOnRemote(branch, file) {
+      if (!(await hasRemote(branch))) {
+        return null;
       }
+      return showFile(`refs/remotes/origin/${branch}`, file);
     },
 
     async getPullRequest(branch) {
       let stdout;
       try {
-        ({ stdout } = await gh(["pr", "view", branch, "--json", "url,state"]));
+        ({ stdout } = await gh([
+          "pr",
+          "view",
+          branch,
+          "--json",
+          "url,state,baseRefName",
+        ]));
       } catch (error) {
         if (
           `${error.message}\n${error.stderr ?? ""}`.includes(
@@ -236,17 +287,39 @@ export function createGitAdapter({ baseDir, run = defaultRun }) {
         }
         throw error;
       }
-      const { url, state } = JSON.parse(stdout);
+      const { url, state, baseRefName } = JSON.parse(stdout);
       return {
         url,
         state: PR_STATES[state],
+        base: baseRefName,
       };
     },
 
-    // On the root branch: without `--base`, gh would target the default
+    // The merged pull requests whose head branch starts with `prefix`, with the
+    // branch that each was merged on. gh cannot filter on a prefix, so the last
+    // 1000 merged pull requests of the repository are read.
+    async listMergedPullRequests(prefix) {
+      const { stdout } = await gh([
+        "pr",
+        "list",
+        "--state",
+        "merged",
+        "--limit",
+        "1000",
+        "--json",
+        "headRefName,baseRefName",
+      ]);
+      return JSON.parse(stdout)
+        .filter((pr) => pr.headRefName.startsWith(prefix))
+        .map((pr) => ({
+          branch: pr.headRefName,
+          base: pr.baseRefName,
+        }));
+    },
+
+    // On the base of the work: without `--base`, gh would target the default
     // branch of the repository.
-    async openPullRequest({ branch, title, body }) {
-      const base = await rootBranch();
+    async openPullRequest({ branch, base, title, body }) {
       const { stdout } = await gh([
         "pr",
         "create",
@@ -269,9 +342,5 @@ export function createGitAdapter({ baseDir, run = defaultRun }) {
     async closePullRequest(branch) {
       await gh(["pr", "close", branch]);
     },
-
-    pullRoot: oneAtATime(async () => {
-      await git(["pull", "--ff-only"]);
-    }),
   };
 }

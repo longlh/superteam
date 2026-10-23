@@ -54,9 +54,9 @@ async function listNames(dir, keep) {
 
 const branchOf = (id) => `works/${id}`;
 
-// The work file of a branch, or null when it is missing or is not valid JSON:
-// a corrupt file counts as not found on that source.
-function parseWork(text) {
+// A file read from git, or null when it is missing or is not valid JSON: a
+// corrupt file counts as not found on that source.
+function parseJson(text) {
   if (text === null) {
     return null;
   }
@@ -65,6 +65,14 @@ function parseWork(text) {
   } catch {
     return null;
   }
+}
+
+// A workflow that cannot be read from the upstream: it is not retried.
+function corrupted(reason) {
+  return Object.assign(new Error(`corrupted workflow data: ${reason}`), {
+    retryable: false,
+    corrupted: true,
+  });
 }
 
 // The first line of the stderr of a failed command, else of its message.
@@ -101,6 +109,28 @@ export function createEngine({
       };
     },
   });
+  // A workflow is read from `base`, the upstream of the root branch, never from
+  // the root workspace: null when the upstream has no file for it, corrupted
+  // when the upstream is not on origin or the file is not valid JSON. `source`
+  // is the git of a handler or of a function.
+  const workflowLoader = (source) => async (name, base) => {
+    if (!isSlug(name)) {
+      return null;
+    }
+    if (!(await source.hasRemoteBranch(base))) {
+      throw corrupted(`origin/${base} does not exist`);
+    }
+    const file = path.relative(baseDir, workflowFile(baseDir, name));
+    const text = await source.readFileOnRemote(base, file);
+    if (text === null) {
+      return null;
+    }
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw corrupted(`${file} on origin/${base} is not valid JSON`);
+    }
+  };
   const pubsub = createPubSub();
   const loop = createEngineLoop({
     ...loopOptions,
@@ -109,8 +139,7 @@ export function createEngine({
   const deps = {
     baseDir,
     git,
-    loadWorkflow: async (name) =>
-      isSlug(name) ? readJson(workflowFile(baseDir, name)) : null,
+    loadWorkflow: workflowLoader(git),
     publish: pubsub.publish,
     now: () => new Date(),
   };
@@ -148,7 +177,9 @@ export function createEngine({
   const worksFolder = path.join(r(baseDir), "worktrees", "works");
 
   // The work of an id from the first source that has it: the work worktree
-  // (with its tasks), the branch of the work, then the root workspace.
+  // (with its tasks), the branch of the work, then the branch on which its pull
+  // request was merged, else the upstream of the root branch (the branch it was
+  // merged on can be gone), given with that pull request.
   async function findWork(id) {
     const folder = worktreeDir(baseDir, {
       workId: id,
@@ -165,7 +196,7 @@ export function createEngine({
       branchOf(id),
       path.relative(baseDir, workFile(baseDir, id)),
     );
-    const onBranch = parseWork(text);
+    const onBranch = parseJson(text);
     if (onBranch !== null) {
       return {
         work: onBranch,
@@ -173,13 +204,24 @@ export function createEngine({
         root: false,
       };
     }
-    const inRoot = await readJson(workFile(baseDir, id));
-    if (inRoot !== null) {
-      return {
-        work: inRoot,
-        tasks: [],
-        root: true,
-      };
+    const pr = await remote.getPullRequest(branchOf(id));
+    if (pr?.state === "merged") {
+      const file = path.relative(baseDir, workFile(baseDir, id));
+      const upstream = await remote.rootUpstream();
+      for (const branch of new Set([pr.base, upstream])) {
+        const merged =
+          branch === null
+            ? null
+            : parseJson(await remote.readFileOnRemote(branch, file));
+        if (merged !== null) {
+          return {
+            work: merged,
+            tasks: [],
+            root: true,
+            pr,
+          };
+        }
+      }
     }
     return null;
   }
@@ -191,7 +233,7 @@ export function createEngine({
       return null;
     }
     const { work, tasks, root } = found;
-    const pr = await remote.getPullRequest(branchOf(id));
+    const pr = root ? found.pr : await remote.getPullRequest(branchOf(id));
     return {
       id,
       title: work.title,
@@ -241,7 +283,6 @@ export function createEngine({
   async function isUsed(id) {
     return (
       (await remote.branchExists(branchOf(id))) ||
-      existsSync(workFile(baseDir, id)) ||
       (await remote.getPullRequest(branchOf(id))) !== null
     );
   }
@@ -383,7 +424,30 @@ export function createEngine({
       if (reason !== null) {
         throw new EngineError("invalid", reason);
       }
-      const workflow = await deps.loadWorkflow(body.workflow);
+      // A work starts from the latest upstream: offline, it is refused.
+      await remote.fetch();
+      if ((await remote.rootBranch()) === "") {
+        throw new EngineError(
+          "unavailable",
+          "HEAD is detached: check out the root branch first",
+        );
+      }
+      const base = await remote.rootUpstream();
+      if (base === null) {
+        throw new EngineError(
+          "unavailable",
+          "the root branch tracks no branch on origin: set its upstream with `git push --set-upstream origin HEAD`",
+        );
+      }
+      let workflow;
+      try {
+        workflow = await workflowLoader(remote)(body.workflow, base);
+      } catch (error) {
+        if (error.corrupted) {
+          throw new EngineError("invalid", error.message);
+        }
+        throw error;
+      }
       if (workflow === null) {
         throw new EngineError("not-found", `no workflow ${body.workflow}`);
       }
@@ -403,6 +467,7 @@ export function createEngine({
       const eventId = await enqueue("work:assign", {
         ...body,
         id,
+        base,
       });
       return {
         id,
@@ -458,11 +523,9 @@ export function createEngine({
         ...(await remote.listBranches("works/")).map((branch) =>
           branch.slice("works/".length),
         ),
-        ...(
-          await listNames(path.join(p(baseDir), "works"), (entry) =>
-            entry.name.endsWith(".json"),
-          )
-        ).map((name) => name.slice(0, -".json".length)),
+        ...(await remote.listMergedPullRequests("works/")).map(({ branch }) =>
+          branch.slice("works/".length),
+        ),
       ];
       const works = [];
       for (const id of new Set(ids.filter(isSlug))) {

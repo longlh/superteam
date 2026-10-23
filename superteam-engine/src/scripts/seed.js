@@ -1,12 +1,13 @@
 import fs from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseEnv } from "node:util";
+import { createGitAdapter } from "../engine/git-adapter.js";
 import { writeJson } from "../lib/storage/files.js";
 import { isSlug } from "../lib/storage/ids.js";
-import { workflowFile } from "../lib/storage/paths.js";
+import { p, workflowFile } from "../lib/storage/paths.js";
 import { validateWorkflow } from "../lib/storage/validate.js";
 
 const GITIGNORE_LINES = [".superteam/.r/", ".superteam/.env"];
@@ -129,6 +130,102 @@ export async function writeWorkflow(baseDir, workflow) {
   return file;
 }
 
+// The names in a folder that end with `ext`, sorted; none when it is missing.
+async function filesOf(dir, ext) {
+  try {
+    return (await readdir(dir)).filter((name) => name.endsWith(ext)).sort();
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return [];
+    }
+    throw error;
+  }
+}
+
+// Checks that the setup of the root workspace is on the upstream of the root
+// branch, where the engine and the worktrees read it: each workflow and role
+// with the same content, each role that a workflow names, and the lines of the
+// .gitignore. Returns "ok", or throws with the files to push.
+export async function checkPushed(
+  baseDir,
+  git = createGitAdapter({
+    baseDir,
+  }),
+) {
+  await git.fetch();
+  if ((await git.rootBranch()) === "") {
+    throw new Error("HEAD is detached: check out the root branch first");
+  }
+  const base = await git.rootUpstream();
+  if (base === null) {
+    throw new Error(
+      "the root branch tracks no branch on origin: push it with `git push --set-upstream origin HEAD`",
+    );
+  }
+  if (!(await git.hasRemoteBranch(base))) {
+    throw new Error(`corrupted workflow data: origin/${base} does not exist`);
+  }
+  const problems = [];
+  const checked = new Set();
+  async function compare(file) {
+    checked.add(file);
+    const local = await readText(path.join(baseDir, file));
+    const remote = await git.readFileOnRemote(base, file);
+    if (remote === null) {
+      problems.push(`missing: ${file}`);
+    } else if (remote !== local) {
+      problems.push(`differs: ${file}`);
+    }
+  }
+
+  const workflowsDir = path.join(p(baseDir), "workflows");
+  const roles = new Set();
+  for (const name of await filesOf(workflowsDir, ".json")) {
+    const file = path.relative(baseDir, path.join(workflowsDir, name));
+    await compare(file);
+    try {
+      const workflow = JSON.parse(await readText(path.join(baseDir, file)));
+      for (const step of workflow.steps ?? []) {
+        roles.add(step.role);
+      }
+    } catch {
+      problems.push(`not valid JSON: ${file}`);
+    }
+  }
+  for (const name of await filesOf(
+    path.join(baseDir, ".claude/agents"),
+    ".md",
+  )) {
+    await compare(path.join(".claude/agents", name));
+  }
+  for (const role of roles) {
+    const file = path.join(".claude/agents", `${role}.md`);
+    if (
+      isSlug(role) &&
+      !ENGINE_ROLES.includes(role) &&
+      !checked.has(file) &&
+      (await git.readFileOnRemote(base, file)) === null
+    ) {
+      problems.push(`missing: ${file}`);
+    }
+  }
+  const gitignore = (await git.readFileOnRemote(base, ".gitignore")) ?? "";
+  const present = new Set(gitignore.split("\n").map((line) => line.trim()));
+  for (const line of GITIGNORE_LINES.filter((l) => !present.has(l))) {
+    problems.push(`missing in .gitignore: ${line}`);
+  }
+
+  if (problems.length > 0) {
+    throw new Error(
+      [
+        `the setup is not on origin/${base}: commit and push these files`,
+        ...problems.map((problem) => `- ${problem}`),
+      ].join("\n"),
+    );
+  }
+  return "ok";
+}
+
 async function readStdinJson() {
   const chunks = [];
   for await (const chunk of process.stdin) {
@@ -148,7 +245,10 @@ async function run(command, baseDir) {
   if (command === "workflow") {
     return writeWorkflow(baseDir, await readStdinJson());
   }
-  throw new Error("usage: seed.js init | role | workflow");
+  if (command === "check") {
+    return checkPushed(baseDir);
+  }
+  throw new Error("usage: seed.js init | role | workflow | check");
 }
 
 if (

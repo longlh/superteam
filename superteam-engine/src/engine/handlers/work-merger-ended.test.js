@@ -74,6 +74,7 @@ test("commits the checklist, pushes, opens the pull request, removes the worktre
       "openPullRequest",
       {
         branch: "works/w1",
+        base: "main",
         title: "Title",
         body: "S\n\n## Work DOD\n\n- [x] ok\n- [ ] docs\n\n## Task `a` DOD\n\n- [x] t1\n",
       },

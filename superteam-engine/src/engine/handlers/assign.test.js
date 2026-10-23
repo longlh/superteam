@@ -69,8 +69,8 @@ let handlers;
 
 function fakeGit() {
   return {
-    async rootBranch() {
-      return "main";
+    async fetch() {
+      calls.push(["fetch"]);
     },
     async createWorktree(args) {
       if (existsSync(args.folder)) {
@@ -88,11 +88,15 @@ function fakeGit() {
   };
 }
 
+// The function `assign` puts the upstream it checked in the event, as `base`.
 function event(data) {
   return {
     type: "work:assign",
     payload: {
-      data,
+      data: {
+        base: "main",
+        ...data,
+      },
     },
   };
 }
@@ -133,11 +137,12 @@ test("assign creates the work worktree, the work file, the tasks and one job", a
   assert.deepEqual(created()[0][1], {
     folder: workTree,
     branch: "works/w1",
-    base: "main",
+    base: "origin/main",
   });
   assert.deepEqual(await readJson(workFile(workTree, "w1")), {
     id: "w1",
     workflow: "linear",
+    base: "main",
     title: "Title",
     dod: ["wf dod"],
     createdAt: now.toISOString(),
@@ -168,7 +173,7 @@ test("assign creates the work worktree, the work file, the tasks and one job", a
   assert.deepEqual(created()[1][1], {
     folder: job.workdir,
     branch: "tasks/w1/a",
-    base: "main",
+    base: "works/w1",
   });
 });
 
@@ -357,7 +362,7 @@ test("an unknown workflow throws a non retryable error", async () => {
     ),
     (error) => error.retryable === false,
   );
-  assert.equal(calls.length, 0);
+  assert.deepEqual(calls, [["fetch"]]);
 });
 
 test("a workflow that is not valid any more throws a non retryable error", async () => {
@@ -373,5 +378,59 @@ test("a workflow that is not valid any more throws a non retryable error", async
       error.retryable === false &&
       /workflow broken: step a: role must be a slug/.test(error.message),
   );
-  assert.equal(calls.length, 0);
+  assert.deepEqual(calls, [["fetch"]]);
+});
+
+test("an event with no base throws a non retryable error", async () => {
+  await assert.rejects(
+    handlers["work:assign"](
+      event({
+        id: "w1",
+        workflow: "linear",
+        title: "T",
+        base: undefined,
+      }),
+    ),
+    (error) => error.retryable === false && /has no base/.test(error.message),
+  );
+  assert.deepEqual(calls, [["fetch"]]);
+});
+
+test("the worktree is based on the base of the event, a branch of origin", async () => {
+  await handlers["work:assign"](
+    event({
+      id: "w1",
+      workflow: "linear",
+      title: "T",
+      base: "develop",
+    }),
+  );
+  assert.equal(created()[0][1].base, "origin/develop");
+});
+
+test("a retry keeps the base of the work that is already written", async () => {
+  await handlers["work:assign"](
+    event({
+      id: "w1",
+      workflow: "linear",
+      title: "T",
+    }),
+  );
+  await handlers["work:assign"](
+    event({
+      id: "w1",
+      workflow: "linear",
+      title: "T",
+      base: "develop",
+    }),
+  );
+  const work = await readJson(
+    workFile(
+      worktreeDir(baseDir, {
+        workId: "w1",
+      }),
+      "w1",
+    ),
+  );
+  assert.equal(work.base, "main");
 });

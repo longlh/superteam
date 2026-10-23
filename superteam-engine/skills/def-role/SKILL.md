@@ -43,17 +43,29 @@ file by hand.
    It adds `.superteam/.r/` and `.superteam/.env` to `.gitignore` and writes
    `SUPERTEAM_PORT` in `.superteam/.env` when it is missing. It prints the port.
 
-5. Tell the person to commit the files of the setup on the root branch:
-   `.gitignore`, `.claude/agents/*.md` and `.superteam/.p/workflows/*.json`. The
-   agents run in worktrees created from the root branch, so a role or a workflow
-   that is not committed is not there for them. Offer to make the commit, and
-   make it only if the person says yes (leave out a path that does not exist
-   yet):
+5. Tell the person to commit the files of the setup on the root branch, and to
+   push them: `.gitignore`, `.claude/agents/*.md` and
+   `.superteam/.p/workflows/*.json`. The agents run in worktrees created from
+   the upstream of the root branch, its branch on `origin`, so a role or a
+   workflow that is not pushed is not there for them. Offer to make the commit
+   and the push, and make them only if the person says yes (leave out a path
+   that does not exist yet):
 
    ```
    git add .gitignore .claude/agents .superteam/.p/workflows
    git commit -m "Set up superteam"
+   git push --set-upstream origin HEAD
    ```
+
+6. Check that the setup is on the upstream, from the workspace root:
+
+   ```
+   node ${CLAUDE_PLUGIN_ROOT}/src/scripts/seed.js check
+   ```
+
+   It prints `ok` when every file of the setup is on the upstream of the root
+   branch. Otherwise it fails with the files that are missing or differ there:
+   report them to the person. The setup is not done until the check passes.
 
 ## Rules
 

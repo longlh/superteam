@@ -74,6 +74,16 @@ export function createOrchestrator({
           "superteam cannot start: the project has no git remote named origin: add one with `git remote add origin <url>`",
         );
       }
+      if ((await git.rootBranch()) === "") {
+        throw new Error(
+          "superteam cannot start: HEAD is detached: check out the root branch first",
+        );
+      }
+      if ((await git.rootUpstream()) === null) {
+        throw new Error(
+          "superteam cannot start: the root branch tracks no branch on origin: set it with `git branch --set-upstream-to=origin/<branch>`, or push it with `git push --set-upstream origin HEAD`",
+        );
+      }
       if (!(await git.checkForge())) {
         throw new Error(
           "superteam cannot start: gh is not signed in to GitHub: run `gh auth login`",

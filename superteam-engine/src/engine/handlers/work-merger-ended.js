@@ -35,6 +35,7 @@ export async function workMergerEnded(deps, event) {
     await deps.git.push(branch);
     await deps.git.openPullRequest({
       branch,
+      base: work.base,
       title: work.title,
       body: renderPullRequestBody({
         summary: summary ?? "",

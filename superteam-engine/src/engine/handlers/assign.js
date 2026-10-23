@@ -12,7 +12,18 @@ function refuse(message) {
 
 export async function assign(deps, event) {
   const { id, workflow: name, title, description, dod } = event.payload.data;
-  const workflow = await deps.loadWorkflow(name);
+  const folder = worktreeDir(deps.baseDir, {
+    workId: id,
+  });
+  await deps.git.fetch();
+  // The upstream that `assign` checked; a retry keeps the base of the work
+  // that is already written.
+  const base =
+    (await readJson(workFile(folder, id)))?.base ?? event.payload.data.base;
+  if (typeof base !== "string" || base === "") {
+    throw refuse(`the work:assign event of ${id} has no base`);
+  }
+  const workflow = await deps.loadWorkflow(name, base);
   if (!workflow) {
     throw refuse(`unknown workflow ${name}`);
   }
@@ -22,13 +33,10 @@ export async function assign(deps, event) {
     throw refuse(`workflow ${name}: ${reason}`);
   }
 
-  const folder = worktreeDir(deps.baseDir, {
-    workId: id,
-  });
   await deps.git.createWorktree({
     folder,
     branch: `works/${id}`,
-    base: await deps.git.rootBranch(),
+    base: `origin/${base}`,
   });
 
   if ((await readJson(workFile(folder, id))) === null) {
@@ -36,6 +44,7 @@ export async function assign(deps, event) {
     await writeJson(workFile(folder, id), {
       id,
       workflow: name,
+      base,
       title,
       ...(description === undefined
         ? {}

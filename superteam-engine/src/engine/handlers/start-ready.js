@@ -58,7 +58,6 @@ export async function startReady({ deps, workId }) {
   });
   const work = await readJson(workFile(workFolder, workId));
   const tasks = await createTaskStore(workFolder).list();
-  const rootBranch = await deps.git.rootBranch();
   const started = [];
 
   for (const task of tasks) {
@@ -69,11 +68,14 @@ export async function startReady({ deps, workId }) {
     if (taskStatus(task, tasks) !== "IN_PROGRESS" || existsSync(folder)) {
       continue;
     }
+    // A task with no dependency starts from the branch of its work, so all
+    // the tasks of a work start from the same commit.
     const [first] = task.dependOn;
     await deps.git.createWorktree({
       folder,
       branch: `tasks/${workId}/${task.id}`,
-      base: first === undefined ? rootBranch : `tasks/${workId}/${first}`,
+      base:
+        first === undefined ? `works/${workId}` : `tasks/${workId}/${first}`,
     });
     // The job needs the worktree (for the artifacts). If it cannot be built,
     // the worktree is removed again, so the retry starts the task.

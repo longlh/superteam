@@ -98,8 +98,12 @@ async function start() {
 const code = (expected) => (error) =>
   error instanceof EngineError && error.code === expected;
 
-const saveWorkflow = (workflow) =>
-  writeJson(workflowFile(h.baseDir, workflow.name), workflow);
+// On the upstream of the root branch, where the engine reads the workflows.
+const saveWorkflow = async (workflow) =>
+  h.remoteFiles.set(
+    `main:${path.relative(h.baseDir, workflowFile(h.baseDir, workflow.name))}`,
+    JSON.stringify(workflow),
+  );
 
 const work = (id, extra = {}) => ({
   id,
@@ -151,13 +155,21 @@ function onBranch(entity) {
   );
 }
 
-const inRoot = (entity) => writeJson(workFile(h.baseDir, entity.id), entity);
-
-const pullRequest = (id, state) =>
+const pullRequest = (id, state, base = "main") =>
   h.pullRequests.set(`works/${id}`, {
     url: `https://example.test/works/${id}`,
     state,
+    base,
   });
+
+// An approved work: its pull request is merged, and its file is on `base`.
+function approved(entity, base = "main") {
+  pullRequest(entity.id, "merged", base);
+  h.remoteFiles.set(
+    `${base}:.superteam/.p/works/${entity.id}.json`,
+    JSON.stringify(entity),
+  );
+}
 
 const done = (type) =>
   notes
@@ -224,6 +236,74 @@ test("assign refuses an unknown workflow with not-found", async () => {
   await assert.rejects(engine.assign(body()), code("not-found"));
 });
 
+test("assign reads the workflow from the upstream, not from the root workspace", async () => {
+  await writeJson(workflowFile(h.baseDir, flow.name), flow);
+  await start();
+  await assert.rejects(engine.assign(body()), code("not-found"));
+});
+
+test("assign refuses the request when the fetch fails: a work starts from the latest upstream", async () => {
+  await saveWorkflow(flow);
+  await start();
+  h.git.fetch = async () => {
+    throw new Error("Could not resolve host: github.com");
+  };
+  await assert.rejects(
+    engine.assign(body()),
+    (error) =>
+      code("unavailable")(error) &&
+      error.message ===
+        "git or gh failed (fetch): Could not resolve host: github.com",
+  );
+  assert.equal(done("work:assign").length, 0);
+});
+
+test("assign refuses a detached HEAD, with how to fix it", async () => {
+  await saveWorkflow(flow);
+  await start();
+  h.git.rootBranch = async () => "";
+  await assert.rejects(
+    engine.assign(body()),
+    (error) =>
+      code("unavailable")(error) &&
+      error.message === "HEAD is detached: check out the root branch first",
+  );
+});
+
+test("assign refuses corrupted workflow data: an upstream gone from origin, or a file that is not JSON", async () => {
+  await start();
+  h.goneBranches.add("main");
+  await assert.rejects(
+    engine.assign(body()),
+    (error) =>
+      code("invalid")(error) &&
+      error.message === "corrupted workflow data: origin/main does not exist",
+  );
+  h.goneBranches.clear();
+  h.remoteFiles.set("main:.superteam/.p/workflows/flow.json", "{ not json");
+  await assert.rejects(
+    engine.assign(body()),
+    (error) =>
+      code("invalid")(error) &&
+      error.message ===
+        "corrupted workflow data: .superteam/.p/workflows/flow.json on origin/main is not valid JSON",
+  );
+});
+
+test("assign refuses a root branch with no upstream on origin, with how to fix it", async () => {
+  await saveWorkflow(flow);
+  await start();
+  h.git.rootUpstream = async () => null;
+  await assert.rejects(
+    engine.assign(body()),
+    (error) =>
+      code("unavailable")(error) &&
+      /tracks no branch on origin: .*git push --set-upstream origin HEAD/.test(
+        error.message,
+      ),
+  );
+});
+
 test("assign refuses a workflow that could never finish", async () => {
   await start();
   const workflows = [
@@ -275,13 +355,13 @@ test("assign refuses a workflow that could never finish", async () => {
   }
 });
 
-test("assign refuses an id that is used by a branch, a root work file or a pull request", async () => {
+test("assign refuses an id that is used by a branch or a pull request", async () => {
   await saveWorkflow(flow);
   await start();
   extraBranches.add("works/on-branch");
-  await inRoot(work("in-root"));
+  approved(work("approved"));
   pullRequest("with-pr", "closed");
-  for (const id of ["on-branch", "in-root", "with-pr"]) {
+  for (const id of ["on-branch", "approved", "with-pr"]) {
     await assert.rejects(
       engine.assign(
         body({
@@ -304,12 +384,12 @@ test("assign enqueues work:assign with the given id, and the work runs", async (
   assert.equal(result.id, "add-login");
   assert.equal(typeof result.eventId, "string");
   await waitFor(() => done("work:assign").length === 1, "work:assign");
-  assert.deepEqual(
-    done("work:assign")[0].data,
-    body({
+  assert.deepEqual(done("work:assign")[0].data, {
+    ...body({
       id: "add-login",
     }),
-  );
+    base: "main",
+  });
   const jobs = notes.filter(([topic]) => topic === "job:run");
   assert.deepEqual(
     jobs.map(([, job]) => job.id),
@@ -510,9 +590,14 @@ test("getWork reads a failed or a rejected work from its branch", async () => {
   });
 });
 
-test("getWork reads an approved work from the root workspace", async () => {
-  await inRoot(work("w1"));
-  pullRequest("w1", "merged");
+test("getWork reads an approved work from the branch its pull request was merged on", async () => {
+  await writeJson(
+    workFile(h.baseDir, "w1"),
+    work("w1", {
+      title: "In the root workspace",
+    }),
+  );
+  approved(work("w1"), "develop");
   assert.deepEqual(await engine.getWork("w1"), {
     id: "w1",
     title: "Title w1",
@@ -523,11 +608,40 @@ test("getWork reads an approved work from the root workspace", async () => {
   });
 });
 
+test("getWork reads an approved work from the upstream when the branch it was merged on is gone", async () => {
+  pullRequest("w1", "merged", "feature");
+  h.remoteFiles.set(
+    "main:.superteam/.p/works/w1.json",
+    JSON.stringify(work("w1")),
+  );
+  assert.equal((await engine.getWork("w1")).approvalStatus, "APPROVED");
+  assert.deepEqual(
+    (await engine.listWorks()).map((w) => w.id),
+    ["w1"],
+  );
+});
+
+test("an approved work whose file is on no branch is not found, but its id stays used", async () => {
+  await saveWorkflow(flow);
+  pullRequest("w1", "merged", "feature");
+  await start();
+  await assert.rejects(engine.getWork("w1"), code("not-found"));
+  assert.deepEqual(await engine.listWorks(), []);
+  await assert.rejects(
+    engine.assign(
+      body({
+        id: "w1",
+      }),
+    ),
+    code("conflict"),
+  );
+});
+
 test("getWork treats a corrupt work file on the branch as not found there", async () => {
   extraBranches.add("works/w1");
   h.branchFiles.set("works/w1:.superteam/.p/works/w1.json", "{ not json");
   await assert.rejects(engine.getWork("w1"), code("not-found"));
-  await inRoot(work("w1"));
+  approved(work("w1"));
   assert.equal((await engine.getWork("w1")).approvalStatus, "APPROVED");
 });
 
@@ -555,14 +669,13 @@ test("listWorks merges the three sources with no duplicate, the first source win
       title: "Branch title",
     }),
   );
-  pullRequest("w3", "merged");
-  await inRoot(
+  approved(
     work("w3", {
       title: "Root title",
     }),
   );
   extraBranches.add("works/w4");
-  await inRoot(work("w5"));
+  approved(work("w5"), "develop");
   const works = await engine.listWorks();
   assert.deepEqual(
     works.map(({ id, title, status, approvalStatus }) => [
@@ -802,7 +915,7 @@ test("the retry and the error of an event are relayed", async () => {
   await start();
   onBranch(work("w1"));
   pullRequest("w1", "open");
-  h.git.pullRoot = async () => {
+  h.git.mergePullRequest = async () => {
     throw new Error("boom");
   };
   await engine.decide("w1", "approve");

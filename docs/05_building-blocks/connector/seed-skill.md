@@ -33,4 +33,11 @@ roles of Claude, and the port of the API. It writes nothing else.
   kept.
 - The skills end by telling the person to commit `.gitignore`,
   `.claude/agents/*.md` and `.superteam/.p/workflows/*.json` on the root branch,
-  because the worktrees are checked out from it. They offer to make the commit.
+  and to push them, because the worktrees are checked out from its upstream (see
+  ADR 15). They offer to make the commit and the push.
+- Then they run `seed.js check`. It fetches, and checks that each workflow and
+  each role of the root workspace is on the upstream of the root branch with the
+  same content, that each role named by a workflow is there (except the roles of
+  the engine), and that the `.gitignore` there has its lines. Otherwise it fails
+  with the list of the files to push, so a setup that is not pushed is reported
+  at once, not when a work is assigned.

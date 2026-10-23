@@ -108,12 +108,26 @@ export function createFakeGh({ baseDir, defaultBranch = "main" }) {
         };
       }
       case "view": {
-        const { url, state } = find(args, branch);
+        const { url, state, base } = find(args, branch);
         return {
           stdout: `${JSON.stringify({
             url,
             state,
+            baseRefName: base,
           })}\n`,
+          stderr: "",
+        };
+      }
+      // Only the merged pull requests are listed (`--state merged`).
+      case "list": {
+        const merged = [...pullRequests]
+          .filter(([, pr]) => pr.state === "MERGED")
+          .map(([head, pr]) => ({
+            headRefName: head,
+            baseRefName: pr.base,
+          }));
+        return {
+          stdout: `${JSON.stringify(merged)}\n`,
           stderr: "",
         };
       }

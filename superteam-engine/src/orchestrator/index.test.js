@@ -72,6 +72,14 @@ function setup(options = {}) {
       calls.push("git.hasOrigin");
       return options.origin ?? true;
     },
+    async rootBranch() {
+      calls.push("git.rootBranch");
+      return options.branch ?? "main";
+    },
+    async rootUpstream() {
+      calls.push("git.rootUpstream");
+      return options.upstream === undefined ? "main" : options.upstream;
+    },
     async checkForge() {
       calls.push("git.checkForge");
       return options.forge ?? true;
@@ -111,6 +119,8 @@ test("start subscribes, recovers, starts the engine, then reconciles and listens
   assert.equal(resolved, true);
   assert.deepEqual(t.calls, [
     "git.hasOrigin",
+    "git.rootBranch",
+    "git.rootUpstream",
     "git.checkForge",
     "subscribe:engine:ready",
     "subscribe:job:run",
@@ -134,6 +144,32 @@ test("start rejects with a clear message when origin is missing, before anything
   assert.deepEqual(t.calls, ["git.hasOrigin"]);
 });
 
+test("start rejects with a clear message when the root branch has no upstream on origin, before anything starts", async () => {
+  const t = setup({
+    upstream: null,
+  });
+  await assert.rejects(
+    t.orchestrator.start(),
+    /the root branch tracks no branch on origin: set it with `git branch --set-upstream-to=origin\/<branch>`/,
+  );
+  assert.deepEqual(t.calls, [
+    "git.hasOrigin",
+    "git.rootBranch",
+    "git.rootUpstream",
+  ]);
+});
+
+test("start rejects with a clear message when HEAD is detached, before anything starts", async () => {
+  const t = setup({
+    branch: "",
+  });
+  await assert.rejects(
+    t.orchestrator.start(),
+    /HEAD is detached: check out the root branch first/,
+  );
+  assert.deepEqual(t.calls, ["git.hasOrigin", "git.rootBranch"]);
+});
+
 test("start rejects with a clear message when gh is not signed in, before anything starts", async () => {
   const t = setup({
     forge: false,
@@ -142,7 +178,12 @@ test("start rejects with a clear message when gh is not signed in, before anythi
     t.orchestrator.start(),
     /gh is not signed in to GitHub: run `gh auth login`/,
   );
-  assert.deepEqual(t.calls, ["git.hasOrigin", "git.checkForge"]);
+  assert.deepEqual(t.calls, [
+    "git.hasOrigin",
+    "git.rootBranch",
+    "git.rootUpstream",
+    "git.checkForge",
+  ]);
 });
 
 test("start waits for engine:ready before reconcile and listen", async () => {

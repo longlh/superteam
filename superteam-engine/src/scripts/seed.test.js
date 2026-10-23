@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import {
   mkdir,
   mkdtemp,
@@ -11,6 +12,7 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import {
+  checkPushed,
   ensureGitignore,
   ensurePort,
   writeRole,
@@ -325,5 +327,100 @@ test("the four functions write no other file", async () => {
       ".superteam/.env",
       ".superteam/.p/workflows/feature.json",
     ]);
+  });
+});
+
+const git = (cwd, ...args) =>
+  execFileSync("git", args, {
+    cwd,
+    encoding: "utf8",
+  }).trim();
+
+// A project with a bare origin, the setup written by the skill, and nothing
+// committed yet.
+async function withProject(fn) {
+  await withDir(async (root) => {
+    const origin = path.join(root, "origin.git");
+    const dir = path.join(root, "project");
+    git(root, "init", "-q", "--bare", "-b", "main", origin);
+    git(root, "init", "-q", "-b", "main", dir);
+    git(dir, "config", "user.name", "Test");
+    git(dir, "config", "user.email", "test@example.com");
+    git(dir, "config", "commit.gpgsign", "false");
+    git(dir, "remote", "add", "origin", origin);
+    git(dir, "commit", "-q", "--allow-empty", "-m", "init");
+    git(dir, "push", "-q", "--set-upstream", "origin", "main");
+    await ensureGitignore(dir);
+    await ensurePort(dir);
+    for (const name of ["developer", "reviewer"]) {
+      await writeRole(dir, {
+        name,
+        description: name,
+        instructions: "x",
+      });
+    }
+    await writeWorkflow(dir, workflow);
+    await fn(dir);
+  });
+}
+
+const pushSetup = (dir) => {
+  git(dir, "add", ".gitignore", ".claude/agents", ".superteam/.p/workflows");
+  git(dir, "commit", "-q", "-m", "Set up superteam");
+  git(dir, "push", "-q");
+};
+
+test("check lists the files of the setup that are not on the upstream", async () => {
+  await withProject(async (dir) => {
+    await assert.rejects(checkPushed(dir), (error) => {
+      assert.equal(
+        error.message,
+        [
+          "the setup is not on origin/main: commit and push these files",
+          "- missing: .superteam/.p/workflows/feature.json",
+          "- missing: .claude/agents/developer.md",
+          "- missing: .claude/agents/reviewer.md",
+          "- missing in .gitignore: .superteam/.r/",
+          "- missing in .gitignore: .superteam/.env",
+        ].join("\n"),
+      );
+      return true;
+    });
+  });
+});
+
+test("check passes once the setup is pushed, and finds a file changed after", async () => {
+  await withProject(async (dir) => {
+    pushSetup(dir);
+    assert.equal(await checkPushed(dir), "ok");
+    await writeRole(dir, {
+      name: "developer",
+      description: "changed",
+      instructions: "x",
+    });
+    await assert.rejects(
+      checkPushed(dir),
+      /- differs: .claude\/agents\/developer.md$/,
+    );
+  });
+});
+
+test("check finds a role that a workflow names and that is on no side", async () => {
+  await withProject(async (dir) => {
+    await rm(path.join(dir, ".claude/agents/reviewer.md"));
+    pushSetup(dir);
+    await assert.rejects(checkPushed(dir), (error) => {
+      assert.match(error.message, /\n- missing: .claude\/agents\/reviewer.md$/);
+      return true;
+    });
+  });
+});
+
+test("check refuses a root branch with no upstream, and a detached HEAD", async () => {
+  await withProject(async (dir) => {
+    git(dir, "checkout", "-q", "-b", "local");
+    await assert.rejects(checkPushed(dir), /tracks no branch on origin/);
+    git(dir, "checkout", "-q", "--detach");
+    await assert.rejects(checkPushed(dir), /HEAD is detached/);
   });
 });

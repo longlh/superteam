@@ -21,9 +21,20 @@ export async function createHarness(workflows) {
   const committed = new Map();
   const pullRequests = new Map();
   const branchFiles = new Map();
+  const remoteFiles = new Map();
+  const goneBranches = new Set();
   const git = {
+    async fetch() {
+      calls.push(["fetch"]);
+    },
     async rootBranch() {
       return "main";
+    },
+    async rootUpstream() {
+      return "main";
+    },
+    async hasRemoteBranch(branch) {
+      return !goneBranches.has(branch);
     },
     async ensureExcluded(line) {
       calls.push(["ensureExcluded", line]);
@@ -75,11 +86,22 @@ export async function createHarness(workflows) {
     async getPullRequest(branch) {
       return pullRequests.get(branch) ?? null;
     },
+    async listMergedPullRequests(prefix) {
+      return [...pullRequests]
+        .filter(
+          ([branch, pr]) => branch.startsWith(prefix) && pr.state === "merged",
+        )
+        .map(([branch, pr]) => ({
+          branch,
+          base: pr.base,
+        }));
+    },
     async openPullRequest(args) {
       calls.push(["openPullRequest", args]);
       const pullRequest = {
         url: `https://example.test/${args.branch}`,
         state: "open",
+        base: args.base,
       };
       pullRequests.set(args.branch, pullRequest);
       return pullRequest;
@@ -92,14 +114,14 @@ export async function createHarness(workflows) {
       calls.push(["closePullRequest", branch]);
       pullRequests.get(branch).state = "closed";
     },
-    async pullRoot() {
-      calls.push(["pullRoot"]);
-    },
     async branchExists(branch) {
       return branches.has(branch);
     },
     async readFileOnBranch(branch, file) {
       return branchFiles.get(`${branch}:${file}`) ?? null;
+    },
+    async readFileOnRemote(branch, file) {
+      return remoteFiles.get(`${branch}:${file}`) ?? null;
     },
     async deleteBranch(branch) {
       calls.push(["deleteBranch", branch]);
@@ -123,6 +145,8 @@ export async function createHarness(workflows) {
     },
     pullRequests,
     branchFiles,
+    remoteFiles,
+    goneBranches,
     named: (name) => calls.filter(([n]) => n === name),
     // The next call of the git method `name` throws, the calls after it work.
     failOnce(name, message = "offline") {
@@ -140,11 +164,15 @@ export async function createHarness(workflows) {
   };
 }
 
+// The function `assign` puts the upstream it checked in the event, as `base`.
 export function assignEvent(data) {
   return {
     type: "work:assign",
     payload: {
-      data,
+      data: {
+        base: "main",
+        ...data,
+      },
     },
   };
 }

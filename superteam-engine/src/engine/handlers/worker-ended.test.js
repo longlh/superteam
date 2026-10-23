@@ -228,7 +228,7 @@ test("a throw while the next task starts is retried: the retry starts it", async
   assert.deepEqual(h.named("push"), [["push", "tasks/w1/a"]]);
 });
 
-test("a throw after the last task is done is retried: the retry publishes the work merger", async () => {
+test("an event of a last task that a throw left done publishes the work merger", async () => {
   await h.handlers["worker:ended"](
     ended("a", {
       summary: "s",
@@ -238,9 +238,12 @@ test("a throw after the last task is done is retried: the retry publishes the wo
   const event = ended("b", {
     summary: "s",
   });
-  h.failOnce("rootBranch");
-  await assert.rejects(h.handlers["worker:ended"](event), /offline/);
-  assert.equal(h.published.length, 0);
+  // The run that threw had recorded b as done, but not published the merger.
+  await store.put({
+    ...(await store.get("b")),
+    completed: true,
+    summary: "s",
+  });
   await h.handlers["worker:ended"](event);
   assert.deepEqual(
     h.published.map(([topic, job]) => [topic, job.id]),
