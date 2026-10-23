@@ -1,0 +1,13 @@
+{
+  "name": "superteam",
+  "owner": {
+    "name": "LongLH"
+  },
+  "plugins": [
+    {
+      "name": "superteam",
+      "source": "./superteam-engine",
+      "description": "Engine that orchestrates a team of agents following each project's own workflow"
+    }
+  ]
+}
