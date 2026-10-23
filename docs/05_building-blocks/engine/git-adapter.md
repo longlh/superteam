@@ -69,7 +69,9 @@ each unit of the work. The engine creates both.
 
 The folders of the worktrees are runtime data, so they are under
 `.superteam/.r`. The folder of a task is not inside the folder of its work: a
-folder inside a worktree would show up there as an untracked file.
+folder inside a worktree would show up there as an untracked file. When the work
+ends, the folder of its tasks, `.superteam/.r/worktrees/tasks/{work_id}`, is
+removed once it is empty.
 
 The worktree of a work also holds the tasks of the work, in its own
 `.superteam/.r/tasks/`. They are not committed, because `.superteam/.r/` is in

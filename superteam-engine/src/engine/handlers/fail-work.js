@@ -3,6 +3,7 @@ import { readJson, writeJson } from "../../lib/storage/files.js";
 import { workFile, worktreeDir } from "../../lib/storage/paths.js";
 import { createTaskStore } from "../tasks.js";
 import { clearError } from "./clear-error.js";
+import { removeTasksFolder } from "./tasks-folder.js";
 
 // Records a failed task: `completed` with an `error` makes it FAILED.
 export async function failTask({ deps, workId, task, error }) {
@@ -62,6 +63,7 @@ export async function failWork({ deps, workId, error, cause = "agent" }) {
     );
   }
   await deps.git.removeWorktree(workFolder);
+  await removeTasksFolder(deps, workId);
   for (const branch of await deps.git.listBranches(`tasks/${workId}/`)) {
     await deps.git.deleteBranch(branch);
   }

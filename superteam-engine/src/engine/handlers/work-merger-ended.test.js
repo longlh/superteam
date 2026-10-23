@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
+import { mkdir } from "node:fs/promises";
+import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { readJson } from "../../lib/storage/files.js";
 import { workFile, worktreeDir } from "../../lib/storage/paths.js";
@@ -176,4 +178,38 @@ test("is ignored for a bad id, a task id, or a gone worktree", async () => {
     (await readJson(workFile(workTree, "w1"))).dodChecklist,
     undefined,
   );
+});
+
+const tasksFolder = () =>
+  path.dirname(
+    worktreeDir(h.baseDir, {
+      workId: "w1",
+      taskId: "a",
+    }),
+  );
+
+test("the folder of the tasks of the work is removed once the work is proposed", async () => {
+  assert.equal(existsSync(tasksFolder()), true);
+  await ended({
+    jobId: "w1/work-merger",
+    summary: "S",
+    data: {
+      dodChecklist: [true, false],
+    },
+  });
+  assert.equal(existsSync(tasksFolder()), false);
+});
+
+test("the folder of the tasks is kept while a task folder is left in it", async () => {
+  await mkdir(path.join(tasksFolder(), "left"), {
+    recursive: true,
+  });
+  await ended({
+    jobId: "w1/work-merger",
+    summary: "S",
+    data: {
+      dodChecklist: [true, false],
+    },
+  });
+  assert.equal(existsSync(path.join(tasksFolder(), "left")), true);
 });

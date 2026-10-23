@@ -4,6 +4,7 @@ import { createTaskStore } from "../tasks.js";
 import { failureOf, readEndedWorkMerger } from "./ended-job.js";
 import { failWork } from "./fail-work.js";
 import { renderPullRequestBody } from "./pull-request-body.js";
+import { removeTasksFolder } from "./tasks-folder.js";
 
 export async function workMergerEnded(deps, event) {
   const { jobId, summary, data, error } = event.payload.data;
@@ -45,4 +46,5 @@ export async function workMergerEnded(deps, event) {
     });
   }
   await deps.git.removeWorktree(workFolder);
+  await removeTasksFolder(deps, workId);
 }

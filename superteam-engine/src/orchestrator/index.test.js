@@ -138,6 +138,7 @@ test("start subscribes, recovers, starts the engine, then reconciles and listens
     "subscribe:job:stop",
     "subscribe:event:retry",
     "subscribe:event:error",
+    "subscribe:event:done",
     "agents.recover",
     "engine.start",
     'engine.reconcile:[{"id":"j1"}]',
@@ -321,6 +322,50 @@ test("a retry is a warning, and an event in the DLQ is an error with its work, a
       "ERROR",
       "the event work:decide (e1) of the work w1 went to the DLQ after 2 attempts: b; file: /p/.superteam/.r/engineloop/dlq/e1.json",
     ],
+  ]);
+  await t.orchestrator.shutdown();
+});
+
+test("a decision on a work is logged once it is done, and no other done event", async () => {
+  const t = setup({
+    onEngineStart: readyOnStart,
+  });
+  await t.orchestrator.start();
+  for (const [type, data] of [
+    [
+      "work:decide",
+      {
+        id: "w1",
+        decision: "approve",
+      },
+    ],
+    [
+      "work:decide",
+      {
+        id: "w2",
+        decision: "reject",
+      },
+    ],
+    [
+      "work:assign",
+      {
+        id: "w3",
+      },
+    ],
+  ]) {
+    t.publish("event:done", {
+      event: {
+        id: "e",
+        payload: {
+          type,
+          data,
+        },
+      },
+    });
+  }
+  assert.deepEqual(t.logs, [
+    ["INFO", "the work w1 is approved"],
+    ["INFO", "the work w2 is rejected"],
   ]);
   await t.orchestrator.shutdown();
 });

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
+import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { worktreeDir } from "../../lib/storage/paths.js";
 import { failWork } from "./fail-work.js";
@@ -146,4 +147,20 @@ test("work:fail fails the work with the cause engine", async () => {
     ),
     false,
   );
+});
+
+test("the folder of the tasks of the work is removed once the work has failed", async () => {
+  const tasksFolder = path.dirname(
+    worktreeDir(h.baseDir, {
+      workId: "w1",
+      taskId: "a",
+    }),
+  );
+  assert.equal(existsSync(tasksFolder), true);
+  await failWork({
+    deps,
+    workId: "w1",
+    error: "boom",
+  });
+  assert.equal(existsSync(tasksFolder), false);
 });

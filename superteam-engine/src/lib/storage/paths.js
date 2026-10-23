@@ -24,6 +24,11 @@ export function artifactsDir(dir, workId) {
   return path.join(p(dir), "artifacts", workId);
 }
 
+// The folder that holds the worktrees of the tasks of a work.
+export function tasksWorktreesDir(baseDir, workId) {
+  return path.join(r(baseDir), "worktrees", "tasks", workId);
+}
+
 export function worktreeDir(baseDir, { workId, taskId }) {
   const worktrees = path.join(r(baseDir), "worktrees");
   if (taskId === undefined) {

@@ -27,6 +27,27 @@ Build an **engine** that replaces the team lead. The engine:
   enough input, so the tasks run in the right order;
 - tracks the work and summarizes its results.
 
+## Install and update
+
+Install the plugin in Claude Code, from its marketplace on GitHub:
+
+```
+/plugin install superteam --marketplace longlh/superteam
+```
+
+Then set up a project with `/superteam:def-role` and `/superteam:def-process`,
+and start superteam with `/superteam:start`.
+
+To update the plugin:
+
+1. Run `/superteam:stop` in each project where superteam runs.
+2. Update the marketplace, then the plugin:
+   `/plugin marketplace update superteam`, then
+   `claude plugin update superteam@superteam`.
+3. Restart the session of Claude Code, so that it loads the new skills and the
+   new MCP server.
+4. Run `/superteam:start` again, so that superteam runs the new code.
+
 ## Appendix
 
 The meaning of the terms used above.

@@ -162,6 +162,19 @@ export function createOrchestrator({
         "event:error",
         guarded((data) => log.error(deadEventLine(data)), log),
       );
+      // A decision is logged once it is done: the merge or the close of the
+      // pull request has then happened.
+      engine.subscribe(
+        "event:done",
+        guarded((data) => {
+          const payload = data?.event?.payload;
+          if (payload?.type === "work:decide") {
+            const result =
+              payload.data?.decision === "approve" ? "approved" : "rejected";
+            log.info(`the work ${payload.data?.id} is ${result}`);
+          }
+        }, log),
+      );
       for (const sub of subscriptions) {
         const target =
           notifier ??
