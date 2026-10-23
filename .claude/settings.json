@@ -1,7 +1,8 @@
 {
-  "autoMemoryEnabled": false,
   "permissions": {
-    "ask": ["Bash(git push:*)"]
+    "ask": [
+      "Bash(git push:*)"
+    ]
   },
   "hooks": {
     "PostToolUse": [
@@ -15,5 +16,9 @@
         ]
       }
     ]
+  },
+  "autoMemoryEnabled": false,
+  "enabledPlugins": {
+    "superpowers@claude-plugins-official": true
   }
 }
