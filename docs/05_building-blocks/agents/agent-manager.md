@@ -31,6 +31,11 @@ When an agent ends, the agent manager calls the `onEnded` callback of its job.
   returns the job of its agent. An agent that runs without its agent manager
   would be stalled, because nothing watches it. It handles a crash and a
   shutdown in the same way.
+- Clean up: `killLeftovers()` kills, like `recover()`, the agents of the pid
+  files whose process is alive and still runs the command of the agents, but it
+  keeps the files, so the next `recover()` returns their jobs and the engine
+  fails their tasks. It returns how many agents it killed. `/superteam:stop`
+  uses it when superteam is not running (see `control-skill.md`).
 - Shutdown: `stopAll()` kills the agents that are running at once. It waits for
   the end of an agent that is being given to its callback, so that the end of an
   agent that has already exited is not lost. The pids of the killed agents stay

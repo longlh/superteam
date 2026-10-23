@@ -59,6 +59,9 @@ function setup(options = {}) {
   const httpApi = {
     async listen(port) {
       calls.push(`api.listen:${port}`);
+      if (options.listenError) {
+        throw options.listenError;
+      }
       return {
         port,
       };
@@ -450,6 +453,24 @@ test("errors of the callbacks are reported, not thrown", async () => {
     );
     await t.orchestrator.shutdown();
   }
+});
+
+test("a start that fails after recover stops the agents and the engine, then throws", async () => {
+  const t = setup({
+    onEngineStart: readyOnStart,
+    listenError: new Error("listen EADDRINUSE: address already in use"),
+  });
+  await assert.rejects(t.orchestrator.start(), /EADDRINUSE/);
+  assert.deepEqual(t.calls.slice(-3), [
+    "api.listen:4000",
+    "agents.stopAll",
+    "engine.shutdown",
+  ]);
+  t.publish("job:run", {
+    id: "w1/a/worker",
+    role: "developer",
+  });
+  assert.equal(t.agents.run.mock.callCount(), 0);
 });
 
 test("shutdown closes the API, stops the agents, then the engine", async () => {

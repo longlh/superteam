@@ -402,6 +402,59 @@ describe("agent manager stop", () => {
   });
 });
 
+describe("agent manager killLeftovers", () => {
+  it("kills the live agents of the pid files, keeps the files, and says how many", async () => {
+    const live = spawn(fake, [], {
+      detached: true,
+      stdio: "ignore",
+      env: {
+        ...process.env,
+        FAKE_CLAUDE_MODE: "hang",
+      },
+    });
+    strays.push(live);
+    const other = spawn(fake, [], {
+      detached: true,
+      stdio: "ignore",
+      env: {
+        ...process.env,
+        FAKE_CLAUDE_MODE: "hang",
+      },
+    });
+    strays.push(other);
+    const dir = agentsDir(baseDir);
+    for (const [pid, id] of [
+      [live.pid, "w1/t1/worker"],
+      [other.pid, "w2/t1/worker"],
+      [999999, "w3/t1/worker"],
+    ]) {
+      await writeJson(path.join(dir, `${pid}.pid`), {
+        pid,
+        job: job(id),
+      });
+    }
+    // The pid of `other` runs another command by now: it is not killed.
+    const manager = make("ok", {
+      commandOf: (pid) =>
+        pid === other.pid ? "/usr/bin/vim notes.txt" : `node ${fake}`,
+    });
+    assert.equal(await manager.killLeftovers(), 1);
+    await until(() => !alive(live.pid));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.ok(alive(other.pid));
+    assert.equal((await pidFiles()).length, 3);
+    assert.deepEqual((await manager.recover()).map((j) => j.id).sort(), [
+      "w1/t1/worker",
+      "w2/t1/worker",
+      "w3/t1/worker",
+    ]);
+  });
+
+  it("kills nothing when there is no folder", async () => {
+    assert.equal(await make("ok").killLeftovers(), 0);
+  });
+});
+
 describe("agent manager recover", () => {
   it("kills a live pid, removes the files and returns the jobs", async () => {
     const live = spawn(fake, [], {

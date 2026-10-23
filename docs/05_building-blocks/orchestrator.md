@@ -200,10 +200,12 @@ work").
 GET /ready
 ```
 
-Answer `200 OK` with `{ "status": "ready" }`. It is the only request that does
-not call the Engine. The API listens only at the end of the start (see "Start"),
-so any answer means that superteam is ready. `/superteam:start` uses it to know
-that the start has ended (see `control-skill.md`).
+Answer `200 OK` with `{ "status": "ready", "pid": <pid> }`, where `pid` is the
+pid of the process of superteam. It is the only request that does not call the
+Engine. The API listens only at the end of the start (see "Start"), so any
+answer means that superteam is ready. `/superteam:start` uses it to know that
+the start has ended (see `control-skill.md`). It checks the `pid`, because
+another server can hold the port.
 
 #### Errors
 
@@ -260,6 +262,12 @@ The process is started by `/superteam:start` (see `control-skill.md`).
    (see `engine.md`). This step handles a crash and a shutdown in the same way.
 7. Open the HTTP API.
 
+When a step after step 4 fails, such as when the port of the HTTP API is in use,
+the orchestrator stops what it has started, as in a shutdown: it calls
+`agents.stopAll()` and shuts the Engine down, then the process exits with the
+code 1. The jobs that were stopped are failed at the next start, by
+`engine.reconcile(jobs)`.
+
 The process writes its log in `.superteam/.r/superteam.log`, one line for each
 entry: the time, the level (`INFO`, `WARN` or `ERROR`) and the message. It logs
 the start and the stop, each job that starts and ends, each retry of an event
@@ -274,9 +282,10 @@ when the file holds its own pid.
 ### Shutdown
 
 On `SIGINT` or `SIGTERM`, such as from `/superteam:stop`, the orchestrator
-closes the HTTP API, calls `agents.stopAll()`, and shuts the Engine down. Once
-the shutdown has begun, the orchestrator does not run a `job:run`: the Engine
-publishes it again at the next start, in `engine.reconcile(jobs)`, because it
-waits for that job and it was never run. The jobs that were stopped are failed
-at the next start, by `engine.reconcile(jobs)`. A second signal is a force quit,
-and the next start recovers from it.
+closes the HTTP API when it is open, calls `agents.stopAll()`, and shuts the
+Engine down, even when the signal comes during the start. Once the shutdown has
+begun, the orchestrator does not run a `job:run`: the Engine publishes it again
+at the next start, in `engine.reconcile(jobs)`, because it waits for that job
+and it was never run. The jobs that were stopped are failed at the next start,
+by `engine.reconcile(jobs)`. A second signal is a force quit, and the next start
+recovers from it.

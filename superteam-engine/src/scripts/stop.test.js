@@ -63,6 +63,7 @@ test("returns stopped false without a pid file", () =>
     });
     assert.deepEqual(result, {
       stopped: false,
+      killed: 0,
     });
   }));
 
@@ -77,6 +78,7 @@ test("deletes a stale pid file without killing", () =>
       });
       assert.deepEqual(result, {
         stopped: false,
+        killed: 0,
       });
       assert.equal(await exists(pidFile(dir)), false);
     },
@@ -97,6 +99,7 @@ for (const content of ["", "0", "-1", "abc"]) {
         });
         assert.deepEqual(result, {
           stopped: false,
+          killed: 0,
         });
         assert.equal(await exists(pidFile(dir)), false);
       },
@@ -180,6 +183,50 @@ test("counts ESRCH from kill as stopped", () =>
     },
   ));
 
+test("kills the agents that a crash left when superteam is not running", () =>
+  withDir(
+    async (dir) => {
+      const result = await stopSuperteam({
+        baseDir: dir,
+        commandOf: superteam,
+        kill: () => assert.fail("must not kill superteam"),
+        isAlive: () => false,
+        killLeftovers: async () => 2,
+      });
+      assert.deepEqual(result, {
+        stopped: false,
+        killed: 2,
+      });
+      assert.equal(await exists(pidFile(dir)), false);
+    },
+    {
+      pid: 555,
+    },
+  ));
+
+test("does not look for leftover agents when superteam is stopped", () =>
+  withDir(
+    async (dir) => {
+      let alive = true;
+      const result = await stopSuperteam({
+        baseDir: dir,
+        commandOf: superteam,
+        kill: () => {
+          alive = false;
+        },
+        isAlive: () => alive,
+        sleep: async () => {},
+        killLeftovers: () => assert.fail("must not clean up"),
+      });
+      assert.deepEqual(result, {
+        stopped: true,
+      });
+    },
+    {
+      pid: 555,
+    },
+  ));
+
 test("never kills a live pid whose command is not superteam, and deletes the stale file", () =>
   withDir(
     async (dir) => {
@@ -195,6 +242,7 @@ test("never kills a live pid whose command is not superteam, and deletes the sta
       });
       assert.deepEqual(result, {
         stopped: false,
+        killed: 0,
       });
       assert.deepEqual(seen, [555]);
       assert.equal(await exists(pidFile(dir)), false);

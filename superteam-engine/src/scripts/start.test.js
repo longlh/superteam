@@ -53,7 +53,7 @@ const start = (dir, options = {}) =>
     spawn: fakeSpawn([]),
     isAlive: (pid) => pid === 4321,
     commandOf: () => assert.fail("must not read the command"),
-    ping: async () => true,
+    ping: async () => 4321,
     sleep: async () => {},
     ...options,
   });
@@ -122,6 +122,7 @@ test("refuses when the pid of the pid file answers on the port", () =>
       start(dir, {
         spawn: fakeSpawn(calls),
         isAlive: (pid) => pid === 777,
+        ping: async () => 777,
       }),
       /already running.*777/,
     );
@@ -136,7 +137,7 @@ test("refuses when the pid of the pid file runs main.js but does not answer", ()
       start(dir, {
         spawn: fakeSpawn(calls),
         isAlive: (pid) => pid === 777,
-        ping: async () => false,
+        ping: async () => null,
         commandOf: () => `node ${main}`,
       }),
       /pid 777\) is starting, or does not answer on the port 4010: read \.superteam\/\.r\/superteam\.log/,
@@ -153,7 +154,7 @@ test("replaces a pid file whose live pid runs another command", () =>
       isAlive: (pid) => pid === 777 || pid === 4321,
       ping: async () => {
         pings += 1;
-        return pings > 1;
+        return pings > 1 ? 4321 : null;
       },
       commandOf: () => "/usr/bin/other",
     });
@@ -176,7 +177,7 @@ test("waits until the new process answers", () =>
     const result = await start(dir, {
       ping: async () => {
         pings += 1;
-        return pings === 3;
+        return pings === 3 ? 4321 : null;
       },
       sleep: async (ms) => waits.push(ms),
     });
@@ -197,7 +198,7 @@ test("fails with the end of the log when the process exits during its start", ()
     );
     await assert.rejects(
       start(dir, {
-        ping: async () => false,
+        ping: async () => null,
         isAlive: () => false,
       }),
       (error) => {
@@ -220,15 +221,30 @@ test("fails and says to read the log when the process does not answer in time", 
   withDir(async (dir) => {
     await assert.rejects(
       start(dir, {
-        ping: async () => false,
+        ping: async () => null,
         timeoutMs: 1000,
       }),
       /does not answer on the port 4010 after 1 s: read \.superteam\/\.r\/superteam\.log/,
     );
   }));
 
+test("does not take the answer of another server on the port for its own", () =>
+  withDir(async (dir) => {
+    let checks = 0;
+    await assert.rejects(
+      start(dir, {
+        ping: async () => 999,
+        isAlive: () => {
+          checks += 1;
+          return checks < 3;
+        },
+      }),
+      /superteam exited during its start/,
+    );
+  }));
+
 test("pingReady is false when nothing listens on the port", async () => {
-  assert.equal(await pingReady(1), false);
+  assert.equal(await pingReady(1), null);
 });
 
 for (const content of ["", "0", "-1", "abc"]) {

@@ -184,14 +184,24 @@ export function createOrchestrator({
       // spawned for the events that were left in the queue.
       const jobs = await agents.recover();
 
-      engineDone = engine.start();
-      const failed = engineDone.then(() => {
-        throw new Error("the engine stopped before it was ready");
-      });
-      await Promise.race([ready, failed]);
+      // From here an agent can run: a failure stops what was started, as a
+      // shutdown, so no agent outlives the process.
+      try {
+        engineDone = engine.start();
+        const failed = engineDone.then(() => {
+          throw new Error("the engine stopped before it was ready");
+        });
+        await Promise.race([ready, failed]);
 
-      await engine.reconcile(jobs);
-      await httpApi.listen(port);
+        await engine.reconcile(jobs);
+        await httpApi.listen(port);
+      } catch (error) {
+        stopping = true;
+        await agents.stopAll();
+        engine.shutdown();
+        await engineDone?.catch(() => {});
+        throw error;
+      }
     },
 
     async shutdown() {

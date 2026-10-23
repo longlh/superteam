@@ -385,6 +385,7 @@ describe("http api", () => {
     assert.equal(res.status, 200);
     assert.deepEqual(res.body, {
       status: "ready",
+      pid: process.pid,
     });
     assert.equal((await send(port, "POST", "/ready")).status, 404);
     assert.equal((await send(port, "GET", "/ready/x")).status, 404);
@@ -421,6 +422,15 @@ describe("http api", () => {
       });
       assert.equal(res.status, 200, host);
     }
+  });
+
+  test("close resolves for an API that was never opened, and once more after a close", async () => {
+    await createHttpApi({
+      engine,
+    }).close();
+    await api.close();
+    await api.close();
+    ({ port } = await api.listen(0));
   });
 
   test("close resolves even with an idle keep-alive connection", async () => {

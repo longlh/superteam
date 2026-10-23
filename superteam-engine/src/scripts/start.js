@@ -13,16 +13,20 @@ const LOG = ".superteam/.r/superteam.log";
 const STEP_MS = 200;
 const LOG_LINES = 20;
 
-// Whether superteam answers GET /ready on the port: the API listens only at
-// the end of the start, so an answer means that the start has ended.
+// The pid of the superteam that answers GET /ready on the port, or null: the
+// API listens only at the end of the start, so an answer means that the start
+// has ended. The pid tells superteam from another server on the port.
 export async function pingReady(port) {
   try {
     const response = await fetch(`http://127.0.0.1:${port}/ready`, {
       signal: AbortSignal.timeout(1000),
     });
-    return response.ok;
+    const body = response.ok ? await response.json() : null;
+    return body?.status === "ready" && Number.isSafeInteger(body.pid)
+      ? body.pid
+      : null;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -64,7 +68,7 @@ export async function startSuperteam({
   const runDir = path.join(baseDir, ".superteam/.r");
   const existing = await readPid(baseDir);
   if (existing !== null && isAlive(existing)) {
-    if (await ping(port)) {
+    if ((await ping(port)) === existing) {
       throw new Error(`superteam is already running (pid ${existing})`);
     }
     if (commandOf(existing)?.includes("main.js")) {
@@ -95,7 +99,7 @@ export async function startSuperteam({
   }
 
   for (let waited = 0; ; waited += STEP_MS) {
-    if (await ping(port)) {
+    if ((await ping(port)) === child.pid) {
       return {
         pid: child.pid,
         port,

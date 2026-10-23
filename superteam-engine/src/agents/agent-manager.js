@@ -290,10 +290,25 @@ export function createAgentManager({
     return jobs;
   }
 
+  // Kills the agents that a crash left, like recover(), but keeps their pid
+  // files, so the next recover() returns their jobs. Returns how many.
+  async function killLeftovers() {
+    let killed = 0;
+    for (const name of await pidFileNames()) {
+      const content = await readPidFile(name);
+      if (content && isAlive(content.pid) && isAgent(content.pid)) {
+        killGroup(content.pid);
+        killed += 1;
+      }
+    }
+    return killed;
+  }
+
   return {
     run,
     stopWork,
     stopAll,
     recover,
+    killLeftovers,
   };
 }

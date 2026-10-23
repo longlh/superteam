@@ -36,7 +36,11 @@ export function createHttpApi({ engine }) {
         });
       });
     },
+    // An API that is not open, such as on a stop during the start, is closed.
     close() {
+      if (!server.listening) {
+        return Promise.resolve();
+      }
       return new Promise((resolve, reject) => {
         server.close((error) => {
           return error ? reject(error) : resolve();
@@ -79,6 +83,7 @@ async function handle(engine, req, res) {
   if (parts.length === 1 && parts[0] === "ready" && req.method === "GET") {
     return reply(res, 200, {
       status: "ready",
+      pid: process.pid,
     });
   }
   if (parts[0] !== "works" || parts.length > 3) {
