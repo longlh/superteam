@@ -380,6 +380,17 @@ describe("http api", () => {
     assert.equal(res.status, 202);
   });
 
+  test("GET /ready answers 200 and never calls the engine", async () => {
+    const res = await send(port, "GET", "/ready");
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body, {
+      status: "ready",
+    });
+    assert.equal((await send(port, "POST", "/ready")).status, 404);
+    assert.equal((await send(port, "GET", "/ready/x")).status, 404);
+    assert.deepEqual(engine.calls, []);
+  });
+
   test("a Host that is not this server is 403 and the engine is not called", async () => {
     for (const host of [
       "evil.example",
@@ -389,6 +400,7 @@ describe("http api", () => {
       `localhost.evil.example:${port}`,
     ]) {
       for (const [method, path] of [
+        ["GET", "/ready"],
         ["GET", "/works"],
         ["GET", "/works/w1"],
         ["POST", "/works/w1/archive"],

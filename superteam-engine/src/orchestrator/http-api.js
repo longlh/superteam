@@ -75,6 +75,12 @@ async function handle(engine, req, res) {
   const parts = new URL(req.url, "http://localhost").pathname
     .split("/")
     .slice(1);
+  // The API listens only at the end of the start: an answer means ready.
+  if (parts.length === 1 && parts[0] === "ready" && req.method === "GET") {
+    return reply(res, 200, {
+      status: "ready",
+    });
+  }
   if (parts[0] !== "works" || parts.length > 3) {
     throw new HttpError(404, "not found");
   }

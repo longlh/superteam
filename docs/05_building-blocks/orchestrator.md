@@ -194,6 +194,17 @@ in the list there until it is proposed or fails.
 Each item has the fields of the state of one work (see "Query the state of a
 work").
 
+#### Check that superteam is ready
+
+```
+GET /ready
+```
+
+Answer `200 OK` with `{ "status": "ready" }`. It is the only request that does
+not call the Engine. The API listens only at the end of the start (see "Start"),
+so any answer means that superteam is ready. `/superteam:start` uses it to know
+that the start has ended (see `control-skill.md`).
+
 #### Errors
 
 The engine refuses a request that it cannot take, and the API turns the reason

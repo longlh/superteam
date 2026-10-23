@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { startSuperteam } from "./start.js";
+import { pingReady, startSuperteam } from "./start.js";
 
 const main = fileURLToPath(new URL("../orchestrator/main.js", import.meta.url));
 
@@ -43,17 +43,30 @@ function fakeSpawn(calls) {
 }
 
 const pidFile = (dir) => path.join(dir, ".superteam/.r/superteam.pid");
+const logFile = (dir) => path.join(dir, ".superteam/.r/superteam.log");
+
+// The defaults of a test: the new process answers at once, and no pid is
+// alive but its own.
+const start = (dir, options = {}) =>
+  startSuperteam({
+    baseDir: dir,
+    spawn: fakeSpawn([]),
+    isAlive: (pid) => pid === 4321,
+    commandOf: () => assert.fail("must not read the command"),
+    ping: async () => true,
+    sleep: async () => {},
+    ...options,
+  });
 
 test("spawns main.js detached and writes the pid file", () =>
   withDir(async (dir) => {
     const calls = [];
-    const result = await startSuperteam({
-      baseDir: dir,
+    const result = await start(dir, {
       spawn: fakeSpawn(calls),
-      isAlive: () => false,
     });
     assert.deepEqual(result, {
       pid: 4321,
+      port: "4010",
     });
     const [call, unref] = calls;
     assert.equal(call.command, process.execPath);
@@ -101,13 +114,12 @@ test("refuses when .env is missing", () =>
     },
   ));
 
-test("refuses when the pid file holds a live pid", () =>
+test("refuses when the pid of the pid file answers on the port", () =>
   withDir(async (dir) => {
     await writeFile(pidFile(dir), "777");
     const calls = [];
     await assert.rejects(
-      startSuperteam({
-        baseDir: dir,
+      start(dir, {
         spawn: fakeSpawn(calls),
         isAlive: (pid) => pid === 777,
       }),
@@ -116,26 +128,116 @@ test("refuses when the pid file holds a live pid", () =>
     assert.deepEqual(calls, []);
   }));
 
-test("replaces a stale pid file", () =>
+test("refuses when the pid of the pid file runs main.js but does not answer", () =>
   withDir(async (dir) => {
     await writeFile(pidFile(dir), "777");
-    const result = await startSuperteam({
-      baseDir: dir,
-      spawn: fakeSpawn([]),
-      isAlive: () => false,
+    const calls = [];
+    await assert.rejects(
+      start(dir, {
+        spawn: fakeSpawn(calls),
+        isAlive: (pid) => pid === 777,
+        ping: async () => false,
+        commandOf: () => `node ${main}`,
+      }),
+      /pid 777\) is starting, or does not answer on the port 4010: read \.superteam\/\.r\/superteam\.log/,
+    );
+    assert.deepEqual(calls, []);
+    assert.equal(await readFile(pidFile(dir), "utf8"), "777");
+  }));
+
+test("replaces a pid file whose live pid runs another command", () =>
+  withDir(async (dir) => {
+    await writeFile(pidFile(dir), "777");
+    let pings = 0;
+    const result = await start(dir, {
+      isAlive: (pid) => pid === 777 || pid === 4321,
+      ping: async () => {
+        pings += 1;
+        return pings > 1;
+      },
+      commandOf: () => "/usr/bin/other",
     });
     assert.equal(result.pid, 4321);
     assert.equal(await readFile(pidFile(dir), "utf8"), "4321");
   }));
 
+test("replaces a pid file whose pid is gone", () =>
+  withDir(async (dir) => {
+    await writeFile(pidFile(dir), "777");
+    const result = await start(dir);
+    assert.equal(result.pid, 4321);
+    assert.equal(await readFile(pidFile(dir), "utf8"), "4321");
+  }));
+
+test("waits until the new process answers", () =>
+  withDir(async (dir) => {
+    let pings = 0;
+    const waits = [];
+    const result = await start(dir, {
+      ping: async () => {
+        pings += 1;
+        return pings === 3;
+      },
+      sleep: async (ms) => waits.push(ms),
+    });
+    assert.equal(result.pid, 4321);
+    assert.deepEqual(waits, [200, 200]);
+  }));
+
+test("fails with the end of the log when the process exits during its start", () =>
+  withDir(async (dir) => {
+    await writeFile(
+      logFile(dir),
+      `${Array.from(
+        {
+          length: 25,
+        },
+        (_, i) => `line ${i + 1}`,
+      ).join("\n")}\n`,
+    );
+    await assert.rejects(
+      start(dir, {
+        ping: async () => false,
+        isAlive: () => false,
+      }),
+      (error) => {
+        const lines = error.message.split("\n");
+        assert.equal(lines[0], "superteam exited during its start:");
+        assert.deepEqual(lines.slice(1), [
+          ...Array.from(
+            {
+              length: 20,
+            },
+            (_, i) => `line ${i + 6}`,
+          ),
+        ]);
+        return true;
+      },
+    );
+  }));
+
+test("fails and says to read the log when the process does not answer in time", () =>
+  withDir(async (dir) => {
+    await assert.rejects(
+      start(dir, {
+        ping: async () => false,
+        timeoutMs: 1000,
+      }),
+      /does not answer on the port 4010 after 1 s: read \.superteam\/\.r\/superteam\.log/,
+    );
+  }));
+
+test("pingReady is false when nothing listens on the port", async () => {
+  assert.equal(await pingReady(1), false);
+});
+
 for (const content of ["", "0", "-1", "abc"]) {
   test(`treats the pid file ${JSON.stringify(content)} as stale`, () =>
     withDir(async (dir) => {
       await writeFile(pidFile(dir), content);
-      const result = await startSuperteam({
-        baseDir: dir,
-        spawn: fakeSpawn([]),
-        isAlive: () => assert.fail("must not probe"),
+      const result = await start(dir, {
+        isAlive: (pid) =>
+          pid === 4321 ? true : assert.fail("must not probe the old pid"),
       });
       assert.equal(result.pid, 4321);
       assert.equal(await readFile(pidFile(dir), "utf8"), "4321");
