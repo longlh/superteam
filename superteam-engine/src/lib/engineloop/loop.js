@@ -16,12 +16,14 @@ export function createLoop({
   sleep,
   now,
 }) {
-  async function reject(key, content, event, reason) {
+  // `retryable` is false for an event that went to the DLQ at once.
+  async function reject(key, content, event, reason, retryable = false) {
     const file = await queue.toDlq(key, content);
     subscribers.emit("event:error", {
       event,
       error: reason,
       file,
+      retryable,
     });
   }
 
@@ -53,7 +55,7 @@ export function createLoop({
       ],
     };
     if (error?.retryable === false || event.attempts + 1 >= maxAttempts) {
-      await reject(key, failed, failed, reason);
+      await reject(key, failed, failed, reason, error?.retryable !== false);
       return;
     }
     const retry = await factory.createAtHead(

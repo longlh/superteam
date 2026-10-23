@@ -3,8 +3,13 @@ import { createLog } from "../lib/log.js";
 import { removeOwnPidFile } from "../scripts/pid-file.js";
 import { readConfig } from "./config.js";
 import { createOrchestrator, handleSignals } from "./index.js";
+import { releaseLock, takeLock } from "./lock.js";
 
 const baseDir = process.cwd();
+// The environment before .superteam/.env is loaded: the agents get this one.
+const agentEnv = {
+  ...process.env,
+};
 const envFile = join(baseDir, ".superteam/.env");
 // The stdout and the stderr go to the same file (see start.js), so what is
 // written before this log, or by a crash, is kept there too.
@@ -28,13 +33,25 @@ try {
 }
 const { port, maxBudgetUsd } = config;
 
-process.on("exit", () => removeOwnPidFile(baseDir, process.pid));
+// One process of superteam runs in a workspace, even with two starts at once.
+try {
+  await takeLock(baseDir);
+} catch (error) {
+  log.error(error.message);
+  process.exit(1);
+}
+
+process.on("exit", () => {
+  removeOwnPidFile(baseDir, process.pid);
+  releaseLock(baseDir, process.pid);
+});
 
 const orchestrator = createOrchestrator({
   baseDir,
   port,
   maxBudgetUsd,
   log,
+  agentEnv,
 });
 handleSignals({
   shutdown: () => {

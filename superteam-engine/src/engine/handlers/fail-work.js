@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { readJson, writeJson } from "../../lib/storage/files.js";
 import { workFile, worktreeDir } from "../../lib/storage/paths.js";
 import { createTaskStore } from "../tasks.js";
+import { clearError } from "./clear-error.js";
 
 // Records a failed task: `completed` with an `error` makes it FAILED.
 export async function failTask({ deps, workId, task, error }) {
@@ -25,7 +26,8 @@ export async function failTask({ deps, workId, task, error }) {
 }
 
 // Every step is idempotent, so a retry after a crash finishes the cleanup.
-export async function failWork({ deps, workId, error }) {
+// `cause` is who failed: the agent, or the engine (see ADR 16).
+export async function failWork({ deps, workId, error, cause = "agent" }) {
   const workFolder = worktreeDir(deps.baseDir, {
     workId,
   });
@@ -42,6 +44,7 @@ export async function failWork({ deps, workId, error }) {
     await writeJson(file, {
       ...work,
       error,
+      errorCause: cause,
       updatedAt: deps.now().toISOString(),
     });
   }
@@ -62,4 +65,6 @@ export async function failWork({ deps, workId, error }) {
   for (const branch of await deps.git.listBranches(`tasks/${workId}/`)) {
     await deps.git.deleteBranch(branch);
   }
+  // The error is in the work now.
+  await clearError(deps, workId);
 }

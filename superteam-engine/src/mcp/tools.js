@@ -51,6 +51,15 @@ export function createTools({ request }) {
       handler: ({ id: workId }) => request("POST", path(workId, "/archive")),
     },
     {
+      name: "retry_work",
+      description:
+        "Retries a work whose last step failed in the engine, such as a push or a merge that GitHub refused: POST /works/{id}/retry.",
+      inputSchema: {
+        id,
+      },
+      handler: ({ id: workId }) => request("POST", path(workId, "/retry")),
+    },
+    {
       name: "get_work",
       description: "Gets the state of a work: GET /works/{id}.",
       inputSchema: {

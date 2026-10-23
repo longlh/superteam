@@ -27,6 +27,9 @@ function fakeEngine() {
     archive: record("archive", {
       eventId: "e3",
     }),
+    retry: record("retry", {
+      eventId: "e4",
+    }),
     getWork: record("getWork", (id) => {
       return {
         id,
@@ -180,6 +183,20 @@ describe("http api", () => {
       assert.equal(typeof res.body.error, "string");
     }
     assert.deepEqual(engine.calls, []);
+  });
+
+  test("POST retry calls retry with the id and answers 202", async () => {
+    const res = await send(port, "POST", "/works/w1/retry");
+    assert.equal(res.status, 202);
+    assert.deepEqual(res.body, {
+      eventId: "e4",
+    });
+    assert.deepEqual(engine.calls, [
+      {
+        name: "retry",
+        args: ["w1"],
+      },
+    ]);
   });
 
   test("POST archive works with an empty body", async () => {
@@ -336,6 +353,7 @@ describe("http api", () => {
       ["POST", "/works/w1"],
       ["POST", "/works/w1/other"],
       ["GET", "/works/w1/archive/x"],
+      ["GET", "/works/w1/retry"],
     ]) {
       const res = await send(port, method, path);
       assert.equal(res.status, 404, `${method} ${path}`);

@@ -52,6 +52,7 @@ export function createOrchestrator({
   maxBudgetUsd,
   subscriptions = [],
   log = consoleLog,
+  agentEnv = process.env,
   engine = createEngine({
     baseDir,
     log: (message) => log.warn(message),
@@ -60,6 +61,7 @@ export function createOrchestrator({
     baseDir,
     maxBudgetUsd,
     log,
+    baseEnv: agentEnv,
   }),
   notifier,
   httpApi = createHttpApi({

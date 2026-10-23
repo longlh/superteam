@@ -21,27 +21,45 @@ async function readIfThere(file) {
 }
 
 // The tools of the `tools:` line of the front matter, or null when there is
-// no such line. The front matter is read line by line, so a quoted value with
-// a colon in another line does not matter.
+// no such line or it lists no tool. Three forms are read: `tools: A, B`,
+// `tools: [A, B]`, and a YAML list of `- A` lines under `tools:`. The front
+// matter is read line by line, so a quoted value with a colon in another line
+// does not matter.
+const unquote = (text) =>
+  text
+    .trim()
+    .replace(/^(['"])(.*)\1$/, "$2")
+    .trim();
+
 export function toolsOf(content) {
   const lines = content.split(/\r?\n/);
   if (lines[0]?.trim() !== "---") {
     return null;
   }
-  for (const line of lines.slice(1)) {
-    if (line.trim() === "---") {
-      return null;
-    }
-    const match = /^tools:(.*)$/.exec(line);
-    if (match) {
-      const tools = match[1]
-        .split(",")
-        .map((tool) => tool.trim())
-        .filter((tool) => tool !== "");
-      return tools.length === 0 ? null : tools;
-    }
+  const end = lines.findIndex((line, i) => i > 0 && line.trim() === "---");
+  const header = lines.slice(1, end === -1 ? undefined : end);
+  const at = header.findIndex((line) => /^tools:/.test(line));
+  if (at === -1) {
+    return null;
   }
-  return null;
+  let value = header[at].slice("tools:".length).trim();
+  let tools = [];
+  if (value === "") {
+    for (const line of header.slice(at + 1)) {
+      const item = /^\s*-\s*(.*)$/.exec(line);
+      if (item === null) {
+        break;
+      }
+      tools.push(unquote(item[1]));
+    }
+  } else {
+    if (value.startsWith("[") && value.endsWith("]")) {
+      value = value.slice(1, -1);
+    }
+    tools = value.split(",").map(unquote);
+  }
+  tools = tools.filter((tool) => tool !== "");
+  return tools.length === 0 ? null : tools;
 }
 
 export async function readRoleTools({ workdir, role, pluginRoot }) {

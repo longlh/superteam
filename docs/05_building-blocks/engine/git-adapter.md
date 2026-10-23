@@ -16,7 +16,10 @@ the platform, and each part of it has a job:
 
 The engine reaches git and the forge through a git adapter, so that another
 forge can be added later. For now only GitHub is supported, and the adapter
-needs the `gh` command line.
+needs the `gh` command line. It runs `gh` on the repository of `origin`, with
+`--repo`, because `gh` could choose another remote, such as the `upstream` of a
+fork. It runs git and `gh` with `LC_ALL=C`, because it reads some of their
+errors, which are in English only then.
 
 The adapter also checks the setup of the project:
 

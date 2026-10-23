@@ -27,12 +27,13 @@ export async function workerEnded(deps, event) {
     return;
   }
   if (!task.completed) {
-    if (error !== undefined) {
+    const failure = error ?? checklistError(task, data);
+    if (failure !== undefined) {
       await failTask({
         deps,
         workId,
         task,
-        error,
+        error: failure,
       });
       return;
     }
@@ -63,6 +64,16 @@ export async function workerEnded(deps, event) {
       }),
     );
   }
+}
+
+// The dodChecklist of a worker has one boolean for each item of the DOD of
+// its task, so the pull request shows each item with its own answer.
+function checklistError(task, data) {
+  const expected = (task.dod ?? []).length;
+  const got = data?.dodChecklist?.length ?? 0;
+  return got === expected
+    ? undefined
+    : `the dodChecklist has ${got} items, the DOD of the task has ${expected}`;
 }
 
 // Commits what the worker left in its worktree (a safety net: it is told to

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import { afterEach, beforeEach, test } from "node:test";
+import { afterEach, beforeEach, describe, test } from "node:test";
 import { worktreeDir } from "../../lib/storage/paths.js";
 import { createTaskStore } from "../tasks.js";
 import { assignEvent, createHarness, endedEvent, now } from "./harness.js";
@@ -62,12 +62,7 @@ test("a result completes the task, pushes its branch and removes its worktree", 
     ended("a", {
       summary: "done a",
       data: {
-        dodChecklist: [
-          {
-            item: "x",
-            done: true,
-          },
-        ],
+        dodChecklist: [],
         other: "ignored",
       },
     }),
@@ -75,17 +70,93 @@ test("a result completes the task, pushes its branch and removes its worktree", 
   const task = await store.get("a");
   assert.equal(task.completed, true);
   assert.equal(task.summary, "done a");
-  assert.deepEqual(task.dodChecklist, [
-    {
-      item: "x",
-      done: true,
-    },
-  ]);
+  assert.deepEqual(task.dodChecklist, []);
   assert.equal(task.completedAt, now.toISOString());
   assert.equal(task.updatedAt, now.toISOString());
   assert.equal("other" in task, false);
   assert.deepEqual(h.named("push"), [["push", "tasks/w1/a"]]);
   assert.equal(existsSync(taskTree("a")), false);
+});
+
+describe("the dodChecklist of a worker", () => {
+  const checked = {
+    name: "checked",
+    title: "Checked",
+    steps: [
+      {
+        name: "a",
+        role: "dev",
+        dod: ["it works", "it is tested"],
+      },
+    ],
+  };
+  let c;
+
+  beforeEach(async () => {
+    c = await createHarness({
+      checked,
+    });
+    await c.handlers["work:assign"](
+      assignEvent({
+        id: "w2",
+        workflow: "checked",
+        title: "T",
+      }),
+    );
+  });
+
+  afterEach(() => c.cleanup());
+
+  const task = () =>
+    createTaskStore(
+      worktreeDir(c.baseDir, {
+        workId: "w2",
+      }),
+    ).get("a");
+
+  test("one boolean for each item of the DOD of the task is kept", async () => {
+    await c.handlers["worker:ended"](
+      endedEvent("worker:ended", {
+        jobId: "w2/a/worker",
+        summary: "s",
+        data: {
+          dodChecklist: [true, false],
+        },
+      }),
+    );
+    assert.deepEqual((await task()).dodChecklist, [true, false]);
+    assert.equal((await task()).error, undefined);
+  });
+
+  for (const dodChecklist of [[true], [true, false, true], undefined]) {
+    test(`a dodChecklist of ${JSON.stringify(dodChecklist)} for two items fails the task`, async () => {
+      await c.handlers["worker:ended"](
+        endedEvent("worker:ended", {
+          jobId: "w2/a/worker",
+          summary: "s",
+          data: {
+            dodChecklist,
+          },
+        }),
+      );
+      const error = `the dodChecklist has ${dodChecklist?.length ?? 0} items, the DOD of the task has 2`;
+      const [, , , state] = c.named("commitAll").at(-1);
+      assert.equal(state.works[0].error, error);
+      assert.equal(state.tasks[0].error, error);
+      assert.equal(state.tasks[0].completed, true);
+      assert.deepEqual(
+        c.published.filter(([topic]) => topic === "job:stop"),
+        [
+          [
+            "job:stop",
+            {
+              workId: "w2",
+            },
+          ],
+        ],
+      );
+    });
+  }
 });
 
 test("what the worker left uncommitted is committed before the push", async () => {

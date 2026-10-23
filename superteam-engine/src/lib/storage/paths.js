@@ -35,3 +35,8 @@ export function worktreeDir(baseDir, { workId, taskId }) {
 export function agentsDir(baseDir) {
   return path.join(r(baseDir), "agents");
 }
+
+// The error of the engine of a work whose event went to the DLQ (see ADR 16).
+export function errorFile(baseDir, workId) {
+  return path.join(r(baseDir), "errors", `${workId}.json`);
+}

@@ -109,3 +109,41 @@ test("a work whose worktree is gone does nothing", async () => {
   assert.equal(h.published.length, 0);
   assert.equal(h.calls.length, 0);
 });
+
+test("the cause of the error is agent, unless it is given", async () => {
+  await failWork({
+    deps,
+    workId: "w1",
+    error: "boom",
+  });
+  const [, , , state] = h.named("commitAll").at(-1);
+  assert.equal(state.works[0].error, "boom");
+  assert.equal(state.works[0].errorCause, "agent");
+});
+
+test("work:fail fails the work with the cause engine", async () => {
+  await h.handlers["work:fail"]({
+    type: "work:fail",
+    payload: {
+      data: {
+        id: "w1",
+        error: "workflow linear: step a: role must be a slug",
+      },
+    },
+  });
+  const [, , , state] = h.named("commitAll").at(-1);
+  assert.equal(
+    state.works[0].error,
+    "workflow linear: step a: role must be a slug",
+  );
+  assert.equal(state.works[0].errorCause, "engine");
+  assert.deepEqual(h.named("push"), [["push", "works/w1"]]);
+  assert.equal(
+    existsSync(
+      worktreeDir(h.baseDir, {
+        workId: "w1",
+      }),
+    ),
+    false,
+  );
+});

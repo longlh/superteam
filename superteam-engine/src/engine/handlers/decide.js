@@ -1,4 +1,5 @@
 import { isSlug } from "../../lib/storage/ids.js";
+import { clearError } from "./clear-error.js";
 
 function refuse(message) {
   return Object.assign(new Error(message), {
@@ -36,6 +37,7 @@ export async function decide(deps, event) {
     await deleteTaskBranches(git, id);
     // The result is read from the upstream: the root workspace is not pulled.
     await git.fetch();
+    await clearError(deps, id);
     return;
   }
 
@@ -46,4 +48,5 @@ export async function decide(deps, event) {
     await git.closePullRequest(branch);
   }
   await deleteTaskBranches(git, id);
+  await clearError(deps, id);
 }

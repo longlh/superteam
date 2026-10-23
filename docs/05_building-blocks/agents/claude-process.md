@@ -13,6 +13,8 @@ The behavior below was checked with `claude` 2.1.300, and the behavior of
   task, the content of its work, the artifacts of the tasks it depends on, and
   the `summary` of the task, which the task merger wrote when it merged the
   dependencies.
+- The prompt of a worker asks for `data.dodChecklist`: exactly one boolean for
+  each item of the DOD of the task, in order.
 - The process runs with the agent of the role (`.claude/agents/{role}.md`, or
   the agent files of the mergers, which come with the plugin), and the tools of
   the role (the `tools` line of its agent file) are allowed with
@@ -20,6 +22,8 @@ The behavior below was checked with `claude` 2.1.300, and the behavior of
   tools and does not grant them. If the agent file has no `tools` line, the job
   ends with an error, and the agent is not started: under `dontAsk` it would get
   no tool, and do nothing. Its stdin is `/dev/null`.
+- The `tools` line is read in three forms: `tools: A, B`, `tools: [A, B]`, and a
+  YAML list, with one `- A` line for each tool under `tools:`.
 - The agent manager looks for the agent file of the role in
   `.claude/agents/{role}.md` of the worktree first, then in the agent files of
   the plugin. When there is none, the job ends with an error, and the agent is

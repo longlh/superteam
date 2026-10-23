@@ -57,6 +57,10 @@ test("a worker prompt", () => {
   );
   assert.match(
     prompt,
+    /\nReturn data\.dodChecklist with exactly one boolean for each item of the DOD of the task, in order\.\n/,
+  );
+  assert.match(
+    prompt,
     /\nCommit all your changes and artifacts on the current branch before you return\.$/,
   );
 });

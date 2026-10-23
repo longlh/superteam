@@ -13,7 +13,7 @@ The loop is made for an internal tool. These limits are known and accepted:
   for a long job, but its own steps, such as a git command or a request to the
   forge, are done one event at a time. A slow step, such as a push or a pull
   request, makes the other works wait for it. The queue is also blocked while
-  the loop waits for a retry.
+  the loop waits for a retry, for up to about one minute (see ADR 16).
 - `order` has a maximum of `999999`. Creating an event above it throws: it is
   not supported.
 - An error of the file system inside the loop is not caught (fail fast): the

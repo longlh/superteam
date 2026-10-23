@@ -21,3 +21,4 @@ consequences. A decision that is replaced is not deleted: its status changes.
 | [13](0013-arc42-views-and-beyond-c4-and-uml.md) | The documents follow arc42, Views and Beyond, the C4 model and UML                    |
 | [14](0014-two-mergers.md)                       | The merger is split into the task merger and the work merger                          |
 | [15](0015-root-branch-from-its-upstream.md)     | The engine reads the root branch from its upstream, and never writes to the local one |
+| [16](0016-engine-errors-are-retried.md)         | An error of the engine is retried, an error of an agent is final                      |

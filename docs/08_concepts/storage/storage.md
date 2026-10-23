@@ -61,6 +61,7 @@ class WORK <<entity>> {
   updatedAt : datetime
   dodChecklist : boolean[]
   error : string - why the work failed
+  errorCause : string - agent or engine
 }
 
 class TASK <<entity>> {

@@ -4,8 +4,8 @@ import { mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
-import { readJson } from "../../lib/storage/files.js";
-import { workFile, worktreeDir } from "../../lib/storage/paths.js";
+import { readJson, writeJson } from "../../lib/storage/files.js";
+import { errorFile, workFile, worktreeDir } from "../../lib/storage/paths.js";
 import { createTaskStore } from "../tasks.js";
 import { createEngineHandlers } from "./index.js";
 import { startReady } from "./start-ready.js";
@@ -433,4 +433,19 @@ test("a retry keeps the base of the work that is already written", async () => {
     ),
   );
   assert.equal(work.base, "main");
+});
+
+test("an assign removes an error left by a work of the same id that was never created", async () => {
+  await writeJson(errorFile(baseDir, "w1"), {
+    error: "offline",
+    retryable: true,
+  });
+  await handlers["work:assign"](
+    event({
+      id: "w1",
+      workflow: "linear",
+      title: "T",
+    }),
+  );
+  assert.equal(existsSync(errorFile(baseDir, "w1")), false);
 });

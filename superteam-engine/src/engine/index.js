@@ -1,10 +1,11 @@
 import { existsSync } from "node:fs";
-import { readdir } from "node:fs/promises";
+import { readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { createEngineLoop } from "../lib/engineloop/index.js";
-import { readJson } from "../lib/storage/files.js";
+import { readJson, writeJson } from "../lib/storage/files.js";
 import { isSlug, newWorkId, parseJobId } from "../lib/storage/ids.js";
 import {
+  errorFile,
   p,
   r,
   workFile,
@@ -176,6 +177,53 @@ export function createEngine({
 
   const worksFolder = path.join(r(baseDir), "worktrees", "works");
 
+  // The work of the data of an event: its id, or the work of its job.
+  function workIdOf(data) {
+    if (typeof data?.id === "string") {
+      return data.id;
+    }
+    return typeof data?.jobId === "string"
+      ? parseJobId(data.jobId).workId
+      : undefined;
+  }
+
+  // An event of a work that went to the DLQ: its error is recorded, for the
+  // queries and for a retry. An error that a retry cannot fix fails the work,
+  // unless the event is a work:fail itself (see ADR 16).
+  async function recordError(data) {
+    const payload = data?.event?.payload;
+    const workId = workIdOf(payload?.data);
+    if (!isSlug(workId)) {
+      return;
+    }
+    await writeJson(errorFile(baseDir, workId), {
+      type: payload.type,
+      error: data.error,
+      retryable: data.retryable === true,
+      file: data.file,
+      time: new Date().toISOString(),
+    });
+    if (
+      data.retryable !== true &&
+      payload.type !== "work:fail" &&
+      existsSync(
+        worktreeDir(baseDir, {
+          workId,
+        }),
+      )
+    ) {
+      await enqueue("work:fail", {
+        id: workId,
+        error: data.error,
+      });
+    }
+  }
+  loop.subscribe("event:error", (data) => {
+    recordError(data).catch((error) =>
+      log(`the error of an event is not recorded: ${shortReason(error)}`),
+    );
+  });
+
   // The assigns that are accepted and not processed yet, by id: an id is used
   // from the moment its request is checked, so a second request with it is
   // refused. The data of the event answers a query until the event is done.
@@ -243,26 +291,31 @@ export function createEngine({
 
   // The state of a work, or null. It does not fetch: the caller does.
   async function readWork(id) {
+    // An accepted assign is answered from its request until its work file is
+    // written.
     const waiting = pending.get(id);
+    const requested = waiting
+      ? {
+          id,
+          title: waiting.title,
+          workflow: waiting.workflow,
+          status: "OPEN",
+          approvalStatus: "DRAFT",
+        }
+      : null;
     if (
-      waiting &&
+      requested &&
       !existsSync(
         worktreeDir(baseDir, {
           workId: id,
         }),
       )
     ) {
-      return {
-        id,
-        title: waiting.title,
-        workflow: waiting.workflow,
-        status: "OPEN",
-        approvalStatus: "DRAFT",
-      };
+      return requested;
     }
     const found = await findWork(id);
     if (found === null) {
-      return null;
+      return requested;
     }
     const { work, tasks, root } = found;
     const pr = root ? found.pr : await remote.getPullRequest(branchOf(id));
@@ -281,12 +334,29 @@ export function createEngine({
         : {
             pullRequest: pr.url,
           }),
-      ...(work.error === undefined
-        ? {}
-        : {
-            error: work.error,
-          }),
+      ...(await errorOf(id, work)),
     };
+  }
+
+  // The error of a work: the one written in it, by an agent unless it says
+  // otherwise, which is final; else the one of an event that went to the DLQ,
+  // by the engine (see ADR 16).
+  async function errorOf(id, work) {
+    if (work.error !== undefined) {
+      return {
+        error: work.error,
+        errorCause: work.errorCause ?? "agent",
+        retryable: false,
+      };
+    }
+    const record = await readJson(errorFile(baseDir, id));
+    return record === null
+      ? {}
+      : {
+          error: record.error,
+          errorCause: "engine",
+          retryable: record.retryable === true,
+        };
   }
 
   // Offline, the state is read from the local refs, with a warning.
@@ -561,6 +631,41 @@ export function createEngine({
           decision,
         }),
       };
+    },
+
+    // Puts back the event of a work that went to the DLQ with an error of the
+    // engine that is retryable (see ADR 16). The error is removed first, so a
+    // new failure of the event records its own.
+    async retry(id) {
+      ensureReady();
+      if (!isSlug(id)) {
+        throw new EngineError("invalid", `invalid id ${id}`);
+      }
+      const file = errorFile(baseDir, id);
+      const record = await readJson(file);
+      if (record?.retryable !== true) {
+        throw new EngineError(
+          "conflict",
+          `the work ${id} has no error of the engine to retry`,
+        );
+      }
+      await rm(file, {
+        force: true,
+      });
+      try {
+        return {
+          eventId: (await loop.requeue(record.file)).id,
+        };
+      } catch (error) {
+        if (error.code === "ENOENT") {
+          throw new EngineError(
+            "conflict",
+            `the event of the work ${id} is no longer in the DLQ`,
+          );
+        }
+        await writeJson(file, record);
+        throw error;
+      }
     },
 
     async archive(id) {

@@ -1,5 +1,7 @@
+import { readFile, rm } from "node:fs/promises";
+
 // The life cycle: the start stage, the loop and the shutdown. It also owns
-// `handle` and `enqueue`, which depend on the stage. It installs no signal
+// `handle`, `enqueue` and `requeue`, which depend on the stage. It installs no signal
 // handler: the process that owns the loop calls `shutdown()`.
 export function createControl({ queue, factory, handlers, loop, subscribers }) {
   let started = false;
@@ -19,6 +21,18 @@ export function createControl({ queue, factory, handlers, loop, subscribers }) {
         throw new Error("enqueue() needs the start stage to be done");
       }
       return factory.create(payload);
+    },
+
+    // Puts an event of the DLQ back in the queue: a new event with its
+    // payload and attempts 0, then its file in the DLQ is removed.
+    async requeue(file) {
+      if (!ready) {
+        throw new Error("requeue() needs the start stage to be done");
+      }
+      const { payload } = JSON.parse(await readFile(file, "utf8"));
+      const event = await factory.create(payload);
+      await rm(file);
+      return event;
     },
 
     async start() {

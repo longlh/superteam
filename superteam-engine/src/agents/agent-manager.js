@@ -43,6 +43,9 @@ export function createAgentManager({
   commandOf = processCommand,
   pluginRoot = PLUGIN_ROOT,
   log = consoleLog,
+  // The environment that an agent starts from: the one of superteam without
+  // the values of .superteam/.env, so that an agent never sees them.
+  baseEnv = process.env,
 }) {
   const dir = agentsDir(baseDir);
   const running = new Map();
@@ -148,7 +151,7 @@ export function createAgentManager({
       detached: true,
       stdio: ["ignore", "pipe", "pipe"],
       env: {
-        ...process.env,
+        ...baseEnv,
         ...env,
       },
     });

@@ -23,16 +23,109 @@ async function started(loop) {
   };
 }
 
-test("the API has handle, enqueue, subscribe, start and shutdown", async () => {
+test("the API has handle, enqueue, requeue, subscribe, start and shutdown", async () => {
   await withTempDir(async (dir) => {
     const loop = engine(dir);
     assert.deepEqual(Object.keys(loop).sort(), [
       "enqueue",
       "handle",
+      "requeue",
       "shutdown",
       "start",
       "subscribe",
     ]);
+  });
+});
+
+test("a failing event is tried 6 times by default, then goes to the DLQ as retryable", async () => {
+  await withTempDir(async (dir) => {
+    const loop = engine(dir);
+    let calls = 0;
+    loop.handle("t", async () => {
+      calls += 1;
+      throw new Error("offline");
+    });
+    const errors = [];
+    loop.subscribe("event:error", (data) => errors.push(data));
+    const { running } = await started(loop);
+    await loop.enqueue({
+      type: "t",
+      data: {},
+    });
+    await waitFor(() => errors.length === 1, "event:error");
+    loop.shutdown();
+    await running;
+    assert.equal(calls, 6);
+    assert.equal(errors[0].retryable, true);
+    assert.equal(
+      path.dirname(errors[0].file),
+      path.join(dir, ".superteam", ".r", "engineloop", "dlq"),
+    );
+  });
+});
+
+test("an error with retryable false goes to the DLQ at once, as not retryable", async () => {
+  await withTempDir(async (dir) => {
+    const loop = engine(dir);
+    loop.handle("t", async () => {
+      throw Object.assign(new Error("bad data"), {
+        retryable: false,
+      });
+    });
+    const errors = [];
+    loop.subscribe("event:error", (data) => errors.push(data));
+    const { running } = await started(loop);
+    await loop.enqueue({
+      type: "t",
+      data: {},
+    });
+    await waitFor(() => errors.length === 1, "event:error");
+    loop.shutdown();
+    await running;
+    assert.equal(errors[0].retryable, false);
+  });
+});
+
+test("requeue puts an event of the DLQ back in the queue, with attempts 0", async () => {
+  await withTempDir(async (dir) => {
+    const loop = engine(dir);
+    let fail = true;
+    loop.handle("t", async () => {
+      if (fail) {
+        throw Object.assign(new Error("refused"), {
+          retryable: false,
+        });
+      }
+    });
+    const errors = [];
+    const done = [];
+    loop.subscribe("event:error", (data) => errors.push(data));
+    loop.subscribe("event:done", (data) => done.push(data));
+    const { running } = await started(loop);
+    await loop.enqueue({
+      type: "t",
+      data: {
+        n: 1,
+      },
+    });
+    await waitFor(() => errors.length === 1, "event:error");
+    fail = false;
+    const event = await loop.requeue(errors[0].file);
+    assert.equal(event.attempts, 0);
+    assert.deepEqual(event.errors, []);
+    await waitFor(() => done.length === 1, "event:done");
+    loop.shutdown();
+    await running;
+    assert.deepEqual(done[0].event.payload, {
+      type: "t",
+      data: {
+        n: 1,
+      },
+    });
+    assert.deepEqual(
+      await readdir(path.join(dir, ".superteam", ".r", "engineloop", "dlq")),
+      [],
+    );
   });
 });
 

@@ -120,19 +120,20 @@ engine loop, the handlers, and the git adapter.
 
 1. **Decide.** The approver reviews the work in the pull request, and sends the
    decision to the API: approved or rejected. The decision is not stored: the
-   merge of the pull request into the root branch is the approval, and the git
-   history keeps it. So the work and the engine stay clean, and approving is one
-   atomic action, with nothing else to update. If the work is rejected, the
-   engine closes the pull request, and deletes the branches of the tasks of the
-   work. The branch of the work is kept on the remote, as the trace of the work.
-   A rejected work is final: to try again, a new work is assigned.
+   merge of the pull request into the `base` of the work is the approval, and
+   the git history keeps it. So the work and the engine stay clean, and
+   approving is one atomic action, with nothing else to update. If the work is
+   rejected, the engine closes the pull request, and deletes the branches of the
+   tasks of the work. The branch of the work is kept on the remote, as the trace
+   of the work. A rejected work is final: to try again, a new work is assigned.
 2. **Merge.** When the work is approved, the engine merges the pull request into
-   the root branch, as a squash merge. This merge is the approval. The engine
-   then deletes all the branches of the work (its own branch and the branches of
-   its tasks), so that they do not pile up, and fetches, so that it reads the
-   result from the `base` of the work. It does not pull the root branch into the
-   root workspace: the person pulls it when they want the result there (see ADR
-   15).
+   the `base` of the work, as a squash merge. This merge is the approval. When
+   GitHub refuses the merge, the work stays `PROPOSED` with the error, and it
+   can be retried (see ADR 16). The engine then deletes all the branches of the
+   work (its own branch and the branches of its tasks), so that they do not pile
+   up, and fetches, so that it reads the result from the `base` of the work. It
+   does not pull the root branch into the root workspace: the person pulls it
+   when they want the result there (see ADR 15).
 
 ```plantuml
 @startuml
@@ -224,8 +225,9 @@ engine loop, the handlers, the git adapter, and the Agents (see "Recover" and
    1. Loads `.superteam/.env` into the environment, checks `SUPERTEAM_PORT` and
       `SUPERTEAM_MAX_BUDGET_USD`, and creates the Engine, the Agents and the
       Notifier.
-   2. Checks that the project has a git remote named `origin`, and that `gh` is
-      signed in. Otherwise it refuses to start.
+   2. Checks that the project has a git remote named `origin`, that HEAD is not
+      detached, that the root branch tracks a branch on `origin`, and that `gh`
+      is signed in. Otherwise it refuses to start.
    3. Subscribes to the engine: `engine:ready`, `job:run`, `job:stop`, and the
       topic of each subscription. It does it first, so that no job to run is
       lost.

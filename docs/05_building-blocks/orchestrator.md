@@ -152,6 +152,22 @@ The work is no longer listed, and its state can no longer be queried. The pull
 request of a rejected work stays closed on the forge, so its history is kept
 there.
 
+#### Retry a work
+
+```
+POST /works/{id}/retry
+```
+
+The client puts back the event of a work that failed in the engine, such as a
+push during an outage of the network, or a merge that GitHub refused (see ADR
+16).
+
+Answer `202 Accepted` with the `eventId` of the event that is put back.
+
+The work must have an error of the engine that is `retryable`. If it does not,
+the engine refuses it, and the API answers `409 Conflict`. An error of an agent
+is final, and it is not retried.
+
 #### Query the state of a work
 
 ```
@@ -160,15 +176,17 @@ GET /works/{id}
 
 Answer `200 OK`:
 
-| Field            | Type   | Description                                                                       |
-| ---------------- | ------ | --------------------------------------------------------------------------------- |
-| `id`             | string | The id of the work.                                                               |
-| `title`          | string | The title of the work.                                                            |
-| `workflow`       | string | The name of its workflow.                                                         |
-| `status`         | string | `OPEN`, `IN_PROGRESS`, `DONE` or `FAILED` (see "Derived status" in `storage.md`). |
-| `approvalStatus` | string | `DRAFT`, `PROPOSED`, `APPROVED` or `REJECTED`. Derived from the pull request.     |
-| `pullRequest`    | string | The URL of the pull request, once the work is proposed. Otherwise absent.         |
-| `error`          | string | Why the work failed, when its status is `FAILED`. Otherwise absent.               |
+| Field            | Type    | Description                                                                                      |
+| ---------------- | ------- | ------------------------------------------------------------------------------------------------ |
+| `id`             | string  | The id of the work.                                                                              |
+| `title`          | string  | The title of the work.                                                                           |
+| `workflow`       | string  | The name of its workflow.                                                                        |
+| `status`         | string  | `OPEN`, `IN_PROGRESS`, `DONE` or `FAILED` (see "Derived status" in `storage.md`).                |
+| `approvalStatus` | string  | `DRAFT`, `PROPOSED`, `APPROVED` or `REJECTED`. Derived from the pull request.                    |
+| `pullRequest`    | string  | The URL of the pull request, once the work is proposed. Otherwise absent.                        |
+| `error`          | string  | Why the work failed, or why its last step failed in the engine. Otherwise absent.                |
+| `errorCause`     | string  | `agent` or `engine`, with `error` (see ADR 16). Otherwise absent.                                |
+| `retryable`      | boolean | With `error`: true when the work can be retried with `POST /works/{id}/retry`. Otherwise absent. |
 
 The `status` and the `approvalStatus` are not stored: the engine derives them
 when it answers.
@@ -247,10 +265,14 @@ The process is started by `/superteam:start` (see `control-skill.md`).
 
 1. Load `.superteam/.env` into the environment, and check `SUPERTEAM_PORT` (an
    integer from 1 to 65535) and `SUPERTEAM_MAX_BUDGET_USD` (a positive number).
-   Create the Engine, the Agents and the Notifier.
-2. Check that the project has a git remote named `origin`, that the root branch
-   tracks a branch on `origin` (its upstream, see ADR 15), and that `gh` is
-   signed in. Otherwise refuse to start, with a message that says how to fix it.
+   Take the lock `.superteam/.r/superteam.lock`, so that one process of
+   superteam runs in a workspace: when the lock holds the pid of a live process
+   of superteam, refuse to start. A lock of a pid that is gone, or that runs
+   another command, is replaced. Create the Engine, the Agents and the Notifier.
+2. Check that the project has a git remote named `origin`, that HEAD is not
+   detached, that the root branch tracks a branch on `origin` (its upstream, see
+   ADR 15), and that `gh` is signed in. Otherwise refuse to start, with a
+   message that says how to fix it.
 3. Subscribe to the Engine: `engine:ready`, `job:run`, `job:stop`, and the topic
    of each subscription. It is done first, so that no job to run is lost.
 4. Call `agents.recover()`, which kills the agents that a crash left, and keep

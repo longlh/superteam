@@ -23,12 +23,13 @@ function setup(
   };
 }
 
-test("the tools are the five requests of the API", () => {
+test("the tools are the six requests of the API", () => {
   const { byName } = setup();
   assert.deepEqual(Object.keys(byName), [
     "assign_work",
     "decide_work",
     "archive_work",
+    "retry_work",
     "get_work",
     "list_works",
   ]);
@@ -80,6 +81,14 @@ test("archive_work sends POST /works/{id}/archive", async () => {
     id: "w",
   });
   assert.deepEqual(calls, [["POST", "/works/w/archive"]]);
+});
+
+test("retry_work sends POST /works/{id}/retry", async () => {
+  const { calls, byName } = setup();
+  await byName.retry_work.handler({
+    id: "w",
+  });
+  assert.deepEqual(calls, [["POST", "/works/w/retry"]]);
 });
 
 test("get_work sends GET /works/{id}", async () => {

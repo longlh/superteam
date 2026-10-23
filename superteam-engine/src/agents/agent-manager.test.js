@@ -152,6 +152,31 @@ describe("agent manager run", () => {
     await until(async () => (await pidFiles()).length === 0);
   });
 
+  it("gives the agent the environment of its base, not the one of the process", async () => {
+    let given;
+    const manager = make("ok", {
+      baseEnv: {
+        PATH: process.env.PATH,
+        KEPT: "1",
+      },
+      spawn: (command, args, options) => {
+        given = options.env;
+        return spawn(command, args, options);
+      },
+    });
+    process.env.SUPERTEAM_TEST_SECRET = "secret";
+    try {
+      const seen = ended();
+      await manager.run(job(), seen.onEnded);
+      await until(() => seen.results.length === 1);
+    } finally {
+      delete process.env.SUPERTEAM_TEST_SECRET;
+    }
+    assert.equal(given.KEPT, "1");
+    assert.equal(given.FAKE_CLAUDE_MODE, "ok");
+    assert.equal("SUPERTEAM_TEST_SECRET" in given, false);
+  });
+
   it("allows the tools of the agent file of the role", async () => {
     const argsFile = path.join(baseDir, "args.json");
     const manager = make("ok", {

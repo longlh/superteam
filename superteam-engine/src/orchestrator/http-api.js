@@ -105,7 +105,8 @@ async function handle(engine, req, res) {
 
   const known =
     (action === undefined && method === "GET") ||
-    (method === "POST" && (action === "decision" || action === "archive"));
+    (method === "POST" &&
+      (action === "decision" || action === "archive" || action === "retry"));
   if (!known) {
     throw new HttpError(404, "not found");
   }
@@ -116,6 +117,9 @@ async function handle(engine, req, res) {
   }
   if (action === "archive") {
     return reply(res, 202, await engine.archive(id));
+  }
+  if (action === "retry") {
+    return reply(res, 202, await engine.retry(id));
   }
   const body = await readJson(req);
   const decision = body !== null && typeof body === "object" && body.decision;

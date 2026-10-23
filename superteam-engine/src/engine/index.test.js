@@ -6,7 +6,12 @@ import { afterEach, beforeEach, test } from "node:test";
 import { waitFor } from "../lib/engineloop/testkit.js";
 import { writeJson } from "../lib/storage/files.js";
 import { isSlug } from "../lib/storage/ids.js";
-import { workFile, workflowFile, worktreeDir } from "../lib/storage/paths.js";
+import {
+  errorFile,
+  workFile,
+  workflowFile,
+  worktreeDir,
+} from "../lib/storage/paths.js";
 import { EngineError } from "./errors.js";
 import { createHarness } from "./handlers/harness.js";
 import { createEngine } from "./index.js";
@@ -451,6 +456,45 @@ test("an id is used from its accepted assign: a second one is refused, and a que
   );
 });
 
+test("a query answers an accepted assign from the request until its work file is written", async () => {
+  await saveWorkflow(flow);
+  await start();
+  // The worktree is created, but the work file is not written yet.
+  let open;
+  const gate = new Promise((resolve) => {
+    open = resolve;
+  });
+  const createWorktree = h.git.createWorktree;
+  h.git.createWorktree = async (args) => {
+    await createWorktree(args);
+    await gate;
+  };
+  await engine.assign(
+    body({
+      id: "w1",
+    }),
+  );
+  await waitFor(
+    () =>
+      existsSync(
+        worktreeDir(h.baseDir, {
+          workId: "w1",
+        }),
+      ),
+    "the worktree",
+  );
+  try {
+    assert.equal((await engine.getWork("w1")).status, "OPEN");
+    assert.deepEqual(
+      (await engine.listWorks()).map((w) => w.id),
+      ["w1"],
+    );
+  } finally {
+    open();
+  }
+  await waitFor(() => done("work:assign").length === 1, "work:assign");
+});
+
 test("two assigns of the same id at the same time: one is accepted", async () => {
   await saveWorkflow(flow);
   await start();
@@ -675,6 +719,8 @@ test("getWork reads a failed or a rejected work from its branch", async () => {
     status: "FAILED",
     approvalStatus: "DRAFT",
     error: "boom",
+    errorCause: "agent",
+    retryable: false,
   });
   assert.deepEqual(await engine.getWork("rejected"), {
     id: "rejected",
@@ -1124,4 +1170,146 @@ test("reconcile logs a work folder that has no work file", async () => {
     "engine:reconcile",
   );
   assert.deepEqual(logs, ["reconcile skips the work w1: it has no work file"]);
+});
+
+const errors = (type) =>
+  notes
+    .filter(([topic]) => topic === "event:error")
+    .map(([, data]) => data)
+    .filter((data) => data.event?.payload?.type === type);
+
+test("an event that fails in the engine leaves the work as it is, with a retryable error", async () => {
+  await start();
+  onBranch(work("w1"));
+  pullRequest("w1", "open");
+  h.git.mergePullRequest = async () => {
+    throw new Error("GitHub refused the merge: a review is required");
+  };
+  await engine.decide("w1", "approve");
+  await waitFor(() => existsSync(errorFile(h.baseDir, "w1")), "the error");
+  assert.deepEqual(await engine.getWork("w1"), {
+    id: "w1",
+    title: "Title w1",
+    workflow: "flow",
+    status: "DONE",
+    approvalStatus: "PROPOSED",
+    pullRequest: "https://example.test/works/w1",
+    error: "GitHub refused the merge: a review is required",
+    errorCause: "engine",
+    retryable: true,
+  });
+});
+
+test("retry puts the event back in the queue, and removes the error", async () => {
+  await start();
+  onBranch(work("w1"));
+  pullRequest("w1", "open");
+  const merge = h.git.mergePullRequest;
+  let refuse = true;
+  h.git.mergePullRequest = async (branch) => {
+    if (refuse) {
+      throw new Error("a review is required");
+    }
+    return merge(branch);
+  };
+  await engine.decide("w1", "approve");
+  await waitFor(() => existsSync(errorFile(h.baseDir, "w1")), "the error");
+  refuse = false;
+  const { eventId } = await engine.retry("w1");
+  assert.equal(typeof eventId, "string");
+  assert.equal(existsSync(errorFile(h.baseDir, "w1")), false);
+  await waitFor(() => done("work:decide").length === 1, "work:decide");
+  assert.deepEqual(done("work:decide")[0].data, {
+    id: "w1",
+    decision: "approve",
+  });
+  assert.equal(h.pullRequests.get("works/w1").state, "merged");
+});
+
+test("a decide that succeeds after an error of the engine removes the error", async () => {
+  await start();
+  onBranch(work("w1"));
+  pullRequest("w1", "open");
+  const merge = h.git.mergePullRequest;
+  let refuse = true;
+  h.git.mergePullRequest = async (branch) => {
+    if (refuse) {
+      throw new Error("a review is required");
+    }
+    return merge(branch);
+  };
+  await engine.decide("w1", "approve");
+  await waitFor(() => existsSync(errorFile(h.baseDir, "w1")), "the error");
+  refuse = false;
+  await engine.decide("w1", "approve");
+  await waitFor(() => done("work:decide").length === 1, "work:decide");
+  assert.equal(existsSync(errorFile(h.baseDir, "w1")), false);
+});
+
+test("retry refuses a work with no error, and a work that an agent failed", async () => {
+  await start();
+  onBranch(work("w1"));
+  await assert.rejects(engine.retry("w1"), code("conflict"));
+  await inWorktree(
+    work("w2", {
+      error: "the agent was killed",
+    }),
+  );
+  const state = await engine.getWork("w2");
+  assert.equal(state.status, "FAILED");
+  assert.equal(state.errorCause, "agent");
+  assert.equal(state.retryable, false);
+  await assert.rejects(engine.retry("w2"), code("conflict"));
+  await assert.rejects(engine.retry("../x"), code("invalid"));
+});
+
+test("an error of the engine that is not retryable fails the work, with the cause engine", async () => {
+  await inWorktree(work("w1"), [task("w1", "a")]);
+  await taskFolder("w1", "a");
+  await start();
+  const push = h.git.push;
+  let first = true;
+  h.git.push = async (branch) => {
+    if (first) {
+      first = false;
+      throw Object.assign(new Error("the branch is protected"), {
+        retryable: false,
+      });
+    }
+    return push(branch);
+  };
+  await engine.jobEnded({
+    id: "w1/a/worker",
+    summary: "s",
+  });
+  await waitFor(() => done("work:fail").length === 1, "work:fail");
+  const [, , , state] = h.named("commitAll").at(-1);
+  assert.equal(state.works[0].error, "the branch is protected");
+  assert.equal(state.works[0].errorCause, "engine");
+  assert.ok(
+    notes.some(([topic, data]) => topic === "job:stop" && data.workId === "w1"),
+  );
+});
+
+test("a work:fail that goes to the DLQ makes no other work:fail", async () => {
+  await inWorktree(work("w1"), [task("w1", "a")]);
+  await taskFolder("w1", "a");
+  await start();
+  h.git.push = async () => {
+    throw Object.assign(new Error("the branch is protected"), {
+      retryable: false,
+    });
+  };
+  await engine.jobEnded({
+    id: "w1/a/worker",
+    summary: "s",
+  });
+  await waitFor(() => errors("work:fail").length === 1, "work:fail in the DLQ");
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.equal(errors("work:fail").length, 1);
+  assert.equal(errors("worker:ended").length, 1);
+  const state = await engine.getWork("w1");
+  assert.equal(state.status, "FAILED");
+  assert.equal(state.errorCause, "engine");
+  assert.equal(state.retryable, false);
 });

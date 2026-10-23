@@ -51,6 +51,31 @@ describe("readRoleTools", () => {
     ]);
   });
 
+  it("reads the tools of a flow list in brackets", async () => {
+    await put(
+      workdir,
+      "developer",
+      "---\nname: developer\ntools: [Bash, \"Read\", 'Write']\n---\n\nBody\n",
+    );
+    assert.deepEqual(await read("developer"), ["Bash", "Read", "Write"]);
+  });
+
+  it("reads the tools of a YAML list under the tools line", async () => {
+    await put(
+      workdir,
+      "developer",
+      '---\nname: developer\ntools:\n  - Bash\n  - "Read"\n- Write\nmodel: sonnet\n---\n\nBody\n',
+    );
+    assert.deepEqual(await read("developer"), ["Bash", "Read", "Write"]);
+  });
+
+  it("returns null for a tools line with an empty list", async () => {
+    for (const tools of ["tools: []", "tools:\nmodel: sonnet"]) {
+      await put(workdir, "developer", `---\nname: developer\n${tools}\n---\n`);
+      assert.equal(await read("developer"), null, tools);
+    }
+  });
+
   it("returns null when the front matter has no tools line", async () => {
     await put(
       workdir,

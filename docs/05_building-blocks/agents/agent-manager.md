@@ -13,7 +13,9 @@ When an agent ends, the agent manager calls the `onEnded` callback of its job.
 
 - Spawn: The agent manager spawns the agent process in the folder of the
   worktree of the job. It first reads the pid files: if an agent of the same job
-  already runs, it does not spawn another one.
+  already runs, it does not spawn another one. The agent gets the environment of
+  superteam without the values of `.superteam/.env`, such as the webhook of a
+  subscription, so that an agent never sees them.
 - Watch: The agent manager records the pid of the agent process, with its job,
   in `.superteam/.r/agents/{pid}.pid`, and watches it. When the agent ends, it
   calls `onEnded` first, then deletes the file. A crash between the two makes

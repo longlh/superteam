@@ -12,9 +12,32 @@ const PR_STATES = {
   CLOSED: "closed",
 };
 
-function defaultRun(command, args, { cwd }) {
+// The repository of a remote url for `gh --repo`: `owner/repo`, with the host
+// first when it is not github.com. Null for a url that is not on a forge, such
+// as a folder.
+export function repoOfUrl(url) {
+  const match =
+    /^(?:https?|ssh):\/\/(?:[^@/]+@)?([^/:]+)(?::\d+)?\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/.exec(
+      url,
+    ) ?? /^[^@/]+@([^:/]+):([^/]+)\/([^/]+?)(?:\.git)?$/.exec(url);
+  if (match === null) {
+    return null;
+  }
+  const [, host, owner, repo] = match;
+  return host === "github.com"
+    ? `${owner}/${repo}`
+    : `${host}/${owner}/${repo}`;
+}
+
+// git and gh run with LC_ALL=C: the adapter reads some of their errors, which
+// are in English only then.
+export function defaultRun(command, args, { cwd }) {
   return execFileAsync(command, args, {
     cwd,
+    env: {
+      ...process.env,
+      LC_ALL: "C",
+    },
     maxBuffer: 64 * 1024 * 1024,
   });
 }
@@ -24,10 +47,27 @@ export function createGitAdapter({ baseDir, run = defaultRun }) {
     run("git", args, {
       cwd,
     });
-  const gh = (args) =>
-    run("gh", args, {
-      cwd: baseDir,
-    });
+  // The repository of origin, read once: gh could choose another remote,
+  // such as the upstream of a fork.
+  let repo;
+  async function repoArgs() {
+    repo ??= git(["remote", "get-url", "origin"]).then(
+      ({ stdout }) => repoOfUrl(stdout.trim()),
+      () => null,
+    );
+    const name = await repo;
+    return name === null ? [] : ["--repo", name];
+  }
+  const gh = async (args) =>
+    run(
+      "gh",
+      args[0] === "pr"
+        ? [...args.slice(0, 2), ...(await repoArgs()), ...args.slice(2)]
+        : args,
+      {
+        cwd: baseDir,
+      },
+    );
 
   // `show-ref --verify --quiet` exits 1 only when the ref is missing: any other
   // failure (exit 128, git not found) is a real error and propagates.

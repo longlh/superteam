@@ -35,6 +35,7 @@ function workerParts({ work, task, tasks, artifacts }) {
         .join("\n"),
     ),
     `To create an artifact, run: node ${JSON.stringify(ARTIFACT_SCRIPT)} ${work.id} ${task.id} "<content>"`,
+    "Return data.dodChecklist with exactly one boolean for each item of the DOD of the task, in order.",
     "Commit all your changes and artifacts on the current branch before you return.",
   ];
 }

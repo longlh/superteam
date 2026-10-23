@@ -1,6 +1,9 @@
 {
   "name": "superteam",
   "private": true,
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "format:md": "prettier --write \"**/*.md\"",
     "test": "node --import ./test/real-git.js --test \"superteam-engine/src/**/*.test.js\"",

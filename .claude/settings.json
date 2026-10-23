@@ -1,8 +1,6 @@
 {
   "permissions": {
-    "ask": [
-      "Bash(git push:*)"
-    ]
+    "ask": ["Bash(git push:*)"]
   },
   "hooks": {
     "PostToolUse": [

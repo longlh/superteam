@@ -86,7 +86,8 @@ Every notification carries the event. For a failed event (`event:retry` and
 `event:error`) it is the event with the error of this attempt added to `errors`,
 and the notification also carries `error`, the reason as text. The `event:done`
 notification also carries `time`, the time the event was done, and `event:error`
-carries `file`, the path of the file of the event in the DLQ.
+carries `file`, the path of the file of the event in the DLQ, and `retryable`,
+false when the event went to the DLQ at once (see "Loop").
 
 ### Public API
 
@@ -96,6 +97,7 @@ const loop = createEngineLoop({ baseDir, maxAttempts, pollIntervalMs });
 loop.handle(type, handler); // registers the handler of a type
 loop.enqueue(payload); // Promise<event>: creates the event and puts it in the queue
 loop.subscribe(name, subscriber); // returns a function that unsubscribes
+await loop.requeue(file); // puts an event of the DLQ back in the queue, with attempts 0
 await loop.start(); // runs the start stage, then the loop, and resolves after shutdown
 loop.shutdown(); // sets isShuttingDown to true
 ```
@@ -164,8 +166,10 @@ On each iteration of `loop()` it does:
    order, the claim is deleted, and `event:retry` is fired. Before it creates
    the new event, the loop adds the error to `errors`, and the new event keeps
    all of them. The maximum number of attempts is configurable, and the default
-   is 3. When `attempts` reaches it, the event is moved to the DLQ instead, with
-   the last error added to `errors` in its file, and `event:error` is fired.
+   is 6, so the waits are 2, 4, 8, 16 and 32 seconds, about one minute, for a
+   short outage of the network to pass. When `attempts` reaches it, the event is
+   moved to the DLQ instead, with the last error added to `errors` in its file,
+   and `event:error` is fired.
 
 An event is never retried, and goes to the DLQ at once with `event:error`, when:
 

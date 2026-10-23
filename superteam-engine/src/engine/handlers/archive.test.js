@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { afterEach, beforeEach, test } from "node:test";
+import { writeJson } from "../../lib/storage/files.js";
+import { errorFile } from "../../lib/storage/paths.js";
 import { createHarness } from "./harness.js";
 
 let h;
@@ -84,4 +87,17 @@ test("throws, not retryable, for any other state", async () => {
     retryable: false,
   });
   assert.deepEqual(h.calls, []);
+});
+
+test("an archive removes the error of the engine of the work", async () => {
+  await writeJson(errorFile(h.baseDir, "w1"), {
+    error: "offline",
+    retryable: true,
+  });
+  workJson({
+    id: "w1",
+    error: "boom",
+  });
+  await archive("w1");
+  assert.equal(existsSync(errorFile(h.baseDir, "w1")), false);
 });

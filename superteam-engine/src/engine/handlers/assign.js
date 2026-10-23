@@ -2,6 +2,7 @@ import { readJson, writeJson } from "../../lib/storage/files.js";
 import { workFile, worktreeDir } from "../../lib/storage/paths.js";
 import { validateWorkflow } from "../../lib/storage/validate.js";
 import { createTasks, createTaskStore } from "../tasks.js";
+import { clearError } from "./clear-error.js";
 import { startReady } from "./start-ready.js";
 
 function refuse(message) {
@@ -16,6 +17,8 @@ export async function assign(deps, event) {
     workId: id,
   });
   await deps.git.fetch();
+  // An error left by a work of the same id that was never created.
+  await clearError(deps, id);
   // The upstream that `assign` checked; a retry keeps the base of the work
   // that is already written.
   const base =

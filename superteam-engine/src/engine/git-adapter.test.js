@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, test } from "node:test";
 
-import { createGitAdapter } from "./git-adapter.js";
+import { createGitAdapter, defaultRun, repoOfUrl } from "./git-adapter.js";
 
 const temps = [];
 
@@ -326,6 +326,9 @@ describe("git parts (real git)", () => {
   });
 });
 
+// The gh calls of a fake run: the adapter also reads the url of origin.
+const ghCalls = (calls) => calls.filter((call) => call.command === "gh");
+
 function fakeRun(answer) {
   const calls = [];
   const run = async (command, args, options) => {
@@ -430,7 +433,7 @@ describe("gh parts (fake run)", () => {
       body: "B",
     });
     assert.equal(url, "https://github.com/o/r/pull/1");
-    assert.deepEqual(calls, [
+    assert.deepEqual(ghCalls(calls), [
       {
         command: "gh",
         args: [
@@ -472,14 +475,14 @@ describe("gh parts (fake run)", () => {
         state: expected,
         base: "develop",
       });
-      assert.deepEqual(calls[0].args, [
+      assert.deepEqual(ghCalls(calls)[0].args, [
         "pr",
         "view",
         "works/a",
         "--json",
         "url,state,baseRefName",
       ]);
-      assert.equal(calls[0].command, "gh");
+      assert.equal(ghCalls(calls)[0].command, "gh");
     }
   });
 
@@ -537,7 +540,7 @@ describe("gh parts (fake run)", () => {
         base: "develop",
       },
     ]);
-    assert.deepEqual(calls, [
+    assert.deepEqual(ghCalls(calls), [
       {
         command: "gh",
         args: [
@@ -566,7 +569,7 @@ describe("gh parts (fake run)", () => {
     await adapter.mergePullRequest("works/a");
     await adapter.closePullRequest("works/a");
     assert.deepEqual(
-      calls.map((c) => [c.command, ...c.args]),
+      ghCalls(calls).map((c) => [c.command, ...c.args]),
       [
         ["gh", "pr", "merge", "works/a", "--squash"],
         ["gh", "pr", "close", "works/a"],
@@ -705,5 +708,87 @@ describe("the calls that update the refs of origin", () => {
     });
     await assert.rejects(adapter.fetch(), /cannot lock ref/);
     await adapter.push("works/a");
+  });
+});
+
+describe("the repository of origin for gh", () => {
+  test("repoOfUrl reads the owner and the repository, with the host when it is not github.com", () => {
+    for (const [url, repo] of [
+      ["https://github.com/o/r.git", "o/r"],
+      ["https://github.com/o/r", "o/r"],
+      ["git@github.com:o/r.git", "o/r"],
+      ["ssh://git@github.com/o/r.git", "o/r"],
+      ["ssh://git@github.com:22/o/r.git", "o/r"],
+      ["https://ghe.example.com/team/app.git", "ghe.example.com/team/app"],
+      ["git@ghe.example.com:team/app.git", "ghe.example.com/team/app"],
+    ]) {
+      assert.equal(repoOfUrl(url), repo, url);
+    }
+    for (const url of [
+      "/tmp/origin.git",
+      "../origin.git",
+      "file:///x/y.git",
+      "",
+    ]) {
+      assert.equal(repoOfUrl(url), null, url);
+    }
+  });
+
+  test("gh runs its pull requests on the repository of origin, read once", async () => {
+    const { calls, run } = fakeRun((command) => ({
+      stdout:
+        command === "git"
+          ? "git@github.com:o/r.git\n"
+          : JSON.stringify({
+              url: "U",
+              state: "OPEN",
+              baseRefName: "main",
+            }),
+    }));
+    const adapter = createGitAdapter({
+      baseDir: "/base",
+      run,
+    });
+    await adapter.getPullRequest("works/a");
+    await adapter.closePullRequest("works/a");
+    assert.deepEqual(
+      calls.map((call) => [call.command, ...call.args]),
+      [
+        ["git", "remote", "get-url", "origin"],
+        [
+          "gh",
+          "pr",
+          "view",
+          "--repo",
+          "o/r",
+          "works/a",
+          "--json",
+          "url,state,baseRefName",
+        ],
+        ["gh", "pr", "close", "--repo", "o/r", "works/a"],
+      ],
+    );
+  });
+
+  test("gh runs with no --repo when the url of origin is not on a forge", async () => {
+    const { calls, run } = fakeRun((command) => ({
+      stdout: command === "git" ? "/tmp/origin.git\n" : "",
+    }));
+    await createGitAdapter({
+      baseDir: "/base",
+      run,
+    }).closePullRequest("works/a");
+    assert.deepEqual(calls.at(-1).args, ["pr", "close", "works/a"]);
+  });
+
+  test("the commands run with LC_ALL=C, so their errors are in English", async () => {
+    const { stdout } = await defaultRun(
+      process.execPath,
+      ["-e", "process.stdout.write(process.env.LC_ALL ?? '')"],
+      {
+        cwd: tmpdir(),
+      },
+    );
+    assert.equal(stdout, "C");
   });
 });

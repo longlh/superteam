@@ -13,7 +13,7 @@ const defaultNow = () => new Date().toISOString();
 
 export function createEngineLoop({
   baseDir,
-  maxAttempts = 3,
+  maxAttempts = 6,
   pollIntervalMs = 1000,
   sleep = defaultSleep,
   now = defaultNow,
@@ -46,6 +46,7 @@ export function createEngineLoop({
   return {
     handle: control.handle,
     enqueue: control.enqueue,
+    requeue: control.requeue,
     subscribe: subscribers.subscribe,
     start: control.start,
     shutdown: control.shutdown,
