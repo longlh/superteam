@@ -24,6 +24,7 @@ export async function workerJob({ deps, work, task, tasks }) {
     tasks,
     workdir,
     artifacts,
+    branches: deps.branches,
   });
 }
 
@@ -40,6 +41,7 @@ export async function taskJob({ deps, work, task, tasks }) {
         workId: work.id,
         taskId: task.id,
       }),
+      branches: deps.branches,
     });
   }
   return workerJob({
@@ -73,9 +75,11 @@ export async function startReady({ deps, workId }) {
     const [first] = task.dependOn;
     await deps.git.createWorktree({
       folder,
-      branch: `tasks/${workId}/${task.id}`,
+      branch: deps.branches.task(workId, task.id),
       base:
-        first === undefined ? `works/${workId}` : `tasks/${workId}/${first}`,
+        first === undefined
+          ? deps.branches.work(workId)
+          : deps.branches.task(workId, first),
     });
     // The job needs the worktree (for the artifacts). If it cannot be built,
     // the worktree is removed again, so the retry starts the task.

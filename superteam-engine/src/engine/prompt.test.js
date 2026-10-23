@@ -73,7 +73,10 @@ test("a task merger prompt", () => {
     tasks,
     artifacts: [],
   });
-  assert.match(prompt, /Branches to merge: tasks\/w\/a, tasks\/w\/c/);
+  assert.match(
+    prompt,
+    /Branches to merge: superteam-task\/w\/a, superteam-task\/w\/c/,
+  );
   assert.match(prompt, /My work/);
   assert.doesNotMatch(prompt, /To create an artifact/);
 });
@@ -85,7 +88,7 @@ test("the work merger prompt", () => {
     tasks,
     artifacts: [],
   });
-  assert.match(prompt, /Branches to merge: tasks\/w\/d\n/);
+  assert.match(prompt, /Branches to merge: superteam-task\/w\/d\n/);
   assert.match(prompt, /1\. ship/);
   assert.match(prompt, /2\. test/);
 });

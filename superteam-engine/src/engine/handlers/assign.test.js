@@ -7,6 +7,7 @@ import { afterEach, beforeEach, test } from "node:test";
 import { readJson, writeJson } from "../../lib/storage/files.js";
 import { errorFile, workFile, worktreeDir } from "../../lib/storage/paths.js";
 import { createTaskStore } from "../tasks.js";
+import { createBranchNames } from "../../lib/storage/branches.js";
 import { createEngineHandlers } from "./index.js";
 import { startReady } from "./start-ready.js";
 
@@ -107,6 +108,7 @@ beforeEach(async () => {
   published = [];
   handlers = createEngineHandlers({
     baseDir,
+    branches: createBranchNames(),
     git: fakeGit(),
     loadWorkflow: async (name) => workflows[name] ?? null,
     publish: (topic, data) => published.push([topic, data]),
@@ -136,7 +138,7 @@ test("assign creates the work worktree, the work file, the tasks and one job", a
   });
   assert.deepEqual(created()[0][1], {
     folder: workTree,
-    branch: "works/w1",
+    branch: "superteam-work/w1",
     base: "origin/main",
   });
   assert.deepEqual(await readJson(workFile(workTree, "w1")), {
@@ -172,8 +174,8 @@ test("assign creates the work worktree, the work file, the tasks and one job", a
   );
   assert.deepEqual(created()[1][1], {
     folder: job.workdir,
-    branch: "tasks/w1/a",
-    base: "works/w1",
+    branch: "superteam-task/w1/a",
+    base: "superteam-work/w1",
   });
 });
 
@@ -226,6 +228,7 @@ test("a step with two dependencies starts a task merger first", async () => {
   await startReady({
     deps: {
       baseDir,
+      branches: createBranchNames(),
       git: fakeGit(),
       publish: (topic, data) => published.push([topic, data]),
       now: () => now,
@@ -238,8 +241,8 @@ test("a step with two dependencies starts a task merger first", async () => {
   assert.deepEqual(job.instruction.targetIds, ["b"]);
   assert.deepEqual(created().at(-1)[1], {
     folder: job.workdir,
-    branch: "tasks/w2/c",
-    base: "tasks/w2/a",
+    branch: "superteam-task/w2/c",
+    base: "superteam-task/w2/a",
   });
 });
 

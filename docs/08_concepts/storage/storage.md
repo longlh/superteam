@@ -119,12 +119,12 @@ same entity.
 The `id` of a work is in the name of its branch, in the path of its file and in
 the URL of the API, so it must be safe for all three. An `id` is used while one
 of these is left: an assign of it that is accepted and not processed yet, the
-branch `works/{id}`, or a pull request from the branch `works/{id}`. An approved
-work, whose file is in `.superteam/.p/works/` on the branch it was merged on,
-always has its merged pull request. The engine refuses a work whose `id` is
-used, so a work that is assigned twice with the same `id` is created once. A
-work that failed and was archived leaves nothing, so its `id` can be used again.
-A rejected work leaves its closed pull request, so its `id` cannot.
+branch `{prefix}-work/{id}`, or a pull request from that branch (see ADR 18). An
+approved work, whose file is in `.superteam/.p/works/` on the branch it was
+merged on, always has its merged pull request. The engine refuses a work whose
+`id` is used, so a work that is assigned twice with the same `id` is created
+once. A work that failed and was archived leaves nothing, so its `id` can be
+used again. A rejected work leaves its closed pull request, so its `id` cannot.
 
 ### Roles
 

@@ -70,12 +70,12 @@ test("commits the checklist, pushes, opens the pull request, removes the worktre
   assert.deepEqual(commit[3].works[0].dodChecklist, dodChecklist);
   assert.equal(commit[3].works[0].extra, undefined);
   assert.equal(commit[3].works[0].updatedAt, now.toISOString());
-  assert.deepEqual(h.named("push"), [["push", "works/w1"]]);
+  assert.deepEqual(h.named("push"), [["push", "superteam-work/w1"]]);
   assert.deepEqual(h.named("openPullRequest"), [
     [
       "openPullRequest",
       {
-        branch: "works/w1",
+        branch: "superteam-work/w1",
         base: "main",
         title: "Title",
         body: "S\n\n## Work DOD\n\n- [x] ok\n- [ ] docs\n\n## Task `a` DOD\n\n- [x] t1\n",
@@ -100,7 +100,7 @@ test("a second event opens no second pull request", async () => {
 });
 
 test("with a pull request already open, only removes the worktree", async () => {
-  h.pullRequests.set("works/w1", {
+  h.pullRequests.set("superteam-work/w1", {
     url: "u",
     state: "open",
   });
@@ -140,7 +140,7 @@ test("a throw while the work fails is retried: the retry cleans up", async () =>
   assert.equal(existsSync(workTree), true);
   await ended(event);
   assert.equal(existsSync(workTree), false);
-  assert.deepEqual(h.named("push"), [["push", "works/w1"]]);
+  assert.deepEqual(h.named("push"), [["push", "superteam-work/w1"]]);
 });
 
 test("a throw before the pull request is open is retried: the retry opens it", async () => {

@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { listJson, writeJson } from "../../lib/storage/files.js";
+import { createBranchNames } from "../../lib/storage/branches.js";
 import { artifactsDir, p } from "../../lib/storage/paths.js";
 import { createTaskStore } from "../tasks.js";
 import { createEngineHandlers } from "./index.js";
@@ -136,6 +137,7 @@ export async function createHarness(workflows) {
     handlers: createEngineHandlers({
       baseDir,
       git,
+      branches: createBranchNames(),
       loadWorkflow: async (name) => workflows[name] ?? null,
       publish: (topic, data) => published.push([topic, data]),
       now: () => now,

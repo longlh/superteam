@@ -447,3 +447,26 @@ test("check refuses a root branch with no upstream, and a detached HEAD", async 
     await assert.rejects(checkPushed(dir), /HEAD is detached/);
   });
 });
+
+test("check compares the config of the project when there is one, and checks it", async () => {
+  await withProject(async (dir) => {
+    pushSetup(dir);
+    await writeFile(
+      path.join(dir, ".superteam/.p/config.json"),
+      '{ "branchPrefix": "acme" }\n',
+    );
+    await assert.rejects(
+      checkPushed(dir),
+      /- missing: \.superteam\/\.p\/config\.json/,
+    );
+    git(dir, "add", ".superteam/.p/config.json");
+    git(dir, "commit", "-q", "-m", "Config");
+    git(dir, "push", "-q");
+    assert.equal(await checkPushed(dir), "ok");
+    await writeFile(
+      path.join(dir, ".superteam/.p/config.json"),
+      '{ "branchPrefix": "Not A Slug" }\n',
+    );
+    await assert.rejects(checkPushed(dir), /branchPrefix must be a slug/);
+  });
+});

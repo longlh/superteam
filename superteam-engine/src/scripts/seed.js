@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { parseEnv } from "node:util";
 import { toolsOf } from "../agents/role-file.js";
 import { createGitAdapter } from "../engine/git-adapter.js";
+import { CONFIG_FILE, parseConfig } from "../lib/storage/branches.js";
 import { writeJson } from "../lib/storage/files.js";
 import { isSlug } from "../lib/storage/ids.js";
 import { p, workflowFile } from "../lib/storage/paths.js";
@@ -216,6 +217,12 @@ export async function checkPushed(
     ) {
       problems.push(`missing: ${file}`);
     }
+  }
+  // The config of the project, when there is one: valid, and pushed.
+  const config = await readText(path.join(baseDir, CONFIG_FILE));
+  if (config !== "") {
+    parseConfig(config);
+    await compare(CONFIG_FILE);
   }
   const gitignore = (await git.readFileOnRemote(base, ".gitignore")) ?? "";
   const present = new Set(gitignore.split("\n").map((line) => line.trim()));

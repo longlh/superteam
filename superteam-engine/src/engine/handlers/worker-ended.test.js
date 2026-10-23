@@ -74,7 +74,7 @@ test("a result completes the task, pushes its branch and removes its worktree", 
   assert.equal(task.completedAt, now.toISOString());
   assert.equal(task.updatedAt, now.toISOString());
   assert.equal("other" in task, false);
-  assert.deepEqual(h.named("push"), [["push", "tasks/w1/a"]]);
+  assert.deepEqual(h.named("push"), [["push", "superteam-task/w1/a"]]);
   assert.equal(existsSync(taskTree("a")), false);
 });
 
@@ -176,7 +176,7 @@ test("what the worker left uncommitted is committed before the push", async () =
 });
 
 test("the next ready task prompt holds the artifact the ended task committed", async () => {
-  h.commitArtifact("tasks/w1/a", {
+  h.commitArtifact("superteam-task/w1/a", {
     id: "art1",
     task: "a",
     work: "w1",
@@ -225,8 +225,10 @@ test("an error fails the task and the work", async () => {
     },
   ]);
   assert.equal(h.published.length, 1);
-  assert.deepEqual(h.named("push"), [["push", "works/w1"]]);
-  assert.deepEqual(h.named("deleteBranch"), [["deleteBranch", "tasks/w1/a"]]);
+  assert.deepEqual(h.named("push"), [["push", "superteam-work/w1"]]);
+  assert.deepEqual(h.named("deleteBranch"), [
+    ["deleteBranch", "superteam-task/w1/a"],
+  ]);
   assert.equal(existsSync(workTree), false);
 });
 
@@ -296,7 +298,7 @@ test("a throw while the next task starts is retried: the retry starts it", async
     [["job:run", "w1/b/worker"]],
   );
   assert.equal(existsSync(taskTree("b")), true);
-  assert.deepEqual(h.named("push"), [["push", "tasks/w1/a"]]);
+  assert.deepEqual(h.named("push"), [["push", "superteam-task/w1/a"]]);
 });
 
 test("an event of a last task that a throw left done publishes the work merger", async () => {
@@ -330,8 +332,10 @@ test("a throw while the work fails is retried: the retry pushes the work and cle
   await assert.rejects(h.handlers["worker:ended"](event), /offline/);
   assert.equal(existsSync(workTree), true);
   await h.handlers["worker:ended"](event);
-  assert.deepEqual(h.named("push"), [["push", "works/w1"]]);
-  assert.deepEqual(h.named("deleteBranch"), [["deleteBranch", "tasks/w1/a"]]);
+  assert.deepEqual(h.named("push"), [["push", "superteam-work/w1"]]);
+  assert.deepEqual(h.named("deleteBranch"), [
+    ["deleteBranch", "superteam-task/w1/a"],
+  ]);
   assert.equal(existsSync(workTree), false);
   for (const [, , , state] of h.named("commitAll")) {
     assert.equal(state.works[0].error, "boom");

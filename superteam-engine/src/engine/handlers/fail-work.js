@@ -52,7 +52,7 @@ export async function failWork({ deps, workId, error, cause = "agent" }) {
   // Always: a commit that failed after the write is done by the retry, and a
   // clean worktree makes it a no-op.
   await deps.git.commitAll(workFolder, `Fail the work ${workId}`);
-  await deps.git.push(`works/${workId}`);
+  await deps.git.push(deps.branches.work(workId));
 
   for (const task of await createTaskStore(workFolder).list()) {
     await deps.git.removeWorktree(
@@ -64,7 +64,9 @@ export async function failWork({ deps, workId, error, cause = "agent" }) {
   }
   await deps.git.removeWorktree(workFolder);
   await removeTasksFolder(deps, workId);
-  for (const branch of await deps.git.listBranches(`tasks/${workId}/`)) {
+  for (const branch of await deps.git.listBranches(
+    deps.branches.tasksOf(workId),
+  )) {
     await deps.git.deleteBranch(branch);
   }
   // The error is in the work now.

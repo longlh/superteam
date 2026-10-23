@@ -33,9 +33,9 @@ The loop is made for an internal tool. These limits are known and accepted:
   it. The killed jobs of that start are not failed, and the jobs that the engine
   waits for are not published again, until the next start.
 - `listWorks()` finds the approved works in the last 1000 merged pull requests
-  of the repository, and keeps those of the branches `works/*`. In a busy
-  repository, an old approved work is not listed, but its state can still be
-  queried by its id.
+  of the repository, and keeps those of the branches `{prefix}-work/*`. In a
+  busy repository, an old approved work is not listed, but its state can still
+  be queried by its id.
 - An approved work is read from the branch its pull request was merged on, else
   from the upstream of the root branch. When neither has its file, for example
   when that branch was deleted before it was merged on, the work is no longer

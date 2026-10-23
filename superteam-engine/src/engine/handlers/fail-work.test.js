@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { worktreeDir } from "../../lib/storage/paths.js";
+import { createBranchNames } from "../../lib/storage/branches.js";
 import { failWork } from "./fail-work.js";
 import { assignEvent, createHarness } from "./harness.js";
 
@@ -35,6 +36,7 @@ beforeEach(async () => {
   h.calls.length = 0;
   deps = {
     baseDir: h.baseDir,
+    branches: createBranchNames(),
     git: h.git,
     publish: (topic, data) => h.published.push([topic, data]),
     now: () => new Date("2026-02-02T00:00:00.000Z"),
@@ -76,7 +78,9 @@ test("failing twice commits the error once and still cleans up", async () => {
   for (const commit of commits) {
     assert.equal(commit[3].works[0].error, "first");
   }
-  assert.deepEqual(h.named("deleteBranch"), [["deleteBranch", "tasks/w1/a"]]);
+  assert.deepEqual(h.named("deleteBranch"), [
+    ["deleteBranch", "superteam-task/w1/a"],
+  ]);
 });
 
 test("a throw of the commit after the error is written is retried: the retry commits it", async () => {
@@ -98,7 +102,7 @@ test("a throw of the commit after the error is written is retried: the retry com
   assert.equal(commits.length, 1);
   assert.equal(commits[0][2], "Fail the work w1");
   assert.equal(commits[0][3].works[0].error, "first");
-  assert.deepEqual(h.named("push"), [["push", "works/w1"]]);
+  assert.deepEqual(h.named("push"), [["push", "superteam-work/w1"]]);
 });
 
 test("a work whose worktree is gone does nothing", async () => {
@@ -138,7 +142,7 @@ test("work:fail fails the work with the cause engine", async () => {
     "workflow linear: step a: role must be a slug",
   );
   assert.equal(state.works[0].errorCause, "engine");
-  assert.deepEqual(h.named("push"), [["push", "works/w1"]]);
+  assert.deepEqual(h.named("push"), [["push", "superteam-work/w1"]]);
   assert.equal(
     existsSync(
       worktreeDir(h.baseDir, {

@@ -10,7 +10,7 @@ let h;
 beforeEach(async () => {
   h = await createHarness({});
   await h.git.createWorktree({
-    branch: "works/w1",
+    branch: "superteam-work/w1",
     folder: `${h.baseDir}/works/w1`,
   });
   h.calls.length = 0;
@@ -29,7 +29,7 @@ const archive = (id) =>
   });
 const workJson = (work) =>
   h.branchFiles.set(
-    "works/w1:.superteam/.p/works/w1.json",
+    "superteam-work/w1:.superteam/.p/works/w1.json",
     JSON.stringify(work),
   );
 
@@ -39,16 +39,20 @@ test("deletes the branch of a failed work", async () => {
     error: "boom",
   });
   await archive("w1");
-  assert.deepEqual(h.named("deleteBranch"), [["deleteBranch", "works/w1"]]);
+  assert.deepEqual(h.named("deleteBranch"), [
+    ["deleteBranch", "superteam-work/w1"],
+  ]);
 });
 
 test("deletes the branch of a rejected work", async () => {
-  h.pullRequests.set("works/w1", {
+  h.pullRequests.set("superteam-work/w1", {
     url: "u",
     state: "closed",
   });
   await archive("w1");
-  assert.deepEqual(h.named("deleteBranch"), [["deleteBranch", "works/w1"]]);
+  assert.deepEqual(h.named("deleteBranch"), [
+    ["deleteBranch", "superteam-work/w1"],
+  ]);
 });
 
 test("does nothing when the work is already archived", async () => {
@@ -69,14 +73,14 @@ test("throws, not retryable, for any other state", async () => {
   await assert.rejects(archive("w1"), {
     retryable: false,
   });
-  h.pullRequests.set("works/w1", {
+  h.pullRequests.set("superteam-work/w1", {
     url: "u",
     state: "open",
   });
   await assert.rejects(archive("w1"), {
     retryable: false,
   });
-  h.pullRequests.set("works/w1", {
+  h.pullRequests.set("superteam-work/w1", {
     url: "u",
     state: "merged",
   });

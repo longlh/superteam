@@ -7,8 +7,9 @@ function refuse(message) {
   });
 }
 
-async function deleteTaskBranches(git, id) {
-  for (const branch of await git.listBranches(`tasks/${id}/`)) {
+async function deleteTaskBranches(deps, id) {
+  const { git } = deps;
+  for (const branch of await git.listBranches(deps.branches.tasksOf(id))) {
     await git.deleteBranch(branch);
   }
 }
@@ -21,7 +22,7 @@ export async function decide(deps, event) {
     throw refuse(`Invalid decision of the work: ${id} ${decision}`);
   }
   const { git } = deps;
-  const branch = `works/${id}`;
+  const branch = deps.branches.work(id);
   const state = (await git.getPullRequest(branch))?.state;
 
   if (decision === "approve") {
@@ -34,7 +35,7 @@ export async function decide(deps, event) {
     if (await git.branchExists(branch)) {
       await git.deleteBranch(branch);
     }
-    await deleteTaskBranches(git, id);
+    await deleteTaskBranches(deps, id);
     // The result is read from the upstream: the root workspace is not pulled.
     await git.fetch();
     await clearError(deps, id);
@@ -47,6 +48,6 @@ export async function decide(deps, event) {
   if (state === "open") {
     await git.closePullRequest(branch);
   }
-  await deleteTaskBranches(git, id);
+  await deleteTaskBranches(deps, id);
   await clearError(deps, id);
 }

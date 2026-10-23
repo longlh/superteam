@@ -38,7 +38,7 @@ export async function assign(deps, event) {
 
   await deps.git.createWorktree({
     folder,
-    branch: `works/${id}`,
+    branch: deps.branches.work(id),
     base: `origin/${base}`,
   });
 

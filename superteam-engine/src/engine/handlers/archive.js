@@ -17,7 +17,7 @@ export async function archive(deps, event) {
     throw refuse(`Invalid id of the work: ${id}`);
   }
   const { git } = deps;
-  const branch = `works/${id}`;
+  const branch = deps.branches.work(id);
   const pullRequest = await git.getPullRequest(branch);
   const exists = await git.branchExists(branch);
 

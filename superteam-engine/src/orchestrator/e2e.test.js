@@ -459,9 +459,12 @@ test("a rejected work keeps its branch until it is archived", async (t) => {
   );
   await waitFor(async () => {
     const branches = await remoteBranches(origin);
-    return !branches.some((name) => name.startsWith("tasks/second/"));
+    return !branches.some((name) => name.startsWith("superteam-task/second/"));
   }, "the task branches of second are deleted");
-  assert.deepEqual(await remoteBranches(origin), ["main", "works/second"]);
+  assert.deepEqual(await remoteBranches(origin), [
+    "main",
+    "superteam-work/second",
+  ]);
 
   const archived = await stack.request("POST", "/works/second/archive");
   assert.equal(archived.status, 202);
@@ -506,7 +509,10 @@ test("a failed task fails the work and stops its other job", async (t) => {
       ),
     "the worktree of third is removed",
   );
-  assert.deepEqual(await remoteBranches(origin), ["main", "works/third"]);
+  assert.deepEqual(await remoteBranches(origin), [
+    "main",
+    "superteam-work/third",
+  ]);
 
   const archived = await stack.request("POST", "/works/third/archive");
   assert.equal(archived.status, 202);

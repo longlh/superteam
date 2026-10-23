@@ -13,9 +13,10 @@ Persistence data has two groups.
 The data that is there before the engine runs a work. The Seed Skill helps to
 write it.
 
-| Entity   | Path                                  |
-| -------- | ------------------------------------- |
-| Workflow | `.superteam/.p/workflows/{name}.json` |
+| Entity   | Path                                               |
+| -------- | -------------------------------------------------- |
+| Workflow | `.superteam/.p/workflows/{name}.json`              |
+| Config   | `.superteam/.p/config.json`, optional (see ADR 18) |
 
 ### Operation data
 

@@ -6,7 +6,12 @@ let h;
 
 beforeEach(async () => {
   h = await createHarness({});
-  for (const branch of ["works/w1", "tasks/w1/a", "tasks/w1/b", "tasks/w2/a"]) {
+  for (const branch of [
+    "superteam-work/w1",
+    "superteam-task/w1/a",
+    "superteam-task/w1/b",
+    "superteam-task/w2/a",
+  ]) {
     await h.git.createWorktree({
       branch,
       folder: `${h.baseDir}/${branch}`,
@@ -25,7 +30,7 @@ const decide = (data) =>
     },
   });
 const open = (state = "open") =>
-  h.pullRequests.set("works/w1", {
+  h.pullRequests.set("superteam-work/w1", {
     url: "u",
     state,
   });
@@ -38,10 +43,10 @@ test("approve merges, deletes all the branches, then fetches", async () => {
     decision: "approve",
   });
   assert.deepEqual(names(), [
-    ["mergePullRequest", "works/w1"],
-    ["deleteBranch", "works/w1"],
-    ["deleteBranch", "tasks/w1/a"],
-    ["deleteBranch", "tasks/w1/b"],
+    ["mergePullRequest", "superteam-work/w1"],
+    ["deleteBranch", "superteam-work/w1"],
+    ["deleteBranch", "superteam-task/w1/a"],
+    ["deleteBranch", "superteam-task/w1/b"],
     ["fetch"],
   ]);
 });
@@ -88,9 +93,9 @@ test("reject closes the pull request and deletes only the task branches", async 
     decision: "reject",
   });
   assert.deepEqual(names(), [
-    ["closePullRequest", "works/w1"],
-    ["deleteBranch", "tasks/w1/a"],
-    ["deleteBranch", "tasks/w1/b"],
+    ["closePullRequest", "superteam-work/w1"],
+    ["deleteBranch", "superteam-task/w1/a"],
+    ["deleteBranch", "superteam-task/w1/b"],
   ]);
 });
 

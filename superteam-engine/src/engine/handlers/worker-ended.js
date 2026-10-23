@@ -61,6 +61,7 @@ export async function workerEnded(deps, event) {
         work: await readJson(workFile(workFolder, workId)),
         tasks,
         workdir: workFolder,
+        branches: deps.branches,
       }),
     );
   }
@@ -94,7 +95,7 @@ async function completeTask({
   if (existsSync(folder)) {
     await deps.git.commitAll(folder, `Save the work of the task ${taskId}`);
   }
-  await deps.git.push(`tasks/${workId}/${taskId}`);
+  await deps.git.push(deps.branches.task(workId, taskId));
   await deps.git.removeWorktree(folder);
   const at = deps.now().toISOString();
   await store.put({

@@ -158,15 +158,15 @@ const taskFolder = (workId, taskId) =>
   );
 
 function onBranch(entity) {
-  extraBranches.add(`works/${entity.id}`);
+  extraBranches.add(`superteam-work/${entity.id}`);
   h.branchFiles.set(
-    `works/${entity.id}:.superteam/.p/works/${entity.id}.json`,
+    `superteam-work/${entity.id}:.superteam/.p/works/${entity.id}.json`,
     JSON.stringify(entity),
   );
 }
 
 const pullRequest = (id, state, base = "main") =>
-  h.pullRequests.set(`works/${id}`, {
+  h.pullRequests.set(`superteam-work/${id}`, {
     url: `https://example.test/works/${id}`,
     state,
     base,
@@ -368,7 +368,7 @@ test("assign refuses a workflow that could never finish", async () => {
 test("assign refuses an id that is used by a branch or a pull request", async () => {
   await saveWorkflow(flow);
   await start();
-  extraBranches.add("works/on-branch");
+  extraBranches.add("superteam-work/on-branch");
   approved(work("approved"));
   pullRequest("with-pr", "closed");
   for (const id of ["on-branch", "approved", "with-pr"]) {
@@ -785,8 +785,11 @@ test("an approved work whose file is on no branch is not found, but its id stays
 });
 
 test("getWork treats a corrupt work file on the branch as not found there", async () => {
-  extraBranches.add("works/w1");
-  h.branchFiles.set("works/w1:.superteam/.p/works/w1.json", "{ not json");
+  extraBranches.add("superteam-work/w1");
+  h.branchFiles.set(
+    "superteam-work/w1:.superteam/.p/works/w1.json",
+    "{ not json",
+  );
   await assert.rejects(engine.getWork("w1"), code("not-found"));
   approved(work("w1"));
   assert.equal((await engine.getWork("w1")).approvalStatus, "APPROVED");
@@ -821,7 +824,7 @@ test("listWorks merges the three sources with no duplicate, the first source win
       title: "Root title",
     }),
   );
-  extraBranches.add("works/w4");
+  extraBranches.add("superteam-work/w4");
   approved(work("w5"), "develop");
   const works = await engine.listWorks();
   assert.deepEqual(
@@ -994,7 +997,7 @@ test("reconcile finishes the failure of a failed work whose worktree is left", a
     () => done("engine:reconcile").length === 1,
     "engine:reconcile",
   );
-  assert.deepEqual(h.named("push"), [["push", "works/w1"]]);
+  assert.deepEqual(h.named("push"), [["push", "superteam-work/w1"]]);
   for (const folder of [
     worktreeDir(h.baseDir, {
       workId: "w1",
@@ -1228,7 +1231,7 @@ test("retry puts the event back in the queue, and removes the error", async () =
     id: "w1",
     decision: "approve",
   });
-  assert.equal(h.pullRequests.get("works/w1").state, "merged");
+  assert.equal(h.pullRequests.get("superteam-work/w1").state, "merged");
 });
 
 test("a decide that succeeds after an error of the engine removes the error", async () => {
@@ -1322,7 +1325,7 @@ test("a work:fail that goes to the DLQ makes no other work:fail", async () => {
 test("a query of a work merged on GitHub finishes the decision, once", async () => {
   await start();
   onBranch(work("w1"));
-  extraBranches.add("tasks/w1/a");
+  extraBranches.add("superteam-task/w1/a");
   pullRequest("w1", "merged");
   // The handler waits, so both queries see the decision as not finished.
   let open;
@@ -1353,7 +1356,7 @@ test("a query of a work merged on GitHub finishes the decision, once", async () 
 test("a query of a work closed on GitHub finishes the reject", async () => {
   await start();
   onBranch(work("w1"));
-  extraBranches.add("tasks/w1/a");
+  extraBranches.add("superteam-task/w1/a");
   pullRequest("w1", "closed");
   assert.equal((await engine.getWork("w1")).approvalStatus, "REJECTED");
   await waitFor(() => done("work:decide").length === 1, "work:decide");
@@ -1361,7 +1364,7 @@ test("a query of a work closed on GitHub finishes the reject", async () => {
     id: "w1",
     decision: "reject",
   });
-  assert.deepEqual([...extraBranches], ["works/w1"]);
+  assert.deepEqual([...extraBranches], ["superteam-work/w1"]);
 });
 
 test("a query of a decided work with no branch left enqueues nothing", async () => {
@@ -1380,7 +1383,7 @@ test("a query of a decided work with no branch left enqueues nothing", async () 
 
 test("the reconcile of the start finishes a decision made on GitHub", async () => {
   onBranch(work("w1"));
-  extraBranches.add("tasks/w1/a");
+  extraBranches.add("superteam-task/w1/a");
   pullRequest("w1", "merged");
   await start();
   await engine.reconcile([]);
@@ -1389,4 +1392,41 @@ test("the reconcile of the start finishes a decision made on GitHub", async () =
     id: "w1",
     decision: "approve",
   });
+});
+
+test("the branches have the prefix of the config of the project, read at the start", async () => {
+  await saveWorkflow(flow);
+  h.remoteFiles.set(
+    "main:.superteam/.p/config.json",
+    JSON.stringify({
+      branchPrefix: "acme",
+    }),
+  );
+  await start();
+  await engine.assign(
+    body({
+      id: "w1",
+    }),
+  );
+  await waitFor(() => done("work:assign").length === 1, "work:assign");
+  assert.deepEqual(
+    h.named("createWorktree").map(([, args]) => args.branch),
+    ["acme-work/w1", "acme-task/w1/build"],
+  );
+  extraBranches.add("acme-work/w2");
+  h.branchFiles.set(
+    "acme-work/w2:.superteam/.p/works/w2.json",
+    JSON.stringify(work("w2")),
+  );
+  assert.ok((await engine.listWorks()).some((w) => w.id === "w2"));
+});
+
+test("a config that is not valid stops the start, with the reason", async () => {
+  h.remoteFiles.set(
+    "main:.superteam/.p/config.json",
+    JSON.stringify({
+      branchPrefix: "Not A Slug",
+    }),
+  );
+  await assert.rejects(engine.start(), /branchPrefix must be a slug/);
 });

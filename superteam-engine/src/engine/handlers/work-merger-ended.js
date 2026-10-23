@@ -23,7 +23,7 @@ export async function workMergerEnded(deps, event) {
     return;
   }
 
-  const branch = `works/${workId}`;
+  const branch = deps.branches.work(workId);
   if ((await deps.git.getPullRequest(branch)) === null) {
     const file = workFile(workFolder, workId);
     const work = {

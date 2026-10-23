@@ -34,6 +34,11 @@ The adapter also checks the setup of the project:
 
 ### Branches
 
+The branch of a work is `{prefix}-work/{work_id}`, and the branch of a task is
+`{prefix}-task/{work_id}/{task_id}`. The prefix is `superteam`, or the
+`branchPrefix` of `.superteam/.p/config.json` on the upstream of the root
+branch, read when the engine starts (see ADR 18).
+
 The branches of the tasks of a work are deleted when the work ends, so that they
 do not pile up as garbage. The branch of the work is deleted when the work is
 approved, because its result is then in the `base` of the work. When the work
@@ -48,8 +53,9 @@ branch that the work is based on (`gh pr create --base <base>`). Without
 The engine reads what is committed with git, and never from the files of the
 root workspace: the workflow from the upstream of the root branch, and an
 approved work from the branch on which its pull request was merged. The approved
-works are found from the merged pull requests of the branches `works/*`. The
-engine never pulls, merges or commits into the local root branch (see ADR 15).
+works are found from the merged pull requests of the branches `{prefix}-work/*`.
+The engine never pulls, merges or commits into the local root branch (see ADR
+15).
 
 ## Code
 
@@ -61,7 +67,7 @@ each unit of the work. The engine creates both.
 |          | Worktree of a work                                                                          | Worktree of a task                                                                                                                                                |
 | -------- | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Based on | The upstream of the root branch, after a fetch. Its name is kept in the `base` of the work. | The branch of the task it depends on. A task with no dependency is based on the branch of its work. A task with more than one dependency is based on one of them. |
-| Branch   | `works/{work_id}`                                                                           | `tasks/{work_id}/{task_id}`                                                                                                                                       |
+| Branch   | `{prefix}-work/{work_id}`                                                                   | `{prefix}-task/{work_id}/{task_id}`                                                                                                                               |
 | Folder   | `.superteam/.r/worktrees/works/{work_id}`                                                   | `.superteam/.r/worktrees/tasks/{work_id}/{task_id}`                                                                                                               |
 | Created  | When the work is assigned.                                                                  | When the task starts.                                                                                                                                             |
 | Removed  | After the pull request is opened, or when the work fails.                                   | When the task ends.                                                                                                                                               |

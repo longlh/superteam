@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import { createBranchNames } from "../lib/storage/branches.js";
 import { finalTasks } from "./tasks.js";
 
 const ARTIFACT_SCRIPT = fileURLToPath(
@@ -9,8 +10,8 @@ function numbered(items) {
   return items.map((item, i) => `${i + 1}. ${item}`).join("\n");
 }
 
-function branches(work, ids) {
-  return ids.map((id) => `tasks/${work.id}/${id}`).join(", ");
+function branchList(branches, work, ids) {
+  return ids.map((id) => branches.task(work.id, id)).join(", ");
 }
 
 function section(title, body) {
@@ -40,19 +41,20 @@ function workerParts({ work, task, tasks, artifacts }) {
   ];
 }
 
-function taskMergerParts({ work, task }) {
+function taskMergerParts({ work, task, branches }) {
   return [
     `Merge the branches of the dependencies of the task ${task.id}.`,
     `Work: ${work.title}`,
-    `Branches to merge: ${branches(work, (task.dependOn ?? []).slice(1))}`,
+    `Branches to merge: ${branchList(branches, work, (task.dependOn ?? []).slice(1))}`,
   ];
 }
 
-function workMergerParts({ work, tasks }) {
+function workMergerParts({ work, tasks, branches }) {
   return [
     "Merge the final tasks of the work.",
     `Work: ${work.title}`,
-    `Branches to merge: ${branches(
+    `Branches to merge: ${branchList(
+      branches,
       work,
       finalTasks(tasks).map((t) => t.id),
     )}`,
@@ -66,7 +68,14 @@ const PARTS = {
   "work-merger": workMergerParts,
 };
 
-export function buildPrompt({ kind, work, task, tasks, artifacts = [] }) {
+export function buildPrompt({
+  kind,
+  work,
+  task,
+  tasks,
+  artifacts = [],
+  branches = createBranchNames(),
+}) {
   const parts = PARTS[kind];
   if (!parts) {
     throw new Error(`unknown job kind ${kind}`);
@@ -76,6 +85,7 @@ export function buildPrompt({ kind, work, task, tasks, artifacts = [] }) {
     task,
     tasks,
     artifacts,
+    branches,
   })
     .filter((part) => part)
     .join("\n\n");

@@ -162,7 +162,7 @@ test("a throw while the work fails is retried: the retry cleans up", async () =>
   assert.equal(existsSync(workTree), true);
   await h.handlers["task-merger:ended"](event);
   assert.equal(existsSync(workTree), false);
-  assert.deepEqual(h.named("push"), [["push", "works/w1"]]);
+  assert.deepEqual(h.named("push"), [["push", "superteam-work/w1"]]);
 });
 
 test("an event for a task that is already done is ignored", async () => {

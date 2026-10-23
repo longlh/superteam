@@ -35,7 +35,15 @@ function describe({ kind, work, task }) {
   }
 }
 
-export function buildJob({ kind, work, task, tasks, workdir, artifacts = [] }) {
+export function buildJob({
+  kind,
+  work,
+  task,
+  tasks,
+  workdir,
+  artifacts = [],
+  branches,
+}) {
   const { role, timeout, schema, target, targetIds } = describe({
     kind,
     work,
@@ -60,6 +68,7 @@ export function buildJob({ kind, work, task, tasks, workdir, artifacts = [] }) {
         task,
         tasks,
         artifacts,
+        branches,
       }),
     },
   };

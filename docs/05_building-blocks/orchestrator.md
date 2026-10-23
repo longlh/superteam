@@ -205,8 +205,8 @@ Answer `200 OK`: the list of all the works. It puts together three sources:
   merged, so its branch is kept as its trace until it is archived (see
   "Branches" in `git-adapter.md`, and "Archive a work").
 - The works that are approved, from the merged pull requests of the branches
-  `works/*`, whatever branch they were merged on. A work is read from the branch
-  on which its pull request was merged (see ADR 15).
+  `{prefix}-work/*` (see ADR 18), whatever branch they were merged on. A work is
+  read from the branch on which its pull request was merged (see ADR 15).
 
 A work that is approved is kept for good, in git. On another machine, the list
 shows only the works that reached the remote, so a work that is running is not

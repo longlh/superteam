@@ -2,6 +2,11 @@ import { existsSync } from "node:fs";
 import { readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { createEngineLoop } from "../lib/engineloop/index.js";
+import {
+  CONFIG_FILE,
+  createBranchNames,
+  parseConfig,
+} from "../lib/storage/branches.js";
 import { readJson, writeJson } from "../lib/storage/files.js";
 import { isSlug, newWorkId, parseJobId } from "../lib/storage/ids.js";
 import {
@@ -52,8 +57,6 @@ async function listNames(dir, keep) {
     .map((entry) => entry.name)
     .sort();
 }
-
-const branchOf = (id) => `works/${id}`;
 
 // A file read from git, or null when it is missing or is not valid JSON: a
 // corrupt file counts as not found on that source.
@@ -143,6 +146,8 @@ export function createEngine({
     loadWorkflow: workflowLoader(git),
     publish: pubsub.publish,
     now: () => new Date(),
+    // Set again from the config of the project when the engine starts.
+    branches: createBranchNames(),
   };
   for (const [type, handler] of Object.entries(createEngineHandlers(deps))) {
     loop.handle(type, handler);
@@ -258,8 +263,9 @@ export function createEngine({
     finishing.add(id);
     try {
       const left =
-        (await remote.listBranches(`tasks/${id}/`)).length > 0 ||
-        (pr.state === "merged" && (await remote.branchExists(branchOf(id))));
+        (await remote.listBranches(deps.branches.tasksOf(id))).length > 0 ||
+        (pr.state === "merged" &&
+          (await remote.branchExists(deps.branches.work(id))));
       if (!left) {
         finishing.delete(id);
         return;
@@ -291,7 +297,7 @@ export function createEngine({
       };
     }
     const text = await remote.readFileOnBranch(
-      branchOf(id),
+      deps.branches.work(id),
       path.relative(baseDir, workFile(baseDir, id)),
     );
     const onBranch = parseJson(text);
@@ -302,7 +308,7 @@ export function createEngine({
         root: false,
       };
     }
-    const pr = await remote.getPullRequest(branchOf(id));
+    const pr = await remote.getPullRequest(deps.branches.work(id));
     if (pr?.state === "merged") {
       const file = path.relative(baseDir, workFile(baseDir, id));
       const upstream = await remote.rootUpstream();
@@ -353,7 +359,9 @@ export function createEngine({
       return requested;
     }
     const { work, tasks, root } = found;
-    const pr = root ? found.pr : await remote.getPullRequest(branchOf(id));
+    const pr = root
+      ? found.pr
+      : await remote.getPullRequest(deps.branches.work(id));
     await finishDecision(id, pr);
     return {
       id,
@@ -420,8 +428,8 @@ export function createEngine({
 
   async function isUsed(id) {
     return (
-      (await remote.branchExists(branchOf(id))) ||
-      (await remote.getPullRequest(branchOf(id))) !== null
+      (await remote.branchExists(deps.branches.work(id))) ||
+      (await remote.getPullRequest(deps.branches.work(id))) !== null
     );
   }
 
@@ -538,7 +546,7 @@ export function createEngine({
       if (
         tasks.length > 0 &&
         tasks.every((t) => taskStatus(t, tasks) === "DONE") &&
-        (await git.getPullRequest(branchOf(workId))) === null
+        (await git.getPullRequest(deps.branches.work(workId))) === null
       ) {
         jobs.push(
           buildJob({
@@ -546,6 +554,7 @@ export function createEngine({
             work,
             tasks,
             workdir: folder,
+            branches: deps.branches,
           }),
         );
       }
@@ -570,13 +579,16 @@ export function createEngine({
     // The decisions made on GitHub while superteam did not run.
     const ids = new Set(
       [
-        ...(await git.listBranches("works/")),
-        ...(await git.listBranches("tasks/")),
-      ].map((branch) => branch.split("/")[1]),
+        ...(await git.listBranches(deps.branches.works)),
+        ...(await git.listBranches(deps.branches.tasks)),
+      ].map((branch) => deps.branches.workIdOf(branch)),
     );
     for (const id of ids) {
       if (isSlug(id)) {
-        await finishDecision(id, await git.getPullRequest(branchOf(id)));
+        await finishDecision(
+          id,
+          await git.getPullRequest(deps.branches.work(id)),
+        );
       }
     }
   }
@@ -742,11 +754,11 @@ export function createEngine({
       const ids = [
         ...[...pending].filter(([, data]) => data !== null).map(([id]) => id),
         ...(await listNames(worksFolder, (entry) => entry.isDirectory())),
-        ...(await remote.listBranches("works/")).map((branch) =>
-          branch.slice("works/".length),
+        ...(await remote.listBranches(deps.branches.works)).map((branch) =>
+          deps.branches.workIdOf(branch),
         ),
-        ...(await remote.listMergedPullRequests("works/")).map(({ branch }) =>
-          branch.slice("works/".length),
+        ...(await remote.listMergedPullRequests(deps.branches.works)).map(
+          ({ branch }) => deps.branches.workIdOf(branch),
         ),
       ];
       const works = [];
@@ -773,8 +785,18 @@ export function createEngine({
     },
 
     subscribe: pubsub.subscribe,
+    // The prefix of the branches is read once, from the upstream of the root
+    // branch, before the loop starts (see ADR 18).
     async start() {
       await git.ensureExcluded(".superteam/.r/");
+      const upstream = await git.rootUpstream();
+      deps.branches = createBranchNames(
+        parseConfig(
+          upstream === null
+            ? null
+            : await git.readFileOnRemote(upstream, CONFIG_FILE),
+        ),
+      );
       return loop.start();
     },
     shutdown: () => loop.shutdown(),

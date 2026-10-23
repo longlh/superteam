@@ -35,8 +35,8 @@ of the root workspace while a work ran changed the branch of that work.
   assigned, and an approved work from the branch on which its pull request was
   merged, or from the upstream of the root branch when that branch no longer has
   it.
-- The approved works are listed from the merged pull requests of the branches
-  `works/*`, not from a folder of the root branch.
+- The approved works are listed from the merged pull requests of the branches of
+  the works, not from a folder of the root branch.
 
 ## Consequences
 
