@@ -576,6 +576,40 @@ describe("gh parts (fake run)", () => {
       ],
     );
   });
+
+  test("commentPullRequest runs gh pr comment, and listPullRequestComments reads the bodies", async () => {
+    const { calls, run } = fakeRun((command, args) => ({
+      stdout:
+        args[1] === "view"
+          ? JSON.stringify({
+              comments: [
+                {
+                  body: "A",
+                },
+                {
+                  body: "B",
+                },
+              ],
+            })
+          : "",
+    }));
+    const adapter = createGitAdapter({
+      baseDir: "/base",
+      run,
+    });
+    await adapter.commentPullRequest("works/a", "Why");
+    assert.deepEqual(await adapter.listPullRequestComments("works/a"), [
+      "A",
+      "B",
+    ]);
+    assert.deepEqual(
+      ghCalls(calls).map((c) => [c.command, ...c.args]),
+      [
+        ["gh", "pr", "comment", "works/a", "--body", "Why"],
+        ["gh", "pr", "view", "works/a", "--json", "comments"],
+      ],
+    );
+  });
 });
 
 describe("real git failures propagate", () => {

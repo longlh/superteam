@@ -382,5 +382,14 @@ export function createGitAdapter({ baseDir, run = defaultRun }) {
     async closePullRequest(branch) {
       await gh(["pr", "close", branch]);
     },
+
+    async commentPullRequest(branch, body) {
+      await gh(["pr", "comment", branch, "--body", body]);
+    },
+
+    async listPullRequestComments(branch) {
+      const { stdout } = await gh(["pr", "view", branch, "--json", "comments"]);
+      return JSON.parse(stdout).comments.map((comment) => comment.body);
+    },
   };
 }
