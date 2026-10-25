@@ -313,6 +313,46 @@ test("a task that depends on a group through another task has its limitations", 
   );
 });
 
+test("a task of a group after another group has the limitations of the other group only", () => {
+  const lint = gate("check-lint-1", 1, {
+    dependOn: ["build-verify-1"],
+    group: "check",
+  });
+  const task = {
+    id: "check-fix-1",
+    dependOn: ["check-lint-1"],
+    completed: true,
+    group: "check",
+    round: 1,
+  };
+  const prompt = buildPrompt({
+    kind: "worker",
+    work,
+    task,
+    tasks: [...oneRound, lint, task],
+  });
+  assert.match(prompt, /\n- build stopped after 1 round/);
+  assert.doesNotMatch(prompt, /check stopped/);
+});
+
+test("a task that depends on a group through two paths has its limitations once", () => {
+  const docs = {
+    id: "docs",
+    dependOn: ["build-verify-1"],
+  };
+  const deploy = {
+    id: "deploy",
+    dependOn: ["release-note", "docs"],
+  };
+  const prompt = buildPrompt({
+    kind: "worker",
+    work,
+    task: deploy,
+    tasks: [...oneRound, releaseNote, docs, deploy],
+  });
+  assert.equal(prompt.match(/the gate build-test-1 did not pass/g)?.length, 1);
+});
+
 test("the work merger prompt has the limitations", () => {
   const prompt = buildPrompt({
     kind: "work-merger",

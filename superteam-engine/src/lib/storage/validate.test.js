@@ -512,7 +512,7 @@ describe("validateWorkflow with a loop group", () => {
   });
 
   test("refuses a group named as a task of another group", () => {
-    const one = (name, inner, more = {}) =>
+    const one = (name, inner) =>
       group(
         {
           name,
@@ -525,7 +525,6 @@ describe("validateWorkflow with a loop group", () => {
               gate: true,
               dod: ["x"],
             }),
-            ...(more.steps ?? []),
           ],
         },
       );

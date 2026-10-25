@@ -160,6 +160,8 @@ A step of a workflow can be a loop group (see ADR 19):
   A gate outside a group, and a group inside a group, are refused.
 - The name of a step of a group is unique in the whole workflow. A step outside
   the group names the group in its `dependOn`, never a step inside it.
+- A task id `{group}-{step}-{round}` must not be the name of another step or
+  group, or the id of another task.
 - When the work is assigned, the group is unrolled into the tasks
   `{group}-{step}-{round}`. The first task of round 1 depends on the `dependOn`
   of the group, the first task of round `n > 1` on the last task of round
