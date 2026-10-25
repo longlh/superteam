@@ -109,9 +109,10 @@ The approver reviews the work in its pull request, then sends the decision.
 
 Body:
 
-| Field      | Type   | Description            |
-| ---------- | ------ | ---------------------- |
-| `decision` | string | `approve` or `reject`. |
+| Field      | Type   | Description                                                                                   |
+| ---------- | ------ | --------------------------------------------------------------------------------------------- |
+| `decision` | string | `approve` or `reject`.                                                                        |
+| `reason`   | string | Optional. Why the approver decides so. The engine writes it as a comment on the pull request. |
 
 Answer `202 Accepted` with the `eventId` of the event `work:decide`.
 
@@ -132,6 +133,13 @@ the next start (see ADR 17).
 
 The decision itself is not stored (see "Decide a work" in `action-flow.md`): the
 result is in the pull request, and the git history keeps it.
+
+The reason, when it is given, is written as a comment on the pull request,
+before the merge or the close, so it stays with the work on GitHub. The engine
+trims it, and a reason made only of spaces is no reason. It writes the comment
+only while the pull request is open, and not when the pull request already has a
+comment with the same text, so a repeated event writes it once. A decision made
+on GitHub has no reason from the engine: the approver can comment there.
 
 #### Archive a work
 

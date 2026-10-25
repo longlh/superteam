@@ -140,13 +140,15 @@ Passes through: the orchestrator with the HTTP API, the engine functions, the
 engine loop, the handlers, and the git adapter.
 
 1. **Decide.** The approver reviews the work in the pull request, and sends the
-   decision to the API: approved or rejected. The decision is not stored: the
-   merge of the pull request into the `base` of the work is the approval, and
-   the git history keeps it. So the work and the engine stay clean, and
-   approving is one atomic action, with nothing else to update. If the work is
-   rejected, the engine closes the pull request, and deletes the branches of the
-   tasks of the work. The branch of the work is kept on the remote, as the trace
-   of the work. A rejected work is final: to try again, a new work is assigned.
+   decision to the API: approved or rejected, with a reason if they want. The
+   engine writes the reason as a comment on the pull request, before it merges
+   or closes it. The decision is not stored: the merge of the pull request into
+   the `base` of the work is the approval, and the git history keeps it. So the
+   work and the engine stay clean, and approving is one atomic action, with
+   nothing else to update. If the work is rejected, the engine closes the pull
+   request, and deletes the branches of the tasks of the work. The branch of the
+   work is kept on the remote, as the trace of the work. A rejected work is
+   final: to try again, a new work is assigned.
 2. **Merge.** When the work is approved, the engine merges the pull request into
    the `base` of the work, as a squash merge. This merge is the approval. When
    GitHub refuses the merge, the work stays `PROPOSED` with the error, and it
@@ -170,6 +172,9 @@ Orch -> Fn : decide
 Fn -> EL : enqueue work:decide
 Orch --> Approver : 202 Accepted
 EL -> Handler : give work:decide
+opt a reason is given
+  Handler -> Git : comment the reason on the pull request
+end
 alt approved
   Handler -> Git : merge pull request
   Handler -> Git : delete branches

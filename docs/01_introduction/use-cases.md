@@ -47,7 +47,8 @@ Each use case is realized by one or more scenarios of
   4. When all the tasks are done, the system proposes the work as a pull
      request, and its status is `PROPOSED`.
   5. The approver reviews the work in the pull request, and decides to approve
-     it.
+     it, with a reason if they want. The system writes the reason as a comment
+     on the pull request.
   6. The system merges the pull request, and the result is in the root branch.
 - **Extensions:**
   - The body of the request is not valid: the system refuses it.

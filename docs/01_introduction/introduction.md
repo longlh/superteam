@@ -29,6 +29,8 @@ and each one points to the document where its design is.
 4. **Decide on a work.** The approver approves or rejects a work that is
    proposed. The merge of the pull request into the root branch is the approval,
    and the decision itself is not stored (see `0001-approval-is-the-merge.md`).
+   The approver can give a reason, which is written as a comment on the pull
+   request.
 5. **A failed or a rejected work is final.** A task is not run again. When a
    task fails, the whole work fails, and the other jobs of the work are stopped.
    To try again, a new work is assigned (see

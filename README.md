@@ -117,7 +117,8 @@ When all the tasks are done, the engine opens a pull request with the result,
 and the work is `PROPOSED`. Review the pull request on GitHub, then:
 
 - merge it with a squash merge to approve, or close it to reject; or
-- run `/superteam:decide <id>` and answer approve or reject.
+- run `/superteam:decide <id>` and answer approve or reject, with a reason if
+  you want one. The engine writes the reason as a comment on the pull request.
 
 A work that is final and was not approved can be archived with the MCP tool
 `archive_work`.
@@ -202,8 +203,8 @@ The result of a job is its output, made of:
 The output of a work is all the artifacts and all the DOD checklists of the
 tasks in it.
 
-The approval flow adds one more artifact to the work: the reason for the
-decision of the approver (see "Approval result").
+The approval flow can add the reason for the decision of the approver, as a
+comment on the pull request (see "Approval result").
 
 ### Approval flow
 
@@ -230,6 +231,8 @@ A work has an `approval_status`, separate from its status:
 
 #### Approval result
 
-The result of the approval flow is the decision (`APPROVED` or `REJECTED`) and
-an **artifact** that records the reason for the decision. The approver creates
-this artifact for the work, together with the decision.
+The result of the approval flow is the decision, `APPROVED` or `REJECTED`. The
+decision is not stored: it is the state of the pull request, merged or closed.
+The approver can give a **reason** together with the decision, and the engine
+writes it as a comment on the pull request. A merge or a close on GitHub has no
+reason from the engine: the approver can comment there.

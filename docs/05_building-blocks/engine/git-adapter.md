@@ -7,12 +7,12 @@ The way the engine reaches git and the forge.
 The engine does not keep a store for the results or for the approvals. Git is
 the platform, and each part of it has a job:
 
-| Git                       | Job                                                        |
-| ------------------------- | ---------------------------------------------------------- |
-| Worktree                  | An environment of its own for each job.                    |
-| Remote branch             | Where the results are kept.                                |
-| Pull request              | The way a work is approved: the approver reviews it there. |
-| Merge of the pull request | The way a result is recorded, as a squash merge.           |
+| Git                       | Job                                                                                                         |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Worktree                  | An environment of its own for each job.                                                                     |
+| Remote branch             | Where the results are kept.                                                                                 |
+| Pull request              | The way a work is approved: the approver reviews it there, and the reason of a decision is a comment on it. |
+| Merge of the pull request | The way a result is recorded, as a squash merge.                                                            |
 
 The engine reaches git and the forge through a git adapter, so that another
 forge can be added later. For now only GitHub is supported, and the adapter
@@ -49,6 +49,10 @@ it is the only trace of the work. It is deleted when the work is archived (see
 The pull request of a work is opened on the `base` of the work, the upstream
 branch that the work is based on (`gh pr create --base <base>`). Without
 `--base`, `gh` would open it on the default branch of the repository.
+
+The reason of a decision is written with `gh pr comment`, and the comments of a
+pull request are read with `gh pr view --json comments`, so that a reason is not
+written twice.
 
 The engine reads what is committed with git, and never from the files of the
 root workspace: the workflow from the upstream of the root branch, and an

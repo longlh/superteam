@@ -215,7 +215,9 @@ work.
 
 The approval status of a work is derived from its pull request only. The
 decision of the approver is not stored: the merge of the pull request into the
-root branch is the approval, and the git history keeps it.
+root branch is the approval, and the git history keeps it. The reason of the
+decision, when the approver gives one, is a comment on the pull request (see
+"Decide a work" in `orchestrator.md`).
 
 | Approval status | Formula                                                    |
 | --------------- | ---------------------------------------------------------- |
