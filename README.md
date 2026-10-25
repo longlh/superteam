@@ -27,6 +27,18 @@ Build an **engine** that replaces the team lead. The engine:
   enough input, so the tasks run in the right order;
 - tracks the work and summarizes its results.
 
+## Requirements
+
+- Node.js 22 or later.
+- The `claude` command, signed in with the account that pays for the runs.
+- The `gh` command, signed in with `gh auth login` with an account that can
+  write to the repository. Run `gh auth setup-git`, so that git pushes with the
+  same account.
+- A git repository whose remote on GitHub is named `origin`, whose root branch
+  tracks a branch on `origin`, and that allows the squash merge.
+
+See `docs/07_deployment/deployment.md` for the details.
+
 ## Install and update
 
 Install the plugin in Claude Code, from its marketplace on GitHub:
@@ -35,8 +47,7 @@ Install the plugin in Claude Code, from its marketplace on GitHub:
 /plugin install superteam --marketplace longlh/superteam
 ```
 
-Then set up a project with `/superteam:def-role` and `/superteam:def-process`,
-and start superteam with `/superteam:start`.
+Then use it in a project as "Usage" says.
 
 To update the plugin:
 
@@ -47,6 +58,69 @@ To update the plugin:
 3. Restart the session of Claude Code, so that it loads the new skills and the
    new MCP server.
 4. Run `/superteam:start` again, so that superteam runs the new code.
+
+## Usage
+
+Run these in Claude Code, at the root of the project.
+
+### 1. Set up the project
+
+1. `/superteam:def-role`: Claude reads the project and proposes the roles of the
+   team, the agent files in `.claude/agents/`. Agree, or ask for changes.
+2. `/superteam:def-process`: Claude proposes the workflows, in
+   `.superteam/.p/workflows/`: the steps, their order, and the role of each
+   step. A step can be a loop group, whose steps repeat until a gate passes (see
+   ADR 19).
+3. Commit and push the setup on the root branch: `.gitignore`, `.claude/agents/`
+   and `.superteam/.p/workflows/`. The skills offer to do it. The agents work in
+   worktrees made from the upstream of the root branch, so a role or a workflow
+   that is not pushed is not there for them.
+
+Settings, all optional except the port:
+
+- `.superteam/.env`, not kept in git:
+  - `SUPERTEAM_PORT`: the port of the local API. The setup skills write it.
+  - `SUPERTEAM_MAX_BUDGET_USD`: the limit of the cost of one run.
+- `.superteam/.p/config.json`, committed and pushed: `{ "branchPrefix": "..." }`
+  sets the prefix of the branches of superteam, `superteam` by default (see ADR
+  18).
+
+### 2. Start and stop
+
+- `/superteam:start` starts superteam in the background. It prints the pid, the
+  port and the path of the log, `.superteam/.r/superteam.log`.
+- `/superteam:stop` stops it.
+
+### 3. Assign a work
+
+Ask Claude in plain words, for example:
+
+```
+Assign a work with the workflow feature: "Add a dark mode"
+```
+
+Claude calls the MCP tool `assign_work` with the workflow and the title, and
+optionally an id, a description and a DOD. The engine breaks the work into
+tasks, and runs each task with an agent of its role when its turn comes, on a
+branch of its own.
+
+### 4. Follow a work
+
+- `/superteam:works` lists the works, with their status and their pull request.
+- `/superteam:work <id>` shows one work: its status, its pull request, its
+  limitations, and its error when it has one. When a step of the engine failed
+  and can be retried, Claude can retry it with `retry_work` once you agree.
+
+### 5. Approve or reject
+
+When all the tasks are done, the engine opens a pull request with the result,
+and the work is `PROPOSED`. Review the pull request on GitHub, then:
+
+- merge it with a squash merge to approve, or close it to reject; or
+- run `/superteam:decide <id>` and answer approve or reject.
+
+A work that is final and was not approved can be archived with the MCP tool
+`archive_work`.
 
 ## Appendix
 
