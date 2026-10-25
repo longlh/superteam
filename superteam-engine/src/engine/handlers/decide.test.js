@@ -109,6 +109,59 @@ test("reject of an already closed work only deletes the task branches", async ()
   assert.equal(h.named("deleteBranch").length, 2);
 });
 
+test("approve with a reason comments it, then merges", async () => {
+  open();
+  await decide({
+    id: "w1",
+    decision: "approve",
+    reason: "Good",
+  });
+  assert.deepEqual(h.calls.slice(0, 2), [
+    ["commentPullRequest", "superteam-work/w1", "Good"],
+    ["mergePullRequest", "superteam-work/w1"],
+  ]);
+});
+
+test("reject with a reason comments it, then closes", async () => {
+  open();
+  await decide({
+    id: "w1",
+    decision: "reject",
+    reason: "Too short",
+  });
+  assert.deepEqual(h.calls.slice(0, 2), [
+    ["commentPullRequest", "superteam-work/w1", "Too short"],
+    ["closePullRequest", "superteam-work/w1"],
+  ]);
+});
+
+test("a reason already commented is not commented again", async () => {
+  open();
+  h.pullRequests.get("superteam-work/w1").comments = ["Too short"];
+  await decide({
+    id: "w1",
+    decision: "reject",
+    reason: "Too short",
+  });
+  assert.equal(h.named("commentPullRequest").length, 0);
+  assert.equal(h.named("closePullRequest").length, 1);
+});
+
+test("a reason is not commented when the pull request is already merged or closed", async () => {
+  for (const [state, decision] of [
+    ["merged", "approve"],
+    ["closed", "reject"],
+  ]) {
+    open(state);
+    await decide({
+      id: "w1",
+      decision,
+      reason: "Why",
+    });
+  }
+  assert.equal(h.named("commentPullRequest").length, 0);
+});
+
 test("reject of a work with no open or closed pull request throws", async () => {
   for (const state of [undefined, "merged"]) {
     if (state) {

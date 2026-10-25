@@ -115,6 +115,14 @@ export async function createHarness(workflows) {
       calls.push(["closePullRequest", branch]);
       pullRequests.get(branch).state = "closed";
     },
+    async commentPullRequest(branch, body) {
+      calls.push(["commentPullRequest", branch, body]);
+      const pullRequest = pullRequests.get(branch);
+      pullRequest.comments = [...(pullRequest.comments ?? []), body];
+    },
+    async listPullRequestComments(branch) {
+      return pullRequests.get(branch)?.comments ?? [];
+    },
     async branchExists(branch) {
       return branches.has(branch);
     },

@@ -14,10 +14,19 @@ async function deleteTaskBranches(deps, id) {
   }
 }
 
+// The reason is written before the merge or the close, so it is there with the
+// decision. A repeated event finds it and does not write it again.
+async function commentReason(deps, branch, reason) {
+  const { git } = deps;
+  if (!(await git.listPullRequestComments(branch)).includes(reason)) {
+    await git.commentPullRequest(branch, reason);
+  }
+}
+
 // Approve is the merge of the pull request. Every step reads the state first,
 // so a repeated event finishes the cleanup of a crash and changes nothing else.
 export async function decide(deps, event) {
-  const { id, decision } = event.payload.data;
+  const { id, decision, reason } = event.payload.data;
   if (!isSlug(id) || (decision !== "approve" && decision !== "reject")) {
     throw refuse(`Invalid decision of the work: ${id} ${decision}`);
   }
@@ -30,6 +39,9 @@ export async function decide(deps, event) {
       throw refuse(`The work ${id} has no pull request to approve`);
     }
     if (state === "open") {
+      if (reason) {
+        await commentReason(deps, branch, reason);
+      }
       await git.mergePullRequest(branch);
     }
     if (await git.branchExists(branch)) {
@@ -46,6 +58,9 @@ export async function decide(deps, event) {
     throw refuse(`The work ${id} has no pull request to reject`);
   }
   if (state === "open") {
+    if (reason) {
+      await commentReason(deps, branch, reason);
+    }
     await git.closePullRequest(branch);
   }
   await deleteTaskBranches(deps, id);
