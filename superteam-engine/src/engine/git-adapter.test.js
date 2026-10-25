@@ -610,6 +610,19 @@ describe("gh parts (fake run)", () => {
       ],
     );
   });
+
+  test("listPullRequestComments returns an empty list for a pull request with no comments", async () => {
+    const { run } = fakeRun(() => ({
+      stdout: JSON.stringify({
+        comments: [],
+      }),
+    }));
+    const adapter = createGitAdapter({
+      baseDir: "/base",
+      run,
+    });
+    assert.deepEqual(await adapter.listPullRequestComments("works/a"), []);
+  });
 });
 
 describe("real git failures propagate", () => {
