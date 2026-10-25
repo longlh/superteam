@@ -126,7 +126,11 @@ async function handle(engine, req, res) {
   if (decision !== "approve" && decision !== "reject") {
     throw new HttpError(400, "decision must be approve or reject");
   }
-  return reply(res, 202, await engine.decide(id, decision));
+  const { reason } = body;
+  if (reason !== undefined && typeof reason !== "string") {
+    throw new HttpError(400, "reason must be a string");
+  }
+  return reply(res, 202, await engine.decide(id, decision, reason));
 }
 
 function decodeId(raw) {

@@ -75,6 +75,25 @@ test("decide_work sends POST /works/{id}/decision with the decision", async () =
   ]);
 });
 
+test("decide_work sends the reason when it is given", async () => {
+  const { calls, byName } = setup();
+  await byName.decide_work.handler({
+    id: "w",
+    decision: "reject",
+    reason: "Too short",
+  });
+  assert.deepEqual(calls, [
+    [
+      "POST",
+      "/works/w/decision",
+      {
+        decision: "reject",
+        reason: "Too short",
+      },
+    ],
+  ]);
+});
+
 test("archive_work sends POST /works/{id}/archive", async () => {
   const { calls, byName } = setup();
   await byName.archive_work.handler({

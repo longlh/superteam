@@ -156,9 +156,45 @@ describe("http api", () => {
     assert.deepEqual(engine.calls, [
       {
         name: "decide",
-        args: ["w1", "approve"],
+        args: ["w1", "approve", undefined],
       },
     ]);
+  });
+
+  test("POST decision passes the reason to decide", async () => {
+    const res = await send(
+      port,
+      "POST",
+      "/works/w1/decision",
+      JSON.stringify({
+        decision: "reject",
+        reason: "Too short",
+      }),
+    );
+    assert.equal(res.status, 202);
+    assert.deepEqual(engine.calls, [
+      {
+        name: "decide",
+        args: ["w1", "reject", "Too short"],
+      },
+    ]);
+  });
+
+  test("a reason that is not a string is 400", async () => {
+    for (const reason of [1, null, ["a"], {}]) {
+      const res = await send(
+        port,
+        "POST",
+        "/works/w1/decision",
+        JSON.stringify({
+          decision: "reject",
+          reason,
+        }),
+      );
+      assert.equal(res.status, 400);
+      assert.equal(typeof res.body.error, "string");
+    }
+    assert.deepEqual(engine.calls, []);
   });
 
   test("a decision that is not approve or reject is 400", async () => {

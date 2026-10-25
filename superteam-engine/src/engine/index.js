@@ -680,9 +680,13 @@ export function createEngine({
       }
     },
 
-    async decide(id, decision) {
+    async decide(id, decision, reason) {
       ensureReady();
-      if (!isSlug(id) || (decision !== "approve" && decision !== "reject")) {
+      if (
+        !isSlug(id) ||
+        (decision !== "approve" && decision !== "reject") ||
+        (reason !== undefined && typeof reason !== "string")
+      ) {
         throw new EngineError(
           "invalid",
           `invalid decision ${decision} of ${id}`,
@@ -692,10 +696,17 @@ export function createEngine({
       if (state.approvalStatus !== "PROPOSED") {
         throw new EngineError("conflict", `the work ${id} is not PROPOSED`);
       }
+      // A reason made only of spaces is no reason, so it is left out.
+      const text = reason?.trim();
       return {
         eventId: await enqueue("work:decide", {
           id,
           decision,
+          ...(text
+            ? {
+                reason: text,
+              }
+            : {}),
         }),
       };
     },

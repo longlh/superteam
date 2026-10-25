@@ -560,6 +560,7 @@ test("decide refuses an invalid id or decision, and an unknown work", async () =
   await start();
   await assert.rejects(engine.decide("../x", "approve"), code("invalid"));
   await assert.rejects(engine.decide("w1", "maybe"), code("invalid"));
+  await assert.rejects(engine.decide("w1", "approve", 1), code("invalid"));
   await assert.rejects(engine.decide("w1", "approve"), code("not-found"));
 });
 
@@ -581,6 +582,27 @@ test("decide enqueues work:decide for a work whose pull request is open", async 
   await waitFor(() => done("work:decide").length === 1, "work:decide");
   assert.deepEqual(done("work:decide")[0].data, {
     id: "w1",
+    decision: "reject",
+  });
+});
+
+test("decide puts the trimmed reason in work:decide, and leaves out an empty one", async () => {
+  await start();
+  onBranch(work("w1"));
+  pullRequest("w1", "open");
+  await engine.decide("w1", "reject", "  Too short \n");
+  await waitFor(() => done("work:decide").length === 1, "work:decide");
+  assert.deepEqual(done("work:decide")[0].data, {
+    id: "w1",
+    decision: "reject",
+    reason: "Too short",
+  });
+  onBranch(work("w2"));
+  pullRequest("w2", "open");
+  await engine.decide("w2", "reject", "   ");
+  await waitFor(() => done("work:decide").length === 2, "work:decide");
+  assert.deepEqual(done("work:decide")[1].data, {
+    id: "w2",
     decision: "reject",
   });
 });

@@ -35,11 +35,15 @@ export function createTools({ request }) {
       inputSchema: {
         id,
         decision: z.enum(["approve", "reject"]).describe("approve or reject."),
+        reason: z
+          .string()
+          .optional()
+          .describe(
+            "Why the approver decides so. Optional: the engine writes it as a comment on the pull request.",
+          ),
       },
-      handler: ({ id: workId, decision }) =>
-        request("POST", path(workId, "/decision"), {
-          decision,
-        }),
+      handler: ({ id: workId, ...body }) =>
+        request("POST", path(workId, "/decision"), body),
     },
     {
       name: "archive_work",
