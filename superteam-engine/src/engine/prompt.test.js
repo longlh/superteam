@@ -204,6 +204,42 @@ const releaseNote = {
   dependOn: ["build-verify-1"],
 };
 
+test("the first task of a group has no issues", () => {
+  const task = {
+    id: "build-test-1",
+    dependOn: ["spec"],
+    gate: true,
+    group: "build",
+    round: 1,
+  };
+  const prompt = buildPrompt({
+    kind: "worker",
+    work,
+    task,
+    tasks: [task],
+  });
+  assert.doesNotMatch(prompt, /Issues of the gates/);
+});
+
+test("a task after a gate of its round has the issues of that gate", () => {
+  const task = {
+    id: "build-fixbug-1",
+    dependOn: ["build-test-1"],
+    group: "build",
+    round: 1,
+  };
+  const prompt = buildPrompt({
+    kind: "worker",
+    work,
+    task,
+    tasks: [oneRound[0], task],
+  });
+  assert.match(
+    prompt,
+    /\nIssues of the gates before:\n- build-test-1: not met: no test fails\n {2}Summary: 2 tests fail in build-test-1\n/,
+  );
+});
+
 test("the first task of a round has the issues of the gates of the round before", () => {
   const task = {
     id: "build-test-2",
@@ -220,11 +256,11 @@ test("the first task of a round has the issues of the gates of the round before"
   });
   assert.match(
     prompt,
-    /\nIssues of the gates of the round before:\n- build-test-1: not met: no test fails\n {2}Summary: 2 tests fail in build-test-1\n- build-verify-1: not met: no test fails\n {2}Summary: 2 tests fail in build-verify-1\n/,
+    /\nIssues of the gates before:\n- build-test-1: not met: no test fails\n {2}Summary: 2 tests fail in build-test-1\n- build-verify-1: not met: no test fails\n {2}Summary: 2 tests fail in build-verify-1\n/,
   );
 });
 
-test("a task of a round that is not its first has no issues", () => {
+test("a task has the issues of the last task of each gate before it", () => {
   const first = gate("build-test-2", 2, {
     dependOn: ["build-verify-1"],
   });
@@ -240,7 +276,11 @@ test("a task of a round that is not its first has no issues", () => {
     task,
     tasks: [...oneRound, first, task],
   });
-  assert.doesNotMatch(prompt, /Issues of the gates/);
+  assert.match(
+    prompt,
+    /\nIssues of the gates before:\n- build-verify-1: not met: no test fails\n {2}Summary: 2 tests fail in build-verify-1\n- build-test-2: not met: no test fails\n {2}Summary: 2 tests fail in build-test-2\n/,
+  );
+  assert.doesNotMatch(prompt, /- build-test-1: not met/);
 });
 
 test("a task that depends on a group has its limitations", () => {
@@ -253,6 +293,23 @@ test("a task that depends on a group has its limitations", () => {
   assert.match(
     prompt,
     /\nLimitations:\n- build stopped after 1 round; the gate build-test-1 did not pass: no test fails\n {2}Summary: 2 tests fail in build-test-1\n- build stopped after 1 round; the gate build-verify-1 did not pass: no test fails\n {2}Summary: 2 tests fail in build-verify-1\n/,
+  );
+});
+
+test("a task that depends on a group through another task has its limitations", () => {
+  const deploy = {
+    id: "deploy",
+    dependOn: ["release-note"],
+  };
+  const prompt = buildPrompt({
+    kind: "worker",
+    work,
+    task: deploy,
+    tasks: [...oneRound, releaseNote, deploy],
+  });
+  assert.match(
+    prompt,
+    /\nLimitations:\n- build stopped after 1 round; the gate build-test-1 did not pass/,
   );
 });
 

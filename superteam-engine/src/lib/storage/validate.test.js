@@ -511,6 +511,66 @@ describe("validateWorkflow with a loop group", () => {
     );
   });
 
+  test("refuses a group named as a task of another group", () => {
+    const one = (name, inner, more = {}) =>
+      group(
+        {
+          name,
+          dependOn: [],
+        },
+        {
+          maxRounds: 1,
+          steps: [
+            step(inner, {
+              gate: true,
+              dod: ["x"],
+            }),
+            ...(more.steps ?? []),
+          ],
+        },
+      );
+    refuses(
+      {
+        name: "feature",
+        title: "Feature",
+        steps: [one("x-test-1", "a"), one("x", "test")],
+      },
+      "duplicate task id x-test-1",
+    );
+  });
+
+  test("refuses a gate that is not a boolean", () => {
+    const [testStep, ...rest] = loopSteps();
+    refuses(
+      flow(
+        group(
+          {},
+          {
+            steps: [
+              {
+                ...testStep,
+                gate: "true",
+              },
+              ...rest,
+            ],
+          },
+        ),
+      ),
+      "step test: gate must be a boolean",
+    );
+  });
+
+  test("refuses a group description that is not a string", () => {
+    refuses(
+      flow(
+        group({
+          description: 1,
+        }),
+      ),
+      "step build: description must be a string",
+    );
+  });
+
   test("refuses a gate on a loop group", () => {
     refuses(
       flow(

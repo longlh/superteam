@@ -50,6 +50,9 @@ function validateStep(step, inLoop = false) {
   if (!inLoop && step.gate !== undefined) {
     return `${at}: gate is only for a step of a loop`;
   }
+  if (step.gate !== undefined && typeof step.gate !== "boolean") {
+    return `${at}: gate must be a boolean`;
+  }
   if (step.gate === true && !(step.dod?.length > 0)) {
     return `${at}: a gate has a non-empty dod`;
   }
@@ -112,6 +115,12 @@ function validateLoop(group) {
   }
   if (group.gate !== undefined) {
     return `${at}: gate is only for a step of a loop`;
+  }
+  if (
+    group.description !== undefined &&
+    typeof group.description !== "string"
+  ) {
+    return `${at}: description must be a string`;
   }
   if (["role", "instruction", "dod", "timeout"].some((f) => f in group)) {
     return `${at}: a loop group has no role, instruction, dod or timeout`;
@@ -217,10 +226,10 @@ export function validateWorkflow(workflow) {
     }
   }
   // A group makes the tasks {group}-{step}-{round}, which must not take the id
-  // of another task.
+  // of another task, or the name of another group.
   const ids = new Set();
   for (const { name, loop } of workflow.steps) {
-    const own = [];
+    const own = loop === undefined ? [] : [name];
     for (let round = 1; round <= (loop?.maxRounds ?? 0); round += 1) {
       own.push(...loop.steps.map((inner) => `${name}-${inner.name}-${round}`));
     }

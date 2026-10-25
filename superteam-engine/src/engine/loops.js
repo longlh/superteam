@@ -101,24 +101,52 @@ export function ranId(id, tasks = []) {
   return ranTask(id, tasks)?.id ?? id;
 }
 
-// The issues of a round: each gate of the round that ended and did not pass,
-// with the items of its DOD that are false and the summary of its worker.
+// The issue of a gate that ended and did not pass: the items of its DOD that
+// are false, and the summary of its worker.
+function issueOf(t) {
+  if (t.gate !== true || t.completed !== true || t.skipped || gatePassed(t)) {
+    return null;
+  }
+  return {
+    gate: t.id,
+    failed: (t.dod ?? []).filter((_, i) => t.dodChecklist?.[i] !== true),
+    summary: t.summary ?? "",
+  };
+}
+
+// The issues of a round: one for each gate of the round that ended and did
+// not pass.
 export function roundIssues(group, round, tasks) {
   return tasks
-    .filter(
-      (t) =>
-        t.group === group &&
-        t.round === round &&
-        t.gate === true &&
-        t.completed === true &&
-        !t.skipped &&
-        !gatePassed(t),
-    )
-    .map((t) => ({
-      gate: t.id,
-      failed: (t.dod ?? []).filter((_, i) => t.dodChecklist?.[i] !== true),
-      summary: t.summary ?? "",
-    }));
+    .filter((t) => t.group === group && t.round === round)
+    .map(issueOf)
+    .filter((issue) => issue !== null);
+}
+
+// The issues of the gates before a task in its group, from the last task of
+// each gate that ran, the oldest first (see ADR 19).
+export function issuesBefore(task, tasks) {
+  if (task.group === undefined) {
+    return [];
+  }
+  const byId = new Map(tasks.map((t) => [t.id, t]));
+  const steps = new Set();
+  const issues = [];
+  let before = byId.get(task.dependOn?.[0]);
+  while (before?.group === task.group) {
+    // The id is {group}-{step}-{round}: the same step in another round has the
+    // same id without its round.
+    const step = before.id.slice(0, before.id.lastIndexOf("-"));
+    if (!steps.has(step)) {
+      steps.add(step);
+      const issue = issueOf(before);
+      if (issue !== null) {
+        issues.unshift(issue);
+      }
+    }
+    before = byId.get(before.dependOn?.[0]);
+  }
+  return issues;
 }
 
 // What a group left: when all its tasks ended and no gate passed, the issues

@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { createBranchNames } from "../lib/storage/branches.js";
-import { limitationsOf, ranId, roundIssues } from "./loops.js";
+import { issuesBefore, limitationsOf, ranId } from "./loops.js";
 import { finalTasks } from "./tasks.js";
 
 const ARTIFACT_SCRIPT = fileURLToPath(
@@ -29,23 +29,12 @@ function issueLines(issues, head) {
     .join("\n");
 }
 
-// The first task of a round after the first gets the issues of the gates of
-// the round before (see ADR 19).
-function roundBeforeIssues(task, tasks) {
-  const before = tasks.find((t) => t.id === task.dependOn?.[0]);
-  if (
-    task.group === undefined ||
-    before?.group !== task.group ||
-    before.round !== task.round - 1
-  ) {
-    return null;
-  }
+// A task of a group gets the issues of the gates before it in the group, from
+// the last task of each gate that ran (see ADR 19).
+function gateIssues(task, tasks) {
   return section(
-    "Issues of the gates of the round before:",
-    issueLines(
-      roundIssues(task.group, before.round, tasks),
-      (issue) => `${issue.gate}: not met`,
-    ),
+    "Issues of the gates before:",
+    issueLines(issuesBefore(task, tasks), (issue) => `${issue.gate}: not met`),
   );
 }
 
@@ -68,14 +57,25 @@ function limitations(tasks, groups) {
   );
 }
 
-// The groups that a task depends on from outside.
+// The groups that a task depends on from outside, directly or through other
+// tasks.
 function groupsBefore(task, tasks) {
   const byId = new Map(tasks.map((t) => [t.id, t]));
-  return new Set(
-    (task.dependOn ?? [])
-      .map((id) => byId.get(id)?.group)
-      .filter((group) => group !== undefined && group !== task.group),
-  );
+  const seen = new Set();
+  const groups = new Set();
+  const next = [...(task.dependOn ?? [])];
+  while (next.length > 0) {
+    const before = byId.get(next.pop());
+    if (before === undefined || seen.has(before.id)) {
+      continue;
+    }
+    seen.add(before.id);
+    if (before.group !== undefined && before.group !== task.group) {
+      groups.add(before.group);
+    }
+    next.push(...(before.dependOn ?? []));
+  }
+  return groups;
 }
 
 function workerParts({ work, task, tasks, artifacts }) {
@@ -86,7 +86,7 @@ function workerParts({ work, task, tasks, artifacts }) {
     work.description,
     section("DOD of the work:", numbered(work.dod ?? [])),
     section("DOD of the task:", numbered(task.dod ?? [])),
-    roundBeforeIssues(task, tasks ?? []),
+    gateIssues(task, tasks ?? []),
     limitations(tasks ?? [], groupsBefore(task, tasks ?? [])),
     task.summary
       ? `Summary of the merge of the dependencies:\n${task.summary}`

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   gatePassed,
+  issuesBefore,
   limitationsOf,
   ranTask,
   roundIssues,
@@ -280,6 +281,43 @@ test("roundIssues gives the failed items and the summary of each gate", () => {
       summary: "summary of build-verify-2",
     },
   ]);
+});
+
+test("issuesBefore gives the last task of each gate before a task, oldest first", () => {
+  const tasks = failedRounds(3);
+  const byId = new Map(tasks.map((t) => [t.id, t]));
+  const gates = (id) => issuesBefore(byId.get(id), tasks).map((i) => i.gate);
+  assert.deepEqual(gates("build-test-1"), []);
+  assert.deepEqual(gates("build-fixbug-1"), ["build-test-1"]);
+  assert.deepEqual(gates("build-test-3"), ["build-test-2", "build-verify-2"]);
+  assert.deepEqual(gates("build-fixbug-3"), ["build-verify-2", "build-test-3"]);
+  assert.deepEqual(issuesBefore(byId.get("build-fixbug-3"), tasks)[1], {
+    gate: "build-test-3",
+    failed: ["no test fails"],
+    summary: "summary of build-test-3",
+  });
+  assert.deepEqual(
+    issuesBefore(
+      {
+        id: "spec",
+      },
+      tasks,
+    ),
+    [],
+  );
+});
+
+test("issuesBefore of a group with only a gate gives the gate of the round before", () => {
+  const tasks = failedRounds(3)
+    .filter((t) => t.id.startsWith("build-test-"))
+    .map((t) => ({
+      ...t,
+      dependOn: [t.round === 1 ? "spec" : `build-test-${t.round - 1}`],
+    }));
+  assert.deepEqual(
+    issuesBefore(tasks[2], tasks).map((i) => i.gate),
+    ["build-test-2"],
+  );
 });
 
 test("limitationsOf gives the issues of the last round when no gate passed", () => {

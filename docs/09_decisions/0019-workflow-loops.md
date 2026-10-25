@@ -21,7 +21,11 @@ each step runs once, so it could not express this.
 - A gate passes when every item of its DOD checklist is true. Once a gate has
   passed, the next tasks of the group are skipped: they are done with no agent
   and no branch, and a skipped task stands for the task that ran before it.
-- The first task of a round gets the issues of the gates of the round before.
+- A task of a group gets the issues of the gates before it in the group, from
+  the last task of each gate that ran: in `test`, `fix`, `verify`, the fix of
+  round 1 gets the issues of the test of round 1, the test of round 2 gets those
+  of the test and the verify of round 1, and the fix of round 2 gets those of
+  the verify of round 1 and the test of round 2.
 - When the last round ends with no gate passed, the work is not failed: it goes
   on with limitations, the issues of the gates of the last round. They are
   written in the work, shown in the pull request and in the API, and given to

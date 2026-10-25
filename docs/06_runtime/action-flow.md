@@ -122,9 +122,9 @@ run a work".
 
 1. **Unroll.** When the work is assigned, its loop group is unrolled into the
    tasks of each round, `{group}-{step}-{round}`, in one chain.
-2. **Round.** The tasks of a round run one after the other, as any task. The
-   first task of a round after the first gets the issues of the gates of the
-   round before, and works on its branch.
+2. **Round.** The tasks of a round run one after the other, as any task. Each
+   task gets the issues of the gates before it in the group, from the last task
+   of each gate that ran, and works on its branch.
 3. **Gate.** A gate passes when its DOD checklist is all true. Then the next
    tasks of the group are skipped: they are done with no agent, and the steps
    after the group run on the branch of the task that ran last.
