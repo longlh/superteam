@@ -117,7 +117,7 @@ test("approve with a reason comments it, then merges", async () => {
     reason: "Good",
   });
   assert.deepEqual(h.calls.slice(0, 2), [
-    ["commentPullRequest", "superteam-work/w1", "Good"],
+    ["commentPullRequest", "superteam-work/w1", "Approved: Good"],
     ["mergePullRequest", "superteam-work/w1"],
   ]);
 });
@@ -130,14 +130,14 @@ test("reject with a reason comments it, then closes", async () => {
     reason: "Too short",
   });
   assert.deepEqual(h.calls.slice(0, 2), [
-    ["commentPullRequest", "superteam-work/w1", "Too short"],
+    ["commentPullRequest", "superteam-work/w1", "Rejected: Too short"],
     ["closePullRequest", "superteam-work/w1"],
   ]);
 });
 
 test("a reason already commented is not commented again", async () => {
   open();
-  h.pullRequests.get("superteam-work/w1").comments = ["Too short"];
+  h.pullRequests.get("superteam-work/w1").comments = ["Rejected: Too short"];
   await decide({
     id: "w1",
     decision: "reject",
@@ -145,6 +145,19 @@ test("a reason already commented is not commented again", async () => {
   });
   assert.equal(h.named("commentPullRequest").length, 0);
   assert.equal(h.named("closePullRequest").length, 1);
+});
+
+test("a comment of someone else with the same text does not stop the reason", async () => {
+  open();
+  h.pullRequests.get("superteam-work/w1").comments = ["Too short"];
+  await decide({
+    id: "w1",
+    decision: "reject",
+    reason: "Too short",
+  });
+  assert.deepEqual(h.named("commentPullRequest"), [
+    ["commentPullRequest", "superteam-work/w1", "Rejected: Too short"],
+  ]);
 });
 
 test("a reason is not commented when the pull request is already merged or closed", async () => {

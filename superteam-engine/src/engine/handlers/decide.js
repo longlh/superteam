@@ -15,11 +15,13 @@ async function deleteTaskBranches(deps, id) {
 }
 
 // The reason is written before the merge or the close, so it is there with the
-// decision. A repeated event finds it and does not write it again.
-async function commentReason(deps, branch, reason) {
+// decision. It starts with the decision, so that it is not taken for the
+// comment of a reviewer. A repeated event finds it and does not write it again.
+async function commentReason(deps, branch, decision, reason) {
   const { git } = deps;
-  if (!(await git.listPullRequestComments(branch)).includes(reason)) {
-    await git.commentPullRequest(branch, reason);
+  const body = `${decision === "approve" ? "Approved" : "Rejected"}: ${reason}`;
+  if (!(await git.listPullRequestComments(branch)).includes(body)) {
+    await git.commentPullRequest(branch, body);
   }
 }
 
@@ -40,7 +42,7 @@ export async function decide(deps, event) {
     }
     if (state === "open") {
       if (reason) {
-        await commentReason(deps, branch, reason);
+        await commentReason(deps, branch, decision, reason);
       }
       await git.mergePullRequest(branch);
     }
@@ -59,7 +61,7 @@ export async function decide(deps, event) {
   }
   if (state === "open") {
     if (reason) {
-      await commentReason(deps, branch, reason);
+      await commentReason(deps, branch, decision, reason);
     }
     await git.closePullRequest(branch);
   }

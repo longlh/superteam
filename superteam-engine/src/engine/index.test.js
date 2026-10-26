@@ -561,6 +561,14 @@ test("decide refuses an invalid id or decision, and an unknown work", async () =
   await assert.rejects(engine.decide("../x", "approve"), code("invalid"));
   await assert.rejects(engine.decide("w1", "maybe"), code("invalid"));
   await assert.rejects(engine.decide("w1", "approve", 1), code("invalid"));
+  await assert.rejects(
+    engine.decide("w1", "approve", "x".repeat(65001)),
+    code("invalid"),
+  );
+  await assert.rejects(
+    engine.decide("w1", "approve", " " + "x".repeat(65000) + "  "),
+    code("not-found"),
+  );
   await assert.rejects(engine.decide("w1", "approve"), code("not-found"));
 });
 

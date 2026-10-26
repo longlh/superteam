@@ -39,7 +39,7 @@ export function createTools({ request }) {
           .string()
           .optional()
           .describe(
-            "Why the approver decides so. Optional: the engine writes it as a comment on the pull request.",
+            "Why the approver decides so, at most 65,000 characters. Optional: the engine writes it as a comment on the pull request.",
           ),
       },
       handler: ({ id: workId, ...body }) =>

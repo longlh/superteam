@@ -38,6 +38,9 @@ import { createTaskStore } from "./tasks.js";
 const JOB_KINDS = ["worker", "task-merger", "work-merger"];
 const LOOP_NOTIFICATIONS = ["event:done", "event:retry", "event:error"];
 const KILLED = "the agent was killed";
+// GitHub refuses a comment longer than 65,536 characters, and the comment of a
+// reason starts with the decision.
+const MAX_REASON = 65000;
 
 // The names in a folder that pass `keep`, sorted; none when it is missing.
 async function listNames(dir, keep) {
@@ -692,12 +695,18 @@ export function createEngine({
           `invalid decision ${decision} of ${id}`,
         );
       }
+      // A reason made only of spaces is no reason, so it is left out.
+      const text = reason?.trim();
+      if (text?.length > MAX_REASON) {
+        throw new EngineError(
+          "invalid",
+          `the reason is longer than ${MAX_REASON} characters`,
+        );
+      }
       const state = await getWork(id);
       if (state.approvalStatus !== "PROPOSED") {
         throw new EngineError("conflict", `the work ${id} is not PROPOSED`);
       }
-      // A reason made only of spaces is no reason, so it is left out.
-      const text = reason?.trim();
       return {
         eventId: await enqueue("work:decide", {
           id,
