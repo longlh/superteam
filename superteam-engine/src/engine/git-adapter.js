@@ -30,9 +30,12 @@ export function repoOfUrl(url) {
 }
 
 // git and gh run with LC_ALL=C: the adapter reads some of their errors, which
-// are in English only then.
-export function defaultRun(command, args, { cwd }) {
-  return execFileAsync(command, args, {
+// are in English only then. An input is written on stdin: a long text in an
+// argument can go over the limit of the system. A command that ends before it
+// reads its input breaks the pipe: the run then fails with the exit code of the
+// command, and the error of the pipe is not thrown.
+export function defaultRun(command, args, { cwd, input }) {
+  const running = execFileAsync(command, args, {
     cwd,
     env: {
       ...process.env,
@@ -40,6 +43,11 @@ export function defaultRun(command, args, { cwd }) {
     },
     maxBuffer: 64 * 1024 * 1024,
   });
+  if (input !== undefined) {
+    running.child.stdin.on("error", () => {});
+    running.child.stdin.end(input);
+  }
+  return running;
 }
 
 export function createGitAdapter({ baseDir, run = defaultRun }) {
@@ -58,7 +66,7 @@ export function createGitAdapter({ baseDir, run = defaultRun }) {
     const name = await repo;
     return name === null ? [] : ["--repo", name];
   }
-  const gh = async (args) =>
+  const gh = async (args, input) =>
     run(
       "gh",
       args[0] === "pr"
@@ -66,6 +74,11 @@ export function createGitAdapter({ baseDir, run = defaultRun }) {
         : args,
       {
         cwd: baseDir,
+        ...(input === undefined
+          ? {}
+          : {
+              input,
+            }),
       },
     );
 
@@ -358,20 +371,23 @@ export function createGitAdapter({ baseDir, run = defaultRun }) {
     },
 
     // On the base of the work: without `--base`, gh would target the default
-    // branch of the repository.
+    // branch of the repository. The body is given on stdin (see defaultRun).
     async openPullRequest({ branch, base, title, body }) {
-      const { stdout } = await gh([
-        "pr",
-        "create",
-        "--base",
-        base,
-        "--head",
-        branch,
-        "--title",
-        title,
-        "--body",
+      const { stdout } = await gh(
+        [
+          "pr",
+          "create",
+          "--base",
+          base,
+          "--head",
+          branch,
+          "--title",
+          title,
+          "--body-file",
+          "-",
+        ],
         body,
-      ]);
+      );
       return stdout.trim();
     },
 
@@ -384,7 +400,7 @@ export function createGitAdapter({ baseDir, run = defaultRun }) {
     },
 
     async commentPullRequest(branch, body) {
-      await gh(["pr", "comment", branch, "--body", body]);
+      await gh(["pr", "comment", branch, "--body-file", "-"], body);
     },
 
     async listPullRequestComments(branch) {

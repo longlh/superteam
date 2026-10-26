@@ -336,6 +336,11 @@ function fakeRun(answer) {
       command,
       args,
       cwd: options.cwd,
+      ...(options.input === undefined
+        ? {}
+        : {
+            input: options.input,
+          }),
     });
     return answer(command, args);
   };
@@ -445,10 +450,11 @@ describe("gh parts (fake run)", () => {
           "works/a",
           "--title",
           "T",
-          "--body",
-          "B",
+          "--body-file",
+          "-",
         ],
         cwd: "/base",
+        input: "B",
       },
     ]);
   });
@@ -605,10 +611,11 @@ describe("gh parts (fake run)", () => {
     assert.deepEqual(
       ghCalls(calls).map((c) => [c.command, ...c.args]),
       [
-        ["gh", "pr", "comment", "works/a", "--body", "Why"],
+        ["gh", "pr", "comment", "works/a", "--body-file", "-"],
         ["gh", "pr", "view", "works/a", "--json", "comments"],
       ],
     );
+    assert.equal(ghCalls(calls)[0].input, "Why");
   });
 
   test("listPullRequestComments returns an empty list for a pull request with no comments", async () => {
@@ -837,5 +844,38 @@ describe("the repository of origin for gh", () => {
       },
     );
     assert.equal(stdout, "C");
+  });
+
+  // 65,000 "ế" are 195,000 bytes, more than Linux allows in one argument. The
+  // command gives up when its stdin is not closed, so the test cannot hang.
+  test("a command gets its input on stdin, longer than one argument can be", async () => {
+    const input = "ế".repeat(65000);
+    const { stdout } = await defaultRun(
+      process.execPath,
+      [
+        "-e",
+        "setTimeout(() => process.exit(1), 2000).unref();" +
+          "process.stdin.pipe(process.stdout);",
+      ],
+      {
+        cwd: tmpdir(),
+        input,
+      },
+    );
+    assert.equal(stdout, input);
+  });
+
+  // A command can end before it reads its input, as gh does when its login has
+  // expired: the run fails with its exit code, and the engine does not crash.
+  test("a command that ends before it reads its input fails with its code", async () => {
+    await assert.rejects(
+      defaultRun(process.execPath, ["-e", "process.exit(3)"], {
+        cwd: tmpdir(),
+        input: "x".repeat(1024 * 1024),
+      }),
+      {
+        code: 3,
+      },
+    );
   });
 });

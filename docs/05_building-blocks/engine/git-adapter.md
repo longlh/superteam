@@ -54,6 +54,10 @@ The reason of a decision is written with `gh pr comment`, and the comments of a
 pull request are read with `gh pr view --json comments`, so that a reason is not
 written twice.
 
+The body of a pull request and the reason of a decision are given to `gh` on
+stdin (`--body-file -`), not as an argument: Linux limits one argument to 128
+KiB, and a long text in UTF-8 can go over it.
+
 The engine reads what is committed with git, and never from the files of the
 root workspace: the workflow from the upstream of the root branch, and an
 approved work from the branch on which its pull request was merged. The approved

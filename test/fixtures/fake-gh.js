@@ -77,7 +77,8 @@ export function createFakeGh({ baseDir, defaultBranch = "main" }) {
     }
   }
 
-  async function gh(args) {
+  // As gh, `--body-file -` reads the body from stdin, the input of the run.
+  async function gh(args, input) {
     const [group, action, branch] = args;
     if (group === "auth" && action === "status") {
       return {
@@ -98,7 +99,7 @@ export function createFakeGh({ baseDir, defaultBranch = "main" }) {
         pullRequests.set(head, {
           url,
           title: option("--title"),
-          body: option("--body"),
+          body: option("--body-file") === "-" ? input : option("--body"),
           base: option("--base") ?? defaultBranch,
           number: count,
           state: "OPEN",
@@ -161,7 +162,9 @@ export function createFakeGh({ baseDir, defaultBranch = "main" }) {
 
   // A test reads the pull requests, by their head branch.
   const run = (command, args, options) =>
-    command === "gh" ? gh(args) : realRun(command, args, options);
+    command === "gh"
+      ? gh(args, options.input)
+      : realRun(command, args, options);
   run.pullRequests = pullRequests;
   return run;
 }
