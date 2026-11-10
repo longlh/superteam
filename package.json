@@ -1,8 +1,9 @@
 {
   "name": "superteam",
   "private": true,
+  "type": "module",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.7"
   },
   "scripts": {
     "format:md": "prettier --write \"**/*.md\"",
