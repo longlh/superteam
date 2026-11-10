@@ -5,6 +5,23 @@ Each item comes from the document of the part that it is about.
 
 ## Known issues
 
+### Deployment (`deployment.md`)
+
+- superteam is tested well only on macOS. Running it on Windows is not
+  recommended, because some parts are known not to work there:
+  - A process is killed in the way of macOS and Linux. The Agents start an agent
+    as a process group of its own, and kill the whole group with a negative pid
+    (`process.kill(-pid, "SIGKILL")`, see `agent-manager.md`). Windows has no
+    process groups: the kill fails, the error is taken as an agent that is
+    already gone, and the agent and its children keep running.
+  - The command of a process is read with `ps` (see `agent-manager.md`, and
+    "Start" in `orchestrator.md`), which Windows does not have. A live agent, or
+    a live superteam, then looks gone, so `/superteam:stop` does not stop
+    superteam.
+  - A path built by Node uses `\` there, so a part that gives a path to git can
+    fail, as the read of a file on a branch did before it was fixed (see
+    `git-adapter.md`).
+
 ### Engine loop (`engineloop.md`)
 
 The loop is made for an internal tool. These limits are known and accepted:

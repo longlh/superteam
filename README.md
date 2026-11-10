@@ -29,6 +29,8 @@ Build an **engine** that replaces the team lead. The engine:
 
 ## Requirements
 
+- macOS. superteam is tested well only on macOS, so running it on Windows is not
+  recommended.
 - Node.js 22 or later.
 - The `claude` command, signed in with the account that pays for the runs.
 - The `gh` command, signed in with `gh auth login` with an account that can
