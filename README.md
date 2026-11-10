@@ -28,6 +28,10 @@ Build an **engine** that replaces the team lead. The engine:
   enough input, so the tasks run in the right order;
 - tracks the work and summarizes its results.
 
+The engine is deterministic: it is code, not an AI. The same events always lead
+to the same decisions, on the order of the tasks, on who does them, and on their
+status. The AI agents only do the tasks that the engine gives them.
+
 ## Requirements
 
 - macOS. superteam is tested well only on macOS, so running it on Windows is not
