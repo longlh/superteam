@@ -709,6 +709,30 @@ describe("real git failures propagate", () => {
   });
 });
 
+describe("the path of a file read on a branch", () => {
+  test("readFileOnBranch and readFileOnRemote give git a path with / when the path has \\ as on Windows", async () => {
+    const shown = [];
+    const run = async (command, args) => {
+      if (args[0] === "show") {
+        shown.push(args[1]);
+      }
+      return {
+        stdout: "",
+      };
+    };
+    const adapter = createGitAdapter({
+      baseDir: "/base",
+      run,
+    });
+    await adapter.readFileOnBranch("works/a", ".superteam\\.p\\works\\a.json");
+    await adapter.readFileOnRemote("main", ".superteam\\.p\\workflows\\w.json");
+    assert.deepEqual(shown, [
+      "refs/heads/works/a:.superteam/.p/works/a.json",
+      "refs/remotes/origin/main:.superteam/.p/workflows/w.json",
+    ]);
+  });
+});
+
 describe("the calls that update the refs of origin", () => {
   test("fetch, push and deleteBranch run one at a time", async () => {
     let running = 0;

@@ -65,6 +65,12 @@ works are found from the merged pull requests of the branches `{prefix}-work/*`.
 The engine never pulls, merges or commits into the local root branch (see ADR
 15).
 
+A path inside git, as in `git show <ref>:<path>`, uses `/` as its separator on
+every system. The engine builds the paths of its files with Node, which uses `\`
+on Windows, so the adapter turns the path into the form of git before it reads a
+file on a branch. Without that, git does not find the file on Windows, so a
+workflow, a work, or a file that the seed checks is read as missing.
+
 ## Code
 
 ### Worktrees

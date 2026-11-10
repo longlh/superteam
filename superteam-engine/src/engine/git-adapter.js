@@ -118,9 +118,12 @@ export function createGitAdapter({ baseDir, run = defaultRun }) {
   }
 
   // The content of `file` at `ref`, or null when the file is missing there.
+  // `file` is a path built by Node, with `\` on Windows: a path inside git
+  // uses `/` on every system.
   async function showFile(ref, file) {
+    const gitFile = file.replaceAll("\\", "/");
     try {
-      const { stdout } = await git(["show", `${ref}:${file}`]);
+      const { stdout } = await git(["show", `${ref}:${gitFile}`]);
       return stdout;
     } catch (error) {
       const text = `${error.message}\n${error.stderr ?? ""}`;
