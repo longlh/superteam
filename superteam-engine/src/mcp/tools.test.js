@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createTools } from "./tools.js";
+import { checkInput, createTools } from "./tools.js";
 
 function setup(
   answer = {
@@ -160,5 +160,88 @@ test("a 409 is given back unchanged", async () => {
       decision: "reject",
     }),
     answer,
+  );
+});
+
+test("decide_work describes its input with JSON Schema", () => {
+  const { byName } = setup();
+  const schema = byName.decide_work.inputSchema;
+  assert.equal(schema.type, "object");
+  assert.deepEqual(schema.required, ["id", "decision"]);
+  assert.deepEqual(schema.properties.decision.enum, ["approve", "reject"]);
+  assert.equal(schema.properties.reason.type, "string");
+});
+
+test("assign_work describes its input with JSON Schema", () => {
+  const { byName } = setup();
+  const schema = byName.assign_work.inputSchema;
+  assert.deepEqual(schema.required, ["workflow", "title"]);
+  assert.equal(schema.properties.dod.type, "array");
+  assert.deepEqual(schema.properties.dod.items, {
+    type: "string",
+  });
+});
+
+test("list_works has no required argument", () => {
+  const { byName } = setup();
+  assert.deepEqual(byName.list_works.inputSchema, {
+    type: "object",
+    properties: {},
+  });
+});
+
+test("checkInput accepts a valid input", () => {
+  const { byName } = setup();
+  assert.equal(
+    checkInput(byName.assign_work.inputSchema, {
+      workflow: "wf",
+      title: "T",
+      dod: ["a", "b"],
+    }),
+    null,
+  );
+});
+
+test("checkInput names a missing required argument", () => {
+  const { byName } = setup();
+  assert.match(
+    checkInput(byName.decide_work.inputSchema, {
+      decision: "approve",
+    }),
+    /\bid\b/,
+  );
+});
+
+test("checkInput names an argument of the wrong type", () => {
+  const { byName } = setup();
+  assert.match(
+    checkInput(byName.assign_work.inputSchema, {
+      workflow: 1,
+      title: "T",
+    }),
+    /workflow/,
+  );
+});
+
+test("checkInput names a value that is not in the enum", () => {
+  const { byName } = setup();
+  assert.match(
+    checkInput(byName.decide_work.inputSchema, {
+      id: "w",
+      decision: "maybe",
+    }),
+    /decision/,
+  );
+});
+
+test("checkInput names an array with an item that is not a string", () => {
+  const { byName } = setup();
+  assert.match(
+    checkInput(byName.assign_work.inputSchema, {
+      workflow: "wf",
+      title: "T",
+      dod: ["a", 2],
+    }),
+    /dod/,
   );
 });
