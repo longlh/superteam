@@ -25,3 +25,4 @@ consequences. A decision that is replaced is not deleted: its status changes.
 | [17](0017-decision-on-github.md)                | A decision can be made on GitHub                                                      |
 | [18](0018-branch-prefix.md)                     | The branches of superteam have a prefix that the project sets                         |
 | [19](0019-workflow-loops.md)                    | A workflow can repeat a group of steps until a gate passes                            |
+| [20](0020-mcp-server-without-dependencies.md)   | The MCP server speaks MCP itself, with no package                                     |
