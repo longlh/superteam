@@ -14,6 +14,7 @@ export const ERRORS = {
   INVALID_REQUEST: -32600,
   METHOD_NOT_FOUND: -32601,
   INVALID_PARAMS: -32602,
+  INTERNAL: -32603,
 };
 
 export function errorAnswer(id, code, message) {
