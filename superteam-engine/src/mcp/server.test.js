@@ -16,7 +16,7 @@ after(() => {
   });
 });
 
-test("the server answers MCP on stdout, one line for each request, and exits when stdin is closed", async () => {
+test("the server answers MCP on stdout, one line for each request, goes on after a line that is not JSON, and exits when stdin is closed", async () => {
   const child = spawn(process.execPath, [SERVER], {
     cwd: folder,
     stdio: ["pipe", "pipe", "pipe"],
@@ -51,12 +51,13 @@ test("the server answers MCP on stdout, one line for each request, and exits whe
     jsonrpc: "2.0",
     method: "notifications/initialized",
   });
+  // A line that is not JSON does not stop the server: the next one is answered.
+  send("{not json");
   send({
     jsonrpc: "2.0",
     id: 2,
     method: "tools/list",
   });
-  send("{not json");
   child.stdin.end();
 
   assert.equal(await exited, 0);
