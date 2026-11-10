@@ -1,6 +1,7 @@
 # Superteam
 
-A Claude Code plugin that runs a team of agents on any project's own workflow.
+A Claude Code plugin that orchestrates the work of AI agents with a
+deterministic engine, which follows each project's own workflow.
 
 ## Problem
 

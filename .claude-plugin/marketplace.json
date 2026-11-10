@@ -3,11 +3,12 @@
   "owner": {
     "name": "LongLH"
   },
+  "description": "superteam: a deterministic engine, not an AI, decides the order and the assignment of the work of AI agents",
   "plugins": [
     {
       "name": "superteam",
       "source": "./superteam-engine",
-      "description": "Engine that orchestrates a team of agents following each project's own workflow"
+      "description": "Orchestrates the work of AI agents with a deterministic engine that follows each project's own workflow"
     }
   ]
 }

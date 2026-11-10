@@ -1,5 +1,9 @@
 {
   "name": "superteam",
   "version": "0.2.0",
-  "description": "Engine that orchestrates a team of agents following each project's own workflow"
+  "description": "Orchestrates the work of AI agents with a deterministic engine that follows each project's own workflow",
+  "author": {
+    "name": "LongLH",
+    "email": "i.me.mine@luchoanglong.com"
+  }
 }
